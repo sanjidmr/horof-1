@@ -1,0 +1,66 @@
+'use client';
+
+import React from 'react';
+import { motion } from 'framer-motion';
+import { ShieldAlert, TreePine, Lock } from 'lucide-react';
+import { Input } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
+import { useAuth } from '../../../context/AuthContext';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+
+export default function AdminLoginPage() {
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    login('admin@horof.art', 'admin');
+    toast.success('Welcome back, Administrator');
+    router.push('/admin/dashboard');
+  };
+
+  return (
+    <div className="min-h-screen bg-bg-secondary flex items-center justify-center px-6 relative overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md space-y-8 relative z-10"
+      >
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center p-3 bg-accent-primary rounded-2xl border border-accent-primary mb-4 shadow-xl">
+            <TreePine className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-4xl font-display font-bold text-accent-primary uppercase tracking-tighter">
+            Horof <span className="text-gold italic">Admin</span>
+          </h1>
+          <p className="text-text-secondary text-sm font-bold uppercase tracking-widest">Enterprise Control Panel</p>
+        </div>
+
+        <form onSubmit={handleAdminLogin} className="bg-white border border-border-forest rounded-[40px] p-10 space-y-6 shadow-2xl shadow-accent-primary/10">
+          <Input label="Administrator Email" type="email" value="admin@horof.art" readOnly className="bg-bg-secondary" />
+          <Input label="Access Key" type="password" value="••••••••" readOnly className="bg-bg-secondary" />
+
+          <Button variant="primary" className="w-full h-14 rounded-full uppercase tracking-[0.2em] font-bold">
+            Secure Entry
+            <Lock className="ml-2 h-4 w-4" />
+          </Button>
+
+          <div className="flex items-center gap-4 p-5 bg-gold/5 border border-gold/10 rounded-2xl text-[10px] text-gold font-bold uppercase tracking-[0.2em] leading-relaxed">
+            <ShieldAlert className="h-5 w-5 flex-shrink-0" />
+            <span>Administrative session is encrypted and audited.</span>
+          </div>
+        </form>
+
+        <div className="text-center">
+          <button
+            onClick={() => router.push('/')}
+            className="text-xs text-text-muted hover:text-accent-primary transition-colors uppercase tracking-[0.3em] font-bold underline underline-offset-8"
+          >
+            Back to Showroom
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
