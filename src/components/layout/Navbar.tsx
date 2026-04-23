@@ -25,7 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart }) => {
   const pathname = usePathname();
 
   const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollY = React.useRef(0);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -33,17 +33,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart }) => {
       setIsScrolled(currentScrollY > 20);
 
       // Hide navbar on mobile scroll down, show on up
-      if (currentScrollY > lastScrollY && currentScrollY > 100) {
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
         setIsVisible(false);
       } else {
         setIsVisible(true);
       }
 
-      setLastScrollY(currentScrollY);
+      lastScrollY.current = currentScrollY;
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+  }, []);
 
   // Handle Search toggle with body scroll lock
   useEffect(() => {
@@ -247,7 +247,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white/95 backdrop-blur-xl z-[150] px-4 md:px-6 flex items-center justify-center p-6 h-screen w-screen left-0 top-0 overflow-hidden"
+            className="fixed inset-0 bg-white/95 backdrop-blur-xl z-[150] px-4 md:px-6 flex items-center justify-center p-6 overflow-hidden"
           >
             <div className="max-w-4xl mx-auto w-full flex flex-col gap-6 md:gap-10">
               <div className="flex items-center justify-between">

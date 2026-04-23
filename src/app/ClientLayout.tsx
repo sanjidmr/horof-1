@@ -27,11 +27,11 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthProvider>
       <WishlistProvider>
         <CartProvider>
-          <div className="flex flex-col min-h-screen bg-white">
+          <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
             {!isAdminPath && <Navbar onOpenCart={() => setIsCartOpen(true)} />}
             <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
             
-            <main className="flex-1">
+            <main className="flex-1 w-full">
               {children}
             </main>
 

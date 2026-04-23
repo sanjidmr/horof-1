@@ -19,7 +19,7 @@ export const Newsletter: React.FC = () => {
             <span className="text-[8px] md:text-[9px] font-bold text-accent-light uppercase tracking-[0.3em]">Exclusive Access</span>
           </div>
           <h2 className="text-2xl sm:text-3xl md:text-5xl font-display font-medium text-white leading-tight">
-            Join the <span className="text-accent-light italic">Horof</span> group
+            Join the <span className="text-accent-light italic">Horof</span>  group
           </h2>
           <p className="text-white/60 text-xs sm:text-sm md:text-base leading-relaxed font-light">
             Be the first to know about new collection drops, workshop stories, and exclusive subscriber-only offers. No spam, just pure craftsmanship.
