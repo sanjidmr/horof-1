@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, TreePine, Lock } from 'lucide-react';
 import { Input } from '../../../components/ui/Input';
@@ -10,14 +10,32 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login('admin@horof.art', 'admin');
-    toast.success('Welcome back, Administrator');
-    router.push('/admin/dashboard');
+    if (isLoading) return;
+    if (!email || !password) {
+      toast.error('Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await login(email, password);
+      toast.success('Welcome back, Administrator');
+      router.push('/admin/dashboard');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Login failed. Please check your credentials.';
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -38,10 +56,30 @@ export default function AdminLoginPage() {
         </div>
 
         <form onSubmit={handleAdminLogin} className="bg-white border border-border-forest rounded-[40px] p-10 space-y-6 shadow-2xl shadow-accent-primary/10">
-          <Input label="Administrator Email" type="email" value="admin@horof.art" readOnly className="bg-bg-secondary" />
-          <Input label="Access Key" type="password" value="••••••••" readOnly className="bg-bg-secondary" />
+          <Input 
+            label="Administrator Email" 
+            type="email" 
+            value={email} 
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="admin@horof.art"
+            required
+          />
+          <Input 
+            label="Access Key" 
+            type="password" 
+            value={password} 
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+          />
 
-          <Button variant="primary" className="w-full h-14 rounded-full uppercase tracking-[0.2em] font-bold">
+          <Button 
+            variant="primary" 
+            className="w-full h-14 rounded-full uppercase tracking-[0.2em] font-bold"
+            isLoading={isLoading}
+            disabled={isLoading}
+            type="submit"
+          >
             Secure Entry
             <Lock className="ml-2 h-4 w-4" />
           </Button>

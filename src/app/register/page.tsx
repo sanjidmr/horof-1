@@ -1,5 +1,6 @@
 'use client';
 
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { UserPlus, TreePine, Github, Mail, User, Lock, Phone } from 'lucide-react';
@@ -8,19 +9,27 @@ import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext'; // ✅ import করো
 
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { signup } = useAuth(); // ✅ signup নাও
   const router = useRouter();
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await signup(email, password); // ✅ আসল Supabase signup
+      toast.success('Account created!');
+      router.push('/'); // ✅ সরাসরি main page এ
+    } catch (err: any) {
+      toast.error(err.message || 'Signup failed');
+    } finally {
       setIsLoading(false);
-      toast.success('Account created successfully! Please login.');
-      router.push('/login');
-    }, 1500);
+    }
   };
 
   return (
@@ -48,14 +57,25 @@ export default function RegisterPage() {
             <Input label="Last Name" placeholder="Doe" required className="rounded-xl" />
           </div>
 
-          <Input label="Email Address" type="email" placeholder="john@example.com" required icon={<Mail className="h-4 w-4" />} className="rounded-xl" />
-          <Input label="Phone Number" placeholder="01XXXXXXXXX" icon={<Phone className="h-4 w-4" />} className="rounded-xl" />
+          <Input
+            label="Email Address"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)} // ✅
+            placeholder="john@example.com"
+            required
+          />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
-            <Input label="Password" type="password" placeholder="••••••••" required icon={<Lock className="h-4 w-4" />} className="rounded-xl" />
-            <Input label="Confirm Password" type="password" placeholder="••••••••" required className="rounded-xl" />
-          </div>
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)} // ✅
+            placeholder="••••••••"
+            required
+          />
 
+         
           <div className="flex items-start gap-3 py-1">
             <input type="checkbox" className="mt-1 h-3.5 w-3.5 md:h-4 md:w-4 accent-accent-primary" id="terms" required />
             <label htmlFor="terms" className="text-[10px] md:text-xs text-text-secondary leading-tight">

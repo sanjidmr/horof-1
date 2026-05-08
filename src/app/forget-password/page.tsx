@@ -2,24 +2,52 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, ArrowLeft, KeyRound } from 'lucide-react';
+import { ArrowLeft, KeyRound } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
+import { createSupabaseBrowserClient } from '../../lib/supabase/client';
+
 export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleReset = (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+    if (!email) {
+      toast.error('Please enter your email');
+      return;
+    }
+
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      if (!supabase) {
+        throw new Error(
+          'Supabase is not configured. Please check your .env.local file and restart the dev server.'
+        );
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) throw error;
+
       setIsSent(true);
       toast.success('Reset link sent to your email');
-    }, 1500);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send reset link';
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -37,11 +65,33 @@ export default function ForgotPasswordPage() {
           <p className="text-sm md:text-base text-text-secondary px-4">Enter your email and we'll send you a link to reset your password.</p>
         </div>
 
-        <form className="bg-bg-card border border-border-forest rounded-3xl md:rounded-[40px] p-6 md:p-10 space-y-5 md:space-y-6 shadow-xl shadow-accent-primary/5 glass-card">
+        <form
+          onSubmit={handleReset}
+          className="bg-bg-card border border-border-forest rounded-3xl md:rounded-[40px] p-6 md:p-10 space-y-5 md:space-y-6 shadow-xl shadow-accent-primary/5 glass-card"
+        >
           {!isSent ? (
             <div className="space-y-5 md:space-y-6">
-              <Input label="Email Address" type="email" placeholder="you@example.com" required className="rounded-xl" />
-              <Button variant="gold" className="w-full h-12 md:h-14 rounded-full uppercase tracking-widest text-[10px] md:text-xs font-bold shadow-lg shadow-gold/20" onClick={handleReset} isLoading={isLoading}>
+              <Input 
+                label="Email Address" 
+                type="email" 
+                placeholder="you@example.com" 
+                required 
+                className="rounded-xl"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              {errorMessage && (
+                <div className="p-3 bg-error/10 border border-error/20 rounded-xl text-error text-[10px] md:text-xs font-bold leading-relaxed">
+                  {errorMessage}
+                </div>
+              )}
+              <Button
+                variant="gold"
+                type="submit"
+                className="w-full h-12 md:h-14 rounded-full uppercase tracking-widest text-[10px] md:text-xs font-bold shadow-lg shadow-gold/20"
+                isLoading={isLoading}
+                disabled={isLoading}
+              >
                 Send Reset Link
               </Button>
             </div>

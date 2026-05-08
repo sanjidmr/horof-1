@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, TreePine, Github } from 'lucide-react';
 import { Input } from '../../components/ui/Input';
@@ -13,12 +13,22 @@ import toast from 'react-hot-toast';
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login('customer@example.com', 'customer');
-    toast.success('Successfully logged in!');
-    router.push('/');
+    setIsLoading(true);
+    try {
+      await login(email, password); // ✅ real input থেকে নেওয়া
+      toast.success('Successfully logged in!');
+      router.push('/');
+    } catch (err: any) {
+      toast.error(err.message || 'Login failed'); // ✅ error দেখাবে
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -33,17 +43,35 @@ export default function LoginPage() {
             <TreePine className="h-6 w-6 md:h-8 md:w-8 text-white" />
           </Link>
           <h1 className="text-3xl md:text-4xl font-display font-bold text-accent-primary">Welcome Back</h1>
-          <p className="text-sm md:text-base text-text-secondary px-4">Sign in to your <span className="text-accent-primary font-bold">Horof</span> account to manage your collection.</p>
+          <p className="text-sm md:text-base text-text-secondary px-4">Sign in to your <span className="text-accent-primary font-bold">Horof</span> account.</p>
         </div>
 
         <form onSubmit={handleLogin} className="bg-white border border-border-forest rounded-3xl md:rounded-[40px] p-6 md:p-10 space-y-5 md:space-y-6 shadow-xl shadow-accent-primary/5">
-          <Input label="Email Address" type="email" placeholder="you@example.com" required className="rounded-xl" />
+          
+          {/* ✅ value আর onChange যোগ করা হয়েছে */}
+          <Input
+            label="Email Address"
+            type="email"
+            placeholder="you@example.com"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="rounded-xl"
+          />
           <div className="space-y-2 text-right">
-            <Input label="Password" type="password" placeholder="••••••••" required className="rounded-xl" />
-            <Link href="/forget-password" title="Forgot Password" className="text-[10px] md:text-xs text-gold hover:underline font-bold uppercase tracking-widest block pr-1">Forgot Password?</Link>
+            <Input
+              label="Password"
+              type="password"
+              placeholder="••••••••"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-xl"
+            />
+            <Link href="/forget-password" className="text-[10px] md:text-xs text-gold hover:underline font-bold uppercase tracking-widest block pr-1">Forgot Password?</Link>
           </div>
 
-          <Button variant="primary" className="w-full h-12 md:h-14 rounded-full uppercase tracking-widest text-[10px] md:text-xs font-bold shadow-lg shadow-accent-primary/20">
+          <Button variant="primary" isLoading={isLoading} className="w-full h-12 md:h-14 rounded-full uppercase tracking-widest text-[10px] md:text-xs font-bold shadow-lg shadow-accent-primary/20">
             Sign In
           </Button>
 

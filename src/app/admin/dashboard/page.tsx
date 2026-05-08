@@ -7,7 +7,7 @@ import {
   CreditCard, Settings, Search, Bell, BarChart3, TrendingUp,
   ArrowUpRight, ArrowDownRight, TreePine, LogOut, Plus, Filter,
   MoreVertical, Edit3, Trash2, CheckCircle, Clock, XCircle,
-  ChevronRight, ArrowLeft, Download, Eye
+  ChevronRight, ArrowLeft, Download, Eye, AlertTriangle
 } from 'lucide-react';
 import { orders, products, customers } from '../../../lib/mockData';
 import { formatPrice, cn } from '../../../lib/utils';
@@ -16,6 +16,7 @@ import { Badge } from '../../../components/ui/Badge';
 import { useAuth } from '../../../context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, LineChart, Line, Cell
@@ -43,12 +44,42 @@ type DashboardTab = 'Overview' | 'Products' | 'Orders' | 'Customers' | 'Settings
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('Overview');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const { logout } = useAuth();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const notificationRef = React.useRef<HTMLDivElement>(null);
+  const { user, logout, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
 
-  const handleLogout = () => {
-    logout();
-    router.push('/admin/login');
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  React.useEffect(() => {
+    if (isAuthLoading) return;
+    if (!user) {
+      router.replace('/admin/login?next=/admin/dashboard');
+    }
+  }, [isAuthLoading, router, user]);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      router.refresh();
+      router.push('/admin/login');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Logout failed';
+      toast.error(message);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const navItems = [
@@ -106,6 +137,7 @@ export default function AdminDashboard() {
       <div className="px-4 mt-8 pt-8 border-t border-border-forest">
         <button
           onClick={handleLogout}
+          disabled={isLoggingOut}
           className="w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl text-[11px] font-bold text-error hover:bg-error/5 transition-all uppercase tracking-widest"
         >
           <LogOut className="h-5 w-5" />
@@ -172,20 +204,84 @@ export default function AdminDashboard() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button className="h-12 w-12 flex items-center justify-center bg-bg-secondary border border-border-forest rounded-2xl text-accent-primary hover:text-gold transition-all relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-3.5 right-3.5 h-2 w-2 bg-gold rounded-full border-2 border-white" />
-              </button>
+              <div className="relative" ref={notificationRef}>
+                <button 
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="h-12 w-12 flex items-center justify-center bg-bg-secondary border border-border-forest rounded-2xl text-accent-primary hover:text-gold transition-all relative"
+                >
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute top-3.5 right-3.5 h-2 w-2 bg-gold rounded-full border-2 border-white" />
+                </button>
+
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-4 w-80 bg-white border border-border-forest rounded-3xl shadow-2xl z-50 overflow-hidden"
+                    >
+                      <div className="p-6 border-b border-border-forest">
+                        <h4 className="text-sm font-bold uppercase tracking-widest">Notifications</h4>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto">
+                        {[
+                          { title: "New order #ORD-042 received", time: "2 mins ago", icon: ShoppingBag, color: "text-gold" },
+                          { title: "Stock low: Walnut Bowl", time: "1 hour ago", icon: AlertTriangle, color: "text-error" },
+                          { title: "Customer review pending", time: "3 hours ago", icon: Edit3, color: "text-accent-primary" },
+                        ].map((n, i) => (
+                          <div key={i} className="p-6 hover:bg-bg-secondary transition-colors flex gap-4 border-b border-border-forest last:border-0">
+                            <div className={cn("h-10 w-10 rounded-xl bg-bg-secondary flex items-center justify-center shrink-0", n.color)}>
+                              <n.icon className="h-5 w-5" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-bold text-accent-primary leading-snug">{n.title}</p>
+                              <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{n.time}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <button className="w-full p-4 text-[10px] font-bold uppercase tracking-widest text-text-muted hover:text-accent-primary transition-colors bg-bg-secondary/30">
+                        View all activity
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               <div className="h-12 border-l border-border-forest mx-2" />
 
               <div className="flex items-center gap-4">
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold text-accent-primary">Admin User</p>
-                  <p className="text-[10px] text-text-muted font-bold uppercase tracking-[0.2em]">Super User</p>
+                  <p className="text-sm font-bold text-accent-primary">
+                    {String(
+                      (user?.user_metadata as Record<string, unknown> | undefined)?.full_name ??
+                        user?.email ??
+                        'Admin'
+                    )}
+                  </p>
+                  <p className="text-[10px] text-text-muted font-bold uppercase tracking-[0.2em]">
+                    {String(
+                      (user?.app_metadata as Record<string, unknown> | undefined)?.role ??
+                        (user?.user_metadata as Record<string, unknown> | undefined)?.role ??
+                        'User'
+                    )}
+                  </p>
                 </div>
                 <div className="h-12 w-12 rounded-2xl bg-accent-primary text-white flex items-center justify-center font-display font-bold text-lg shadow-xl shadow-accent-primary/20">
-                  AU
+                  {(() => {
+                    const display = String(
+                      (user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? user?.email ?? 'Admin'
+                    );
+                    const letters = display
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+                    return letters || 'AD';
+                  })()}
                 </div>
               </div>
             </div>
@@ -412,7 +508,13 @@ const ProductsTab = () => (
               <Badge variant="gold" className="rounded-full px-4 py-1.5 backdrop-blur-md bg-gold/80 border-none shadow-lg shadow-gold/20">
                 {product.category}
               </Badge>
-              <div className="bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full text-[10px] font-bold text-accent-primary border border-white/50 uppercase tracking-widest shadow-lg">
+              <div className={cn(
+                "px-3 py-1.5 rounded-full text-[10px] font-bold border backdrop-blur-md uppercase tracking-widest shadow-lg flex items-center gap-1.5",
+                product.stock < 5 
+                  ? "bg-error/80 text-white border-error shadow-error/20" 
+                  : "bg-white/80 text-accent-primary border-white/50"
+              )}>
+                {product.stock < 5 && <AlertTriangle className="h-3 w-3" />}
                 Inventory: {product.stock}
               </div>
             </div>
@@ -449,114 +551,274 @@ const ProductsTab = () => (
   </motion.div>
 );
 
-const OrdersTab = () => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.98 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 0.98 }}
-    className="space-y-10"
-  >
-    <div className="flex items-center justify-between">
-      <div className="space-y-2">
-        <h3 className="text-4xl font-display font-bold text-accent-primary">Orders Manifest</h3>
-        <p className="text-text-secondary">Tracking the journey of every handcrafted piece</p>
-      </div>
-      <div className="flex gap-4">
-        <Button variant="secondary" className="h-14 px-8 rounded-full border-border-forest">
-          <Download className="h-5 w-5 mr-3" />
-          Export CSV
-        </Button>
-        <Button variant="primary" className="h-14 px-8 rounded-full">
-          Print Labels
-        </Button>
-      </div>
-    </div>
+const OrdersTab = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
 
-    <div className="bg-white border border-border-forest rounded-[3rem] overflow-hidden">
-      <div className="grid grid-cols-4 divide-x divide-border-forest bg-bg-secondary/20">
-        <div className="p-8 space-y-2">
-          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Processing</p>
-          <p className="text-3xl font-display font-bold">42</p>
+  const filteredOrders = orders.filter(order => 
+    order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    order.status.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      className="space-y-10"
+    >
+      <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          <h3 className="text-4xl font-display font-bold text-accent-primary">Orders Manifest</h3>
+          <p className="text-text-secondary">Tracking the journey of every handcrafted piece</p>
         </div>
-        <div className="p-8 space-y-2">
-          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">In Transit</p>
-          <p className="text-3xl font-display font-bold">18</p>
-        </div>
-        <div className="p-8 space-y-2">
-          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Delivered</p>
-          <p className="text-3xl font-display font-bold">156</p>
-        </div>
-        <div className="p-8 space-y-2">
-          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Canceled</p>
-          <p className="text-3xl font-display font-bold text-error">3</p>
+        <div className="flex gap-4">
+          <Button variant="secondary" className="h-14 px-8 rounded-full border-border-forest">
+            <Download className="h-5 w-5 mr-3" />
+            Export CSV
+          </Button>
+          <Button variant="primary" className="h-14 px-8 rounded-full">
+            Print Labels
+          </Button>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-bg-secondary/30 text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">
-              <th className="px-12 py-6">ID / Manifest</th>
-              <th className="px-12 py-6">Consignee</th>
-              <th className="px-12 py-6">Status Trace</th>
-              <th className="px-12 py-6">Composition</th>
-              <th className="px-12 py-6 text-right">Valuation</th>
-              <th className="px-12 py-6 text-right">Logistics</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-forest">
-            {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-bg-secondary/10 transition-colors">
-                <td className="px-12 py-8">
-                  <div className="space-y-1">
-                    <p className="font-mono text-xs font-bold text-gold">#{order.id.toUpperCase()}</p>
-                    <p className="text-[10px] text-text-muted uppercase tracking-widest">{order.date}</p>
-                  </div>
-                </td>
-                <td className="px-12 py-8">
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-accent-primary">{order.customerName}</p>
-                    <p className="text-[10px] text-text-muted uppercase">{order.email || 'artisan.client@email.com'}</p>
-                  </div>
-                </td>
-                <td className="px-12 py-8">
-                  <Badge variant={order.status === 'delivered' ? 'success' : 'gold'} className="rounded-full px-4 py-1.5 uppercase font-bold tracking-[0.2em] text-[8px] border-none shadow-sm capitalize">
-                    {order.status}
-                  </Badge>
-                </td>
-                <td className="px-12 py-8">
-                  <div className="flex -space-x-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-10 w-10 rounded-xl border-2 border-white bg-bg-secondary overflow-hidden shadow-lg">
-                        <img src={`https://picsum.photos/seed/wood-${i}/50/50`} alt="asset" className="h-full w-full object-cover" />
+      <div className="bg-bg-secondary rounded-[3rem] p-4 flex gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted" />
+          <input
+            placeholder="Search by ID, name or status..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-16 bg-white border border-border-forest rounded-[2rem] pl-16 pr-6 text-sm focus:border-gold outline-none shadow-sm"
+          />
+        </div>
+      </div>
+
+      <div className="bg-white border border-border-forest rounded-[3rem] overflow-hidden">
+        <div className="grid grid-cols-4 divide-x divide-border-forest bg-bg-secondary/20">
+          <div className="p-8 space-y-2">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Processing</p>
+            <p className="text-3xl font-display font-bold">
+              {orders.filter(o => o.status === 'processing').length}
+            </p>
+          </div>
+          <div className="p-8 space-y-2">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Shipped</p>
+            <p className="text-3xl font-display font-bold">
+              {orders.filter(o => o.status === 'shipped').length}
+            </p>
+          </div>
+          <div className="p-8 space-y-2">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Delivered</p>
+            <p className="text-3xl font-display font-bold">
+              {orders.filter(o => o.status === 'delivered').length}
+            </p>
+          </div>
+          <div className="p-8 space-y-2">
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Canceled</p>
+            <p className="text-3xl font-display font-bold text-error">
+              {orders.filter(o => o.status === 'cancelled').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-bg-secondary/30 text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">
+                <th className="px-12 py-6">ID / Manifest</th>
+                <th className="px-12 py-6">Consignee</th>
+                <th className="px-12 py-6">Status Trace</th>
+                <th className="px-12 py-6">Composition</th>
+                <th className="px-12 py-6 text-right">Valuation</th>
+                <th className="px-12 py-6 text-right">Logistics</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-forest">
+              {filteredOrders.map((order) => (
+                <React.Fragment key={order.id}>
+                  <tr className="hover:bg-bg-secondary/10 transition-colors">
+                    <td className="px-12 py-8">
+                      <div className="space-y-1">
+                        <p className="font-mono text-xs font-bold text-gold">#{order.id.toUpperCase()}</p>
+                        <p className="text-[10px] text-text-muted uppercase tracking-widest">{order.date}</p>
                       </div>
-                    ))}
-                    <div className="h-10 w-10 rounded-xl border-2 border-white bg-accent-primary flex items-center justify-center text-[10px] text-white font-bold relative z-10">
-                      +2
+                    </td>
+                    <td className="px-12 py-8">
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-accent-primary">{order.customerName}</p>
+                        <p className="text-[10px] text-text-muted uppercase">{order.email || 'artisan.client@email.com'}</p>
+                      </div>
+                    </td>
+                    <td className="px-12 py-8">
+                      <Badge variant={order.status === 'delivered' ? 'success' : 'gold'} className="rounded-full px-4 py-1.5 uppercase font-bold tracking-[0.2em] text-[8px] border-none shadow-sm capitalize">
+                        {order.status}
+                      </Badge>
+                    </td>
+                    <td className="px-12 py-8">
+                      <div className="flex -space-x-4">
+                        {order.items.slice(0, 3).map((item, i) => (
+                          <div key={i} className="h-10 w-10 rounded-xl border-2 border-white bg-bg-secondary overflow-hidden shadow-lg">
+                            <img src={item.images[0]} alt="asset" className="h-full w-full object-cover" />
+                          </div>
+                        ))}
+                        {order.items.length > 3 && (
+                          <div className="h-10 w-10 rounded-xl border-2 border-white bg-accent-primary flex items-center justify-center text-[10px] text-white font-bold relative z-10">
+                            +{order.items.length - 3}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-12 py-8 text-right font-display font-bold text-2xl">
+                      {formatPrice(order.total)}
+                    </td>
+                    <td className="px-12 py-8 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => setTrackingOrderId(order.id)}
+                          className="h-10 px-6 rounded-2xl bg-bg-secondary border border-border-forest text-[10px] font-bold uppercase tracking-widest hover:border-gold transition-all"
+                        >
+                          Track
+                        </button>
+                        <button 
+                          onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+                          className={cn(
+                            "h-10 w-10 rounded-2xl border border-border-forest flex items-center justify-center transition-all shadow-sm",
+                            expandedOrderId === order.id ? "bg-gold text-white border-gold" : "bg-white hover:bg-gold hover:border-gold hover:text-white"
+                          )}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  
+                  {/* Expanded Order Details */}
+                  <AnimatePresence>
+                    {expandedOrderId === order.id && (
+                      <tr>
+                        <td colSpan={6} className="px-12 py-0">
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="py-8 border-t border-border-forest grid grid-cols-1 md:grid-cols-2 gap-12">
+                              <div className="space-y-6">
+                                <h5 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Order Composition</h5>
+                                <div className="space-y-4">
+                                  {order.items.map((item, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-4 bg-bg-secondary rounded-2xl">
+                                      <div className="flex items-center gap-4">
+                                        <img src={item.images[0]} className="h-12 w-12 rounded-xl object-cover" />
+                                        <div>
+                                          <p className="text-xs font-bold">{item.name}</p>
+                                          <p className="text-[10px] text-text-muted">Qty: {item.quantity}</p>
+                                        </div>
+                                      </div>
+                                      <p className="text-sm font-display font-bold">{formatPrice(item.price * item.quantity)}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-6">
+                                <h5 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Logistics Info</h5>
+                                <div className="p-6 border border-border-forest rounded-3xl space-y-4">
+                                  <div className="flex justify-between">
+                                    <span className="text-[10px] font-bold uppercase text-text-muted">Address</span>
+                                    <span className="text-xs font-bold text-right max-w-[200px]">{order.address}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-[10px] font-bold uppercase text-text-muted">Payment</span>
+                                    <span className="text-xs font-bold uppercase tracking-widest">{order.paymentMethod}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-[10px] font-bold uppercase text-text-muted">Transaction ID</span>
+                                    <span className="text-xs font-mono font-bold text-gold">{order.transactionId || 'N/A'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        </td>
+                      </tr>
+                    )}
+                  </AnimatePresence>
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tracking Modal */}
+      <AnimatePresence>
+        {trackingOrderId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setTrackingOrderId(null)}
+              className="absolute inset-0 bg-accent-primary/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-lg rounded-[3rem] p-12 relative shadow-2xl space-y-10"
+            >
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gold">Real-time Logistics</p>
+                <h4 className="text-3xl font-display font-bold">Track Shipment</h4>
+                <p className="text-xs text-text-muted font-mono">#{trackingOrderId.toUpperCase()}</p>
+              </div>
+
+              <div className="space-y-12 py-4">
+                {[
+                  { step: 'Confirmed', status: 'completed', desc: 'Order placed and verified' },
+                  { step: 'Dispatched', status: orders.find(o => o.id === trackingOrderId)?.status === 'delivered' || orders.find(o => o.id === trackingOrderId)?.status === 'shipped' ? 'completed' : 'pending', desc: 'Handed over to carrier' },
+                  { step: 'Delivered', status: orders.find(o => o.id === trackingOrderId)?.status === 'delivered' ? 'completed' : 'pending', desc: 'Received by customer' },
+                ].map((s, i) => (
+                  <div key={i} className="flex gap-6 relative">
+                    {i < 2 && (
+                      <div className={cn(
+                        "absolute left-[19px] top-10 w-0.5 h-12",
+                        s.status === 'completed' ? "bg-accent-primary" : "bg-bg-secondary"
+                      )} />
+                    )}
+                    <div className={cn(
+                      "h-10 w-10 rounded-full flex items-center justify-center shrink-0 border-4 border-white shadow-lg relative z-10",
+                      s.status === 'completed' ? "bg-accent-primary text-white" : "bg-bg-secondary text-text-muted"
+                    )}>
+                      {s.status === 'completed' ? <CheckCircle className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                    </div>
+                    <div className="space-y-1">
+                      <p className={cn("text-sm font-bold", s.status === 'completed' ? "text-accent-primary" : "text-text-muted")}>{s.step}</p>
+                      <p className="text-[10px] text-text-muted uppercase tracking-widest">{s.desc}</p>
                     </div>
                   </div>
-                </td>
-                <td className="px-12 py-8 text-right font-display font-bold text-2xl">
-                  {formatPrice(order.total)}
-                </td>
-                <td className="px-12 py-8 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button className="h-10 px-6 rounded-2xl bg-bg-secondary border border-border-forest text-[10px] font-bold uppercase tracking-widest hover:border-gold transition-all">
-                      Track
-                    </button>
-                    <button className="h-10 w-10 rounded-2xl bg-white border border-border-forest flex items-center justify-center hover:bg-gold hover:border-gold hover:text-white transition-all shadow-sm">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </motion.div>
-);
+                ))}
+              </div>
+
+              <Button 
+                variant="primary" 
+                className="w-full h-14 rounded-full" 
+                onClick={() => setTrackingOrderId(null)}
+              >
+                Close Tracking
+              </Button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
 
 const CustomersTab = () => (
   <motion.div
@@ -578,7 +840,7 @@ const CustomersTab = () => (
             </div>
             <div className="text-right">
               <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Total Spend</p>
-              <p className="text-2xl font-display font-bold text-gold">{formatPrice(Math.random() * 5000 + 1000)}</p>
+              <p className="text-2xl font-display font-bold text-gold">{formatPrice(customer.totalSpent)}</p>
             </div>
           </div>
 
@@ -590,7 +852,9 @@ const CustomersTab = () => (
           <div className="flex items-center justify-between pt-6 border-t border-border-forest">
             <div className="space-y-1">
               <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest italic">Member Since</p>
-              <p className="text-xs font-bold font-mono">OCT 2025</p>
+              <p className="text-xs font-bold font-mono">
+                {new Date(customer.joinedDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toUpperCase()}
+              </p>
             </div>
             <Button variant="ghost" size="sm" className="rounded-full px-6 bg-bg-secondary">View Profile</Button>
           </div>
@@ -600,61 +864,110 @@ const CustomersTab = () => (
   </motion.div>
 );
 
-const SettingsTab = () => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.95 }}
-    animate={{ opacity: 1, scale: 1 }}
-    className="max-w-4xl space-y-12"
-  >
-    <div className="space-y-2">
-      <h3 className="text-4xl font-display font-bold text-accent-primary">Portal Configuration</h3>
-      <p className="text-text-secondary">Fine-tune the Horof Enterprise Management controls</p>
-    </div>
+const SettingsTab = () => {
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [goldAesthetic, setGoldAesthetic] = useState(true);
+  const [isSaved, setIsSaved] = useState(false);
 
-    <div className="space-y-8">
-      <section className="bg-white border border-border-forest rounded-[3rem] p-12 space-y-8">
-        <h4 className="text-2xl font-display font-bold text-accent-primary">General Integrity</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Store Branding</label>
-            <input className="w-full h-14 bg-bg-secondary rounded-2xl border-none px-6 outline-none focus:ring-2 ring-gold/20" defaultValue="Horof" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Support Email</label>
-            <input className="w-full h-14 bg-bg-secondary rounded-2xl border-none px-6 outline-none focus:ring-2 ring-gold/20" defaultValue="concierge@horof.art" />
-          </div>
-        </div>
-      </section>
+  const handleSave = () => {
+    setIsSaved(true);
+    setTimeout(() => {
+      setIsSaved(false);
+    }, 2000);
+  };
 
-      <section className="bg-white border border-border-forest rounded-[3rem] p-12 space-y-8">
-        <h4 className="text-2xl font-display font-bold text-accent-primary">Marketplace Controls</h4>
-        <div className="flex items-center justify-between p-8 bg-bg-secondary rounded-3xl">
-          <div>
-            <p className="font-bold text-accent-primary">Maintenance Mode</p>
-            <p className="text-xs text-text-muted">Immediately suspend public storefront access</p>
-          </div>
-          <div className="h-8 w-14 bg-accent-primary/10 rounded-full relative p-1 cursor-pointer">
-            <div className="h-6 w-6 bg-white rounded-full shadow-lg" />
-          </div>
-        </div>
-        <div className="flex items-center justify-between p-8 bg-gold/5 rounded-3xl border border-gold/10">
-          <div>
-            <p className="font-bold text-gold">Premium Gold Aesthetic</p>
-            <p className="text-xs text-text-muted">Toggle luxury styling across the platform</p>
-          </div>
-          <div className="h-8 w-14 bg-gold rounded-full relative p-1 cursor-pointer">
-            <div className="h-6 w-6 bg-white rounded-full shadow-lg ml-auto" />
-          </div>
-        </div>
-      </section>
-    </div>
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="max-w-4xl space-y-12"
+    >
+      <div className="space-y-2">
+        <h3 className="text-4xl font-display font-bold text-accent-primary">Portal Configuration</h3>
+        <p className="text-text-secondary">Fine-tune the Horof Enterprise Management controls</p>
+      </div>
 
-    <div className="flex justify-end gap-6 pt-10">
-      <Button variant="outline" className="h-14 px-12 rounded-full">Discard Changes</Button>
-      <Button variant="primary" className="h-14 px-12 rounded-full">Apply Configuration</Button>
-    </div>
-  </motion.div>
-);
+      <div className="space-y-8">
+        <section className="bg-white border border-border-forest rounded-[3rem] p-12 space-y-8">
+          <h4 className="text-2xl font-display font-bold text-accent-primary">General Integrity</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Store Branding</label>
+              <input className="w-full h-14 bg-bg-secondary rounded-2xl border-none px-6 outline-none focus:ring-2 ring-gold/20" defaultValue="Horof" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Support Email</label>
+              <input className="w-full h-14 bg-bg-secondary rounded-2xl border-none px-6 outline-none focus:ring-2 ring-gold/20" defaultValue="concierge@horof.art" />
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white border border-border-forest rounded-[3rem] p-12 space-y-8">
+          <h4 className="text-2xl font-display font-bold text-accent-primary">Marketplace Controls</h4>
+          <div className="flex items-center justify-between p-8 bg-bg-secondary rounded-3xl">
+            <div>
+              <p className="font-bold text-accent-primary">Maintenance Mode</p>
+              <p className="text-xs text-text-muted">Immediately suspend public storefront access</p>
+            </div>
+            <div 
+              onClick={() => setMaintenanceMode(!maintenanceMode)}
+              className={cn(
+                "h-8 w-14 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
+                maintenanceMode ? "bg-error" : "bg-accent-primary/10"
+              )}
+            >
+              <motion.div 
+                animate={{ x: maintenanceMode ? 24 : 0 }}
+                className="h-6 w-6 bg-white rounded-full shadow-lg" 
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-between p-8 bg-gold/5 rounded-3xl border border-gold/10">
+            <div>
+              <p className="font-bold text-gold">Premium Gold Aesthetic</p>
+              <p className="text-xs text-text-muted">Toggle luxury styling across the platform</p>
+            </div>
+            <div 
+              onClick={() => setGoldAesthetic(!goldAesthetic)}
+              className={cn(
+                "h-8 w-14 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
+                goldAesthetic ? "bg-gold" : "bg-accent-primary/10"
+              )}
+            >
+              <motion.div 
+                animate={{ x: goldAesthetic ? 24 : 0 }}
+                className="h-6 w-6 bg-white rounded-full shadow-lg" 
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="flex items-center justify-end gap-6 pt-10">
+        <AnimatePresence>
+          {isSaved && (
+            <motion.p 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="text-success text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
+            >
+              <CheckCircle className="h-4 w-4" /> Configuration saved
+            </motion.p>
+          )}
+        </AnimatePresence>
+        <Button variant="outline" className="h-14 px-12 rounded-full">Discard Changes</Button>
+        <Button 
+          variant="primary" 
+          className="h-14 px-12 rounded-full"
+          onClick={handleSave}
+        >
+          Apply Configuration
+        </Button>
+      </div>
+    </motion.div>
+  );
+};
 
 const Star = ({ className }: { className?: string }) => (
   <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
