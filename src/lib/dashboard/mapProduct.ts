@@ -1,0 +1,23 @@
+import type { Product } from '../types';
+import type { DbProductRow } from './types';
+import { parseProductImages } from './orderHelpers';
+
+export function mapDbProductToProduct(row: DbProductRow): Product {
+  const priceRaw = row.price;
+  const priceNum = typeof priceRaw === 'string' ? parseFloat(priceRaw) : Number(priceRaw);
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: '',
+    price: Number.isFinite(priceNum) ? priceNum : 0,
+    images: parseProductImages(row.images),
+    category: 'Curated',
+    rating: 5,
+    reviewCount: 0,
+    stock: 99,
+    tags: [],
+    isNew: false,
+    isFeatured: false,
+  };
+}

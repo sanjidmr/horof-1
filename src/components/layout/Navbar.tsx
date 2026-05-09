@@ -207,11 +207,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href="/orders"
+                  href="/dashboard"
                   className={cn(
                     "hidden sm:flex h-9 w-9 rounded-full items-center justify-center transition-all",
                     (isScrolled || !isTransparentPage) ? "bg-slate-100 text-slate-800" : "bg-white/10 text-white backdrop-blur-sm"
                   )}
+                  title="My dashboard"
                 >
                   <User size={18} />
                 </Link>
@@ -352,9 +353,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                   )}
                   {isAuthenticated && (
                     <div className="space-y-4">
-                      <Link href="/orders" onClick={() => setIsMobileMenuOpen(false)}>
+                      <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
                         <Button className="w-full h-12 rounded-xl border border-[#1A3320] text-[#1A3320] hover:bg-slate-50 text-sm font-bold tracking-[0.2em] uppercase">
-                          View My Orders
+                          My dashboard
                         </Button>
                       </Link>
                       <Button 

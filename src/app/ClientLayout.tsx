@@ -15,6 +15,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const [hasMounted, setHasMounted] = useState(false);
   const pathname = usePathname();
   const isAdminPath = pathname?.startsWith('/admin');
+  const isDashboardPath = pathname?.startsWith('/dashboard');
 
   useEffect(() => {
     setHasMounted(true);
@@ -28,14 +29,16 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
       <WishlistProvider>
         <CartProvider>
           <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
-            {!isAdminPath && <Navbar onOpenCart={() => setIsCartOpen(true)} />}
+            {!isAdminPath && !isDashboardPath && (
+              <Navbar onOpenCart={() => setIsCartOpen(true)} />
+            )}
             <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
             
             <main className="flex-1 w-full">
               {children}
             </main>
 
-            {!isAdminPath && <Footer />}
+            {!isAdminPath && !isDashboardPath && <Footer />}
             <Toaster 
               position="bottom-right"
               toastOptions={{

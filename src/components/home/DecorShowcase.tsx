@@ -57,13 +57,7 @@ export const DecorShowcase: React.FC = () => {
       <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-10 min-h-[400px] md:min-h-[650px]">
 
         {/* LEFT: BIG IMAGE (FULL SHOW) */}
-        <motion.div
-          initial={{ opacity: 0, x: -30 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
-          className="relative group h-[320px] md:h-full"
-        >
+        
           <Link
             href={decorItems[0].path}
             className="block h-full relative overflow-hidden rounded-xl md:rounded-2xl bg-bg-secondary"
@@ -92,33 +86,18 @@ export const DecorShowcase: React.FC = () => {
                   {decorItems[0].desc}
                 </p>
 
-                <div className="pt-2 sm:pt-4 flex items-center gap-3 sm:gap-4 text-white group-hover:text-accent-light transition-colors">
-                  <span className="text-xs font-bold uppercase tracking-widest">
-                    Explore Piece
-                  </span>
-                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full border border-white/20 flex items-center justify-center group-hover:bg-accent-hover group-hover:border-accent-hover transition-all">
-                    <ArrowRight className="h-4 w-4" />
-                  </div>
-                </div>
+               
               </div>
             </div>
           </Link>
-        </motion.div>
         {/* RIGHT SIDE */}
         <div className="grid grid-cols-2 md:grid-cols-1 md:grid-rows-2 gap-3 md:gap-6 h-[220px] md:h-full">
           {decorItems.slice(1).map((item, idx) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: idx * 0.2 }}
-              className="relative group h-full"
-            >
-              <Link
-                href={item.path}
-                className="block h-full relative overflow-hidden rounded-xl md:rounded-2xl bg-bg-secondary"
-              >
+           
+           <div
+           key={item.id}
+           className="block h-full relative overflow-hidden rounded-xl md:rounded-2xl bg-bg-secondary group"
+         >
                 <img
                   src={item.image}
                   alt={item.title}
@@ -141,8 +120,8 @@ export const DecorShowcase: React.FC = () => {
                     <ArrowRight className="h-3 w-3 text-accent-light" />
                   </div>
                 </div>
-              </Link>
-            </motion.div>
+              </div>
+           
           ))}
         </div>
       </div>

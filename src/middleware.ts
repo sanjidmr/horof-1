@@ -13,7 +13,12 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAdminProtected = pathname.startsWith('/admin') && pathname !== '/admin/login';
-  const isProtected = pathname.startsWith('/checkout') || pathname.startsWith('/orders') || isAdminProtected;
+  const isDashboardProtected = pathname.startsWith('/dashboard');
+  const isProtected =
+    pathname.startsWith('/checkout') ||
+    pathname.startsWith('/orders') ||
+    isDashboardProtected ||
+    isAdminProtected;
   if (!isProtected) return response;
 
   const env = getSupabasePublicEnv();

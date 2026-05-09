@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, use } from 'react';
+import React, { useState, use, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { products } from '../../../lib/mockData';
@@ -12,6 +12,7 @@ import { Star, ShoppingCart, Heart, ShieldCheck, Truck, RefreshCcw, ChevronRight
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { ProductCard } from '../../../components/product/ProductCard';
+import { appendRecentProductId } from '../../../lib/recentlyViewed';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -29,6 +30,10 @@ export default function ProductDetailsPage({ params }: PageProps) {
   const relatedProducts = products
     .filter(p => p.category === product?.category && p.id !== product?.id)
     .slice(0, 4);
+
+  useEffect(() => {
+    if (product?.id) appendRecentProductId(product.id);
+  }, [product?.id]);
 
   const handleBuyNow = () => {
     if (!product) return;

@@ -1,6 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, ArrowRight } from 'lucide-react';
+import Image from 'next/image';
+
 
 export const Footer: React.FC = () => {
   return (
@@ -9,14 +11,19 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand & Mission */}
           <div className="space-y-4 flex flex-col items-center md:items-start text-center md:text-left">
-            <Link href="/" className="inline-block group">
-              <div className="relative flex flex-col items-center md:items-start">
-                <span className="text-2xl md:text-4xl font-display font-medium tracking-[0.25em] transition-all duration-500 uppercase leading-none text-white drop-shadow-md group-hover:scale-105 origin-center md:origin-left">
-                  Horof
-                </span>
-                <div className="h-[1.5px] w-0 group-hover:w-full transition-all duration-700 mt-1.5 bg-white" />
-              </div>
-            </Link>
+            <div className="flex justify-center items-center">
+              <Link href="/" className="relative block group">
+                <div className="relative h-15 md:h-20 w-[140px] md:w-[160px] px-2 flex items-center justify-center">
+                  <Image
+                    src="/images/horof.svg"
+                    alt="Horof Logo"
+                    width={160}
+                    height={180}
+                    className="object-contain"
+                  />
+                </div>
+              </Link>
+            </div>
             <p className="text-white/60 text-[12px] leading-relaxed max-w-xs font-light">
               Crafting sustainable heritage through master woodcarving. We turn nature's finest timber into heirloom stories.
             </p>
