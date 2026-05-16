@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { categories } from '../../lib/mockData';
 import Link from 'next/link';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -11,7 +10,9 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/free-mode';
 
-export const CategorySection: React.FC = () => {
+import { Category } from '../../lib/types';
+
+export const CategorySection: React.FC<{ categories: Category[] }> = ({ categories }) => {
   return (
     <div className="relative py-6">
       <div className="flex flex-col items-center text-center md:flex-row md:items-end md:justify-between mb-12 gap-6">

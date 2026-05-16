@@ -1,19 +1,21 @@
 import React from 'react';
-import { products } from '../../lib/mockData';
+import { Product } from '../../lib/types';
 import { ProductCard } from '../product/ProductCard';
 
 interface FeaturedProductsProps {
   title?: string;
   subtitle?: string;
   limit?: number;
+  products: Product[];
 }
 
 export const FeaturedProducts: React.FC<FeaturedProductsProps> = ({ 
   title = "Featured Collection", 
   subtitle = "Masterpieces", 
-  limit = 8 
+  limit = 8,
+  products
 }) => {
-  const featured = products.filter(p => p.isFeatured).slice(0, limit);
+  const featured = products.slice(0, limit);
 
   return (
     <div className="space-y-12">

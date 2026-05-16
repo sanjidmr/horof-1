@@ -1,33 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, HelpCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
-
-const faqs = [
-  {
-    question: "What makes your wood crafts unique?",
-    answer: "Every piece is handcrafted by master artisans using premium, sustainably sourced wood. We combine ancestral carving techniques with modern precision to create heirlooms that tell a story."
-  },
-  {
-    question: "Do you accept custom design requests?",
-    answer: "Yes! We specialize in bespoke craftsmanship. You can contact us through our 'Custom Design' section to discuss your unique vision and our artisans will bring it to life."
-  },
-  {
-    question: "Where do you source your timber?",
-    answer: "We are committed to the environment. All our wood is sourced either from naturally fallen trees or from verified sustainable timber plantations in local communities."
-  },
-  {
-    question: "Do you offer international shipping?",
-    answer: "No, we only delever your product on bangladesh we dont have interntionl shipping "
-  },
-  {
-    question: "How should I care for my wooden items?",
-    answer: "We recommend keeping them away from direct sunlight and extreme moisture. Regular cleaning with a soft, dry cloth and occasional application of food-safe mineral oil will maintain their beauty for generations."
-  }
-];
+import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export const FAQSection: React.FC = () => {
+  const [faqs, setFaqs] = useState<any[]>([]);
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const supabase = createSupabaseBrowserClient();
+
+  useEffect(() => {
+    async function fetchFaqs() {
+      const { data } = await supabase
+        .from('faqs')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (data) setFaqs(data);
+    }
+    fetchFaqs();
+  }, [supabase]);
+
+  if (faqs.length === 0) return null;
 
   return (
     <section className="py-8 md:py-20 bg-bg-secondary/30 rounded-2xl md:rounded-[3rem] border border-border-forest/50">
@@ -51,7 +44,7 @@ export const FAQSection: React.FC = () => {
 
             return (
               <motion.div
-                key={index}
+                key={faq.id}
                 initial={false}
                 className={cn(
                   "border border-border-forest rounded-lg md:rounded-2xl overflow-hidden transition-all duration-300",

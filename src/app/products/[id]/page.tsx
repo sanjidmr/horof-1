@@ -3,7 +3,7 @@
 import React, { useState, use, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { products } from '../../../lib/mockData';
+import { createSupabaseBrowserClient } from '../../../lib/supabase/client';
 import { formatPrice } from '../../../lib/utils';
 import { useCart } from '../../../context/CartContext';
 import { Button } from '../../../components/ui/Button';
@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { ProductCard } from '../../../components/product/ProductCard';
 import { appendRecentProductId } from '../../../lib/recentlyViewed';
+import { Product } from '../../../lib/types';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -21,19 +22,82 @@ interface PageProps {
 export default function ProductDetailsPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const product = products.find(p => p.id === id);
+  const supabase = createSupabaseBrowserClient();
+  
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const { addToCart, clearCart } = useCart();
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('description');
 
-  const relatedProducts = products
-    .filter(p => p.category === product?.category && p.id !== product?.id)
-    .slice(0, 4);
-
   useEffect(() => {
-    if (product?.id) appendRecentProductId(product.id);
-  }, [product?.id]);
+    async function fetchProduct() {
+      if (!id) return;
+      setLoading(true);
+      
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, categories(name)')
+        .eq('id', id)
+        .single();
+
+      if (data && !error) {
+        const mappedProduct: Product = {
+          id: data.id,
+          name: data.name,
+          description: data.description || '',
+          price: Number(data.price),
+          discountPrice: data.compare_price ? Number(data.compare_price) : undefined,
+          images: data.images || [],
+          category: data.categories?.name || 'Uncategorized',
+          rating: 4.5, // Default for now
+          reviewCount: 12, // Default for now
+          stock: data.stock || 0,
+          tags: [],
+          isNew: !!data.is_new_arrival,
+          isFeatured: !!data.is_best_selling,
+          slug: data.slug,
+          specification: data.specification || '',
+          perfect_for: data.perfect_for || ''
+        };
+        setProduct(mappedProduct);
+        appendRecentProductId(data.id);
+
+        // Fetch related products
+        const { data: relatedData } = await supabase
+          .from('products')
+          .select('*, categories(name)')
+          .eq('category_id', data.category_id)
+          .neq('id', data.id)
+          .limit(4);
+
+        if (relatedData) {
+          setRelatedProducts(relatedData.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description || '',
+            price: Number(p.price),
+            discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
+            images: p.images || [],
+            category: p.categories?.name || 'Uncategorized',
+            rating: 4.5,
+            reviewCount: 12,
+            stock: p.stock || 0,
+            tags: [],
+            isNew: !!p.is_new_arrival,
+            isFeatured: !!p.is_best_selling,
+            slug: p.slug,
+            specification: p.specification || '',
+            perfect_for: p.perfect_for || ''
+          })));
+        }
+      }
+      setLoading(false);
+    }
+    fetchProduct();
+  }, [id, supabase]);
 
   const handleBuyNow = () => {
     if (!product) return;
@@ -42,12 +106,21 @@ export default function ProductDetailsPage({ params }: PageProps) {
     router.push('/checkout');
   };
 
+  if (loading) {
+    return (
+      <div className="pt-40 pb-24 text-center space-y-6">
+        <div className="h-12 w-12 border-4 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-accent-primary font-display">Crafting product details...</p>
+      </div>
+    );
+  }
+
   if (!product) {
     return (
       <div className="pt-32 pb-24 text-center space-y-6">
         <h2 className="text-4xl font-display font-bold">Product not found</h2>
         <Link href="/products">
-          <Button variant="gold">Back to Shop</Button>
+          <Button variant="outline" className="rounded-full px-8">Back to Gallery</Button>
         </Link>
       </div>
     );
@@ -196,37 +269,44 @@ export default function ProductDetailsPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="pt-6 md:pt-10 space-y-6 md:space-y-8">
-            <div className="flex border-b border-white/5 overflow-x-auto custom-scrollbar no-scrollbar-on-mobile">
-              {['description', 'specifications', 'reviews'].map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-6 md:px-8 py-3 md:py-4 text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all relative flex-shrink-0 ${activeTab === tab ? 'text-accent-hover' : 'text-text-muted hover:text-text-primary'}`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-hover" />
-                  )}
-                </button>
-              ))}
+          {/* Detailed Info Sections - Vertically Stacked */}
+          <div className="pt-10 space-y-12">
+            {/* Description Section */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="h-[1px] w-8 bg-accent-hover"></div> General Description
+              </h3>
+              <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
+                {product.description || "No description available for this masterpiece."}
+              </div>
             </div>
-            <div className="text-text-secondary text-xs sm:text-sm md:text-base leading-relaxed min-h-[100px] bg-bg-card/40 p-5 md:p-8 rounded-2xl md:rounded-3xl border border-white/5 backdrop-blur-sm">
-              {activeTab === 'description' && (
-                <p>Every piece is carefully selected from sustainable forests. Our artisans spend over 40 hours on a single item to ensure the output meets the highest luxury standards. The natural wood grain is preserved through organic oils, making each product unique.</p>
-              )}
-              {activeTab === 'specifications' && (
-                <ul className="space-y-3">
-                  <li><span className="text-text-primary font-bold">Material:</span> Solid American Walnut</li>
-                  <li><span className="text-text-primary font-bold">Finish:</span> Natural Organic Oil</li>
-                  <li><span className="text-text-primary font-bold">Weight:</span> 4.5kg</li>
-                  <li><span className="text-text-primary font-bold">Origin:</span> Handmade in South Asia</li>
-                </ul>
-              )}
-              {activeTab === 'reviews' && (
-                <p>No reviews yet. Be the first to review this handcrafted masterpiece!</p>
-              )}
+
+            {/* Specifications Section */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="h-[1px] w-8 bg-accent-hover"></div> Technical Specifications
+              </h3>
+              <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
+                {product.specification ? (
+                  <div className="whitespace-pre-line">{product.specification}</div>
+                ) : (
+                  <p>Details regarding craftsmanship and materials are available upon request.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Perfect For Section */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                <div className="h-[1px] w-8 bg-accent-hover"></div> Perfect For
+              </h3>
+              <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
+                {product.perfect_for ? (
+                  <div className="italic text-accent-light/80">"{product.perfect_for}"</div>
+                ) : (
+                  <p>Ideal for those who appreciate fine, handcrafted wood art.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

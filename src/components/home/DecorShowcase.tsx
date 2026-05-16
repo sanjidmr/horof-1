@@ -2,39 +2,55 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { cn } from '../../lib/utils';
-import Image from "next/image";
-
-
-const decorItems = [
-  {
-    id: 1,
-    title: 'The Eternal Root',
-    subtitle: 'Signature Sculpture',
-    desc: 'Hand-carved from century-old walnut, this piece captures the fluid motion of growing roots. A testament to time and artisanal patience.',
-    image: '/images/hero1.jpg',
-    path: '/products',
-    isLarge: true
-  },
-  {
-    id: 2,
-    title: 'Horizon Wall Art',
-    subtitle: 'Heritage Edition',
-    desc: 'Abstract topography carved into solid oak, finished with organic oils to reveal the hidden soul of the wood.',
-    image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=1000',
-    path: '/products'
-  },
-  {
-    id: 3,
-    title: 'Minimalist Vessel',
-    subtitle: 'Sculpted Form',
-    desc: 'A seamless blend of hollowed space and solid silhouette, perfect for bringing a piece of nature into your workspace.',
-    image: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&q=80&w=1000',
-    path: '/products'
-  }
-];
+import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export const DecorShowcase: React.FC = () => {
+  const [items, setItems] = React.useState([
+    {
+      id: 1,
+      title: 'The Eternal Root',
+      subtitle: 'Signature Sculpture',
+      desc: 'Hand-carved from century-old walnut, this piece captures the fluid motion of growing roots. A testament to time and artisanal patience.',
+      image: '/images/hero1.jpg',
+      path: '/products',
+      isLarge: true
+    },
+    {
+      id: 2,
+      title: 'Horizon Wall Art',
+      subtitle: 'Heritage Edition',
+      desc: 'Abstract topography carved into solid oak, finished with organic oils to reveal the hidden soul of the wood.',
+      image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=1000',
+      path: '/products'
+    },
+    {
+      id: 3,
+      title: 'Minimalist Vessel',
+      subtitle: 'Sculpted Form',
+      desc: 'A seamless blend of hollowed space and solid silhouette, perfect for bringing a piece of nature into your workspace.',
+      image: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&q=80&w=1000',
+      path: '/products'
+    }
+  ]);
+  const supabase = createSupabaseBrowserClient();
+
+  React.useEffect(() => {
+    async function fetchShowcase() {
+      const { data } = await supabase
+        .from('site_images')
+        .select('*')
+        .filter('section', 'like', 'decor-%');
+      
+      if (data && data.length > 0) {
+        setItems(prev => prev.map(item => {
+          const match = data.find(d => d.section === `decor-${item.id}`);
+          return match ? { ...item, image: match.image_url } : item;
+        }));
+      }
+    }
+    fetchShowcase();
+  }, [supabase]);
+
   return (
     <section className="max-w-6xl mx-auto px-6 py-10 sm:py-16">
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 sm:mb-16 gap-6 md:gap-8 text-left">
@@ -59,12 +75,12 @@ export const DecorShowcase: React.FC = () => {
         {/* LEFT: BIG IMAGE (FULL SHOW) */}
         
           <Link
-            href={decorItems[0].path}
+            href={items[0].path}
             className="block h-full relative overflow-hidden rounded-xl md:rounded-2xl bg-bg-secondary"
           >
             <img
-              src={decorItems[0].image}
-              alt={decorItems[0].title}
+              src={items[0].image}
+              alt={items[0].title}
               className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
             />
 
@@ -74,16 +90,16 @@ export const DecorShowcase: React.FC = () => {
                 <div className="flex items-center gap-2 text-accent-light">
                   <Sparkles className="h-4 w-4" />
                   <span className="text-[10px] font-bold uppercase tracking-widest">
-                    {decorItems[0].subtitle}
+                    {items[0].subtitle}
                   </span>
                 </div>
 
                 <h3 className="text-2xl sm:text-3xl md:text-5xl font-display font-medium text-white">
-                  {decorItems[0].title}
+                  {items[0].title}
                 </h3>
 
                 <p className="text-white/60 text-xs sm:text-sm md:text-base max-w-md line-clamp-2 md:line-clamp-3 font-light leading-relaxed">
-                  {decorItems[0].desc}
+                  {items[0].desc}
                 </p>
 
                
@@ -92,7 +108,7 @@ export const DecorShowcase: React.FC = () => {
           </Link>
         {/* RIGHT SIDE */}
         <div className="grid grid-cols-2 md:grid-cols-1 md:grid-rows-2 gap-3 md:gap-6 h-[220px] md:h-full">
-          {decorItems.slice(1).map((item, idx) => (
+          {items.slice(1).map((item) => (
            
            <div
            key={item.id}

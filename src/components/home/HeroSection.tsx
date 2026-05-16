@@ -1,11 +1,26 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
-import { ShoppingBag, ArrowRight, TreePine } from 'lucide-react';
+import { ShoppingBag, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import Image from "next/image";
+import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export const HeroSection: React.FC = () => {
+  const [heroImage, setHeroImage] = React.useState('/images/about.jpg');
+  const supabase = createSupabaseBrowserClient();
+
+  React.useEffect(() => {
+    async function getHero() {
+      const { data } = await supabase
+        .from('site_images')
+        .select('image_url')
+        .eq('section', 'hero')
+        .maybeSingle();
+      if (data?.image_url) setHeroImage(data.image_url);
+    }
+    getHero();
+  }, [supabase]);
+
   return (
     <section className="relative min-h-screen flex items-center bg-black overflow-hidden pt-20">
       {/* Full-Bleed Premium Decor Background */}
@@ -17,7 +32,7 @@ export const HeroSection: React.FC = () => {
           className="absolute inset-0"
         >
           <img
-            src="/images/about.jpg"
+            src={heroImage}
             alt="Premium Artisan Decor"
             className="w-full h-full object-cover object-top"
           />

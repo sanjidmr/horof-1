@@ -1,9 +1,9 @@
 import React from 'react';
-import { products } from '../../lib/mockData';
+import { Product } from '../../lib/types';
 import { ProductCard } from '../product/ProductCard';
 
-export const NewArrivals: React.FC = () => {
-  const newItems = products.filter(p => p.isNew).slice(0, 4);
+export const NewArrivals: React.FC<{ products: Product[] }> = ({ products }) => {
+  const newItems = products.slice(0, 4);
 
   return (
     <div className="space-y-8 sm:space-y-12">

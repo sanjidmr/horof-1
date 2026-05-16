@@ -73,6 +73,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ✅ Signup এর পরে auto login
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     if (loginError) throw loginError;
+
+    // Create admin notification
+    try {
+      const { createNotification } = await import('@/lib/actions/notifications');
+      await createNotification(
+        'New Customer Registered',
+        `A new user (${email}) has just registered on the platform.`,
+        'customer'
+      );
+    } catch (e) {
+      console.error('Failed to create notification:', e);
+    }
   };
 
   const logout = async () => {

@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { products, categories } from '../../lib/mockData';
+import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 import { ProductCard } from '../../components/product/ProductCard';
 import { Search, SlidersHorizontal, ChevronDown, Filter } from 'lucide-react';
 import { useSearchParams, usePathname } from 'next/navigation';
+import { Product } from '../../lib/types';
 
 interface FilterSidebarProps {
   searchQuery: string;
@@ -106,15 +107,55 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
 function ProductsPageContent() {
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const initialSearch = searchParams.get('search') || '';
+  const supabase = createSupabaseBrowserClient();
 
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [dbCategories, setDbCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [sortBy, setSortBy] = useState('Newest');
   const [priceRange, setPriceRange] = useState(200000);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!supabase) return;
+      setLoading(true);
+
+      const [prodRes, catRes] = await Promise.all([
+        supabase.from('products').select('*, categories(name)').eq('is_active', true),
+        supabase.from('categories').select('*').eq('is_active', true)
+      ]);
+
+      if (prodRes.data) {
+        setDbProducts(prodRes.data.map(p => ({
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          description: p.description || '',
+          price: Number(p.price),
+          discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
+          images: p.images || [],
+          category: p.categories?.name || 'Uncategorized',
+          rating: 4.5,
+          reviewCount: 12,
+          stock: p.stock || 0,
+          tags: [],
+          isNew: true,
+          createdAt: p.created_at
+        })));
+      }
+
+      if (catRes.data) {
+        setDbCategories(catRes.data);
+      }
+      setLoading(false);
+    }
+    fetchData();
+  }, [supabase]);
 
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '');
@@ -124,7 +165,7 @@ function ProductsPageContent() {
 
   const sortOptions = ['Newest', 'Price: Low to High', 'Price: High to Low', 'Top Rated'];
 
-  const filteredProducts = products
+  const filteredProducts = dbProducts
     .filter(p => {
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -143,7 +184,10 @@ function ProductsPageContent() {
         case 'Top Rated': return b.rating - a.rating;
         case 'Newest':
         default:
-          return b.id.localeCompare(a.id); // Assuming IDs or adding a date field would be better, but IDs work for mock
+          if (a.createdAt && b.createdAt) {
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          }
+          return String(b.id).localeCompare(String(a.id));
       }
     });
 
@@ -152,11 +196,20 @@ function ProductsPageContent() {
     setSearchQuery,
     selectedCategory,
     setSelectedCategory,
-    categories,
+    categories: dbCategories,
     setIsMobileFilterOpen,
     priceRange,
     setPriceRange
   };
+
+  if (loading) {
+    return (
+      <div className="pt-40 pb-24 px-6 max-w-7xl mx-auto text-center space-y-6">
+        <div className="h-16 w-16 border-4 border-accent-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-xl font-display text-accent-primary animate-pulse">Opening the Gallery...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-32 lg:pt-40 pb-24 px-6 max-w-7xl mx-auto">

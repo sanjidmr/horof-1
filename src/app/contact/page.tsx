@@ -76,7 +76,16 @@ export default function ContactPage() {
 
           <div className="h-48 md:h-64 bg-bg-card border border-border-forest rounded-2xl md:rounded-3xl overflow-hidden relative">
             <div className="absolute inset-0 bg-accent-primary/10 flex items-center justify-center">
-              <p className="text-text-muted text-[10px] md:text-xs uppercase tracking-widest font-bold">Interactive Map Placeholder</p>
+              <iframe
+                src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d824.1325765028048!2d90.40538057487808!3d24.750255134907835!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sbd!4v1778946357471!5m2!1sen!2sbd"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="rounded-2xl md:rounded-3xl"
+              />
             </div>
           </div>
         </div>

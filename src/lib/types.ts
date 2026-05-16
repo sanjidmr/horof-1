@@ -1,5 +1,6 @@
 export interface Product {
   id: string;
+  slug?: string;
   name: string;
   description: string;
   price: number;
@@ -12,6 +13,12 @@ export interface Product {
   tags: string[];
   isNew?: boolean;
   isFeatured?: boolean;
+  is_best_selling?: boolean;
+  is_new_arrival?: boolean;
+  is_product_of_the_day?: boolean;
+  specification?: string;
+  perfect_for?: string;
+  createdAt?: string;
 }
 
 export interface Category {

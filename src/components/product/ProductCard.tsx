@@ -39,6 +39,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Badges */}
         <div className="absolute top-3 left-3 sm:top-5 sm:left-5 flex flex-col gap-1 sm:gap-2 pointer-events-none z-10">
           {product.isNew && <Badge variant="primary" className="rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs">New</Badge>}
+          {product.isFeatured && (
+            <Badge className="bg-gold text-white rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs">
+              Best Seller
+            </Badge>
+          )}
           {product.discountPrice && (
             <Badge className="bg-accent-primary text-white rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs">
               -{Math.round((1 - product.discountPrice / product.price) * 100)}%

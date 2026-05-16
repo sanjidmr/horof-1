@@ -1,12 +1,11 @@
 import React from 'react';
-import { products } from '../../lib/mockData';
+import { Product } from '../../lib/types';
 import { ProductCard } from '../product/ProductCard';
 import { Sparkles } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
-export const ProductOfTheDay: React.FC = () => {
-  // Selecting specific products for this specialized section
-  const selectedProductIds = ['p21', 'p22', 'p23', 'p24'];
-  const dailyProducts = products.filter(p => selectedProductIds.includes(p.id));
+export const ProductOfTheDay: React.FC<{ products: Product[] }> = ({ products }) => {
+  const dailyProducts = products.slice(0, 4);
 
   return (
     <section className="pt-16 pb-2 md:pt-24 md:pb-4">
@@ -24,17 +23,16 @@ export const ProductOfTheDay: React.FC = () => {
         
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 max-w-7xl mx-auto">
+      <div className={cn(
+        "grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8 max-w-7xl mx-auto",
+        dailyProducts.length === 1 && "lg:grid-cols-1 flex justify-center"
+      )}>
         {dailyProducts.map((product) => (
-          <div key={product.id} className="relative group">
+          <div key={product.id} className={cn("relative group", dailyProducts.length === 1 && "max-w-sm w-full")}>
             {/* Spotlight Glow Effect on Hover */}
             <div className="absolute -inset-2 bg-gradient-to-b from-gold/20 to-transparent rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-all duration-500 blur-xl"></div>
             <div className="relative">
               <ProductCard product={product} />
-              
-              {/* Optional: Add a "Daily Selection" badge if needed, 
-                  but ProductCard might already have badges. 
-                  Let's keep it clean since it's already in the section. */}
             </div>
           </div>
         ))}

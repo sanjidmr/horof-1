@@ -1,0 +1,39 @@
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { mapDbProductToCardProduct } from '@/lib/store/map-product';
+import type { Product } from '@/lib/types';
+
+export async function getProductDetail(slug: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { product: null as Product | null, variants: [] as { id: string; size: string | null; color: string | null; stock: number; price_modifier: number }[], images: [] as string[] };
+
+  let row = null as unknown;
+  const bySlug = await supabase
+    .from('products')
+    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(image_url,sort_order),categories(name)')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (bySlug.data) row = bySlug.data;
+  else {
+    const byId = await supabase
+      .from('products')
+      .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(image_url,sort_order),categories(name)')
+      .eq('id', slug)
+      .eq('is_active', true)
+      .maybeSingle();
+    row = byId.data;
+  }
+
+  if (!row) return { product: null, variants: [], images: [] };
+
+  const { data: variants } = await supabase.from('product_variants').select('id,size,color,stock,price_modifier').eq('product_id', (row as { id: string }).id);
+
+  const imgs = ((row as { product_images?: { image_url: string; sort_order: number | null }[] }).product_images ?? [])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((i) => i.image_url);
+
+  const product = mapDbProductToCardProduct(row as never, (row as { categories?: { name?: string } }).categories?.name);
+
+  return { product, variants: variants ?? [], images: imgs };
+}

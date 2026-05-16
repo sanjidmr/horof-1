@@ -1,56 +1,95 @@
-'use client';
-
-import React, { use } from 'react';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { products, categories } from '../../../lib/mockData';
-import { ProductCard } from '../../../components/product/ProductCard';
-import { ChevronRight } from 'lucide-react';
+import { notFound } from 'next/navigation';
+import { formatPrice } from '@/lib/utils';
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
-}
+export const revalidate = 60; // Revalidate every minute
 
-export default function CategoryPage({ params }: PageProps) {
-  const { slug } = use(params);
-  const category = categories.find(c => c.slug === slug);
-  const categoryProducts = products.filter(p => p.category === category?.name);
+export default async function CategoryPage({ params }: { params: { slug: string } }) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data: category } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('slug', params.slug)
+    .eq('is_active', true)
+    .single();
 
   if (!category) {
-    return <div className="pt-32 pb-24 text-center">Category not found</div>;
+    notFound();
   }
 
+  const { data: products } = await supabase
+    .from('products')
+    .select('*, categories(name)')
+    .eq('category_id', category.id)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false });
+
   return (
-    <div className="pt-24 pb-24">
-      {/* Category Hero */}
-      <div className="relative h-[400px] overflow-hidden">
-        <img src={category.image} alt={category.name} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-bg-primary/70 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
-            <nav className="flex items-center gap-2 text-[10px] font-bold text-accent-hover uppercase tracking-[0.4em] mb-6">
-                <Link href="/">Home</Link>
-                <ChevronRight className="h-3 w-3" />
-                <Link href="/products">Shop</Link>
-                <ChevronRight className="h-3 w-3" />
-                <span className="text-text-primary">{category.name}</span>
-            </nav>
-            <h1 className="text-6xl md:text-7xl font-display font-bold text-text-primary mb-4">{category.name}</h1>
-            <p className="text-text-secondary max-w-xl text-lg leading-relaxed">
-              Explore our curated collection of {category.name.toLowerCase()} handcrafted from nature's finest materials.
-            </p>
+    <div className="min-h-screen bg-white pt-20">
+      {/* Category Header */}
+      <div className="bg-slate-50 border-b border-slate-100">
+        <div className="max-w-7xl mx-auto px-6 py-16">
+          <div className="flex flex-col md:flex-row items-center gap-10">
+            {category.image_url && (
+              <div className="w-48 h-48 rounded-3xl overflow-hidden shrink-0 shadow-lg border border-slate-200">
+                <img src={category.image_url} alt={category.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div>
+              <h1 className="text-4xl md:text-5xl font-display font-bold text-slate-900 mb-4">{category.name}</h1>
+              {category.description && (
+                <p className="text-slate-500 max-w-2xl text-lg">{category.description}</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-20">
-        <div className="flex items-center justify-between mb-12">
-           <h2 className="text-3xl font-display font-bold">{categoryProducts.length} Results Found</h2>
-           {/* Filters would go here */}
-        </div>
+      {/* Product Grid */}
+      <div className="max-w-7xl mx-auto px-6 py-16">
+        {!products || products.length === 0 ? (
+          <div className="text-center py-20">
+            <h3 className="text-xl font-bold text-slate-900 mb-2">No products found</h3>
+            <p className="text-slate-500">Check back later for new arrivals in {category.name}.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+            {products.map((product) => (
+              <Link key={product.id} href={`/product/${product.slug}`} className="group block">
+                <div className="relative aspect-[4/5] rounded-2xl bg-slate-100 overflow-hidden mb-4 shadow-sm group-hover:shadow-lg transition-shadow">
+                  {product.images && product.images[0] ? (
+                    <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">No Image</div>
+                  )}
+                  
+                  {/* Hover Quick View */}
+                  <div className="absolute inset-x-4 bottom-4 translate-y-[120%] group-hover:translate-y-0 transition-transform duration-300">
+                    <div className="w-full py-3 bg-white/90 backdrop-blur text-slate-900 text-sm font-bold text-center rounded-xl shadow-lg">
+                      Quick View
+                    </div>
+                  </div>
+                </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
-           {categoryProducts.map(p => (
-             <ProductCard key={p.id} product={p} />
-           ))}
-        </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-[#2D6A4F] transition-colors line-clamp-1">
+                    {product.name}
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-900">{formatPrice(Number(product.price))}</span>
+                    {product.compare_price && (
+                      <span className="text-xs text-slate-400 line-through">{formatPrice(Number(product.compare_price))}</span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-};
+}

@@ -1,53 +1,49 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
 import { Button } from "../ui/Button";
+import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
 export const FlashSale: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState({
-    days: 10,
-    hours: 23,
-    minutes: 59,
-    seconds: 59,
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
   });
+  const [flashSale, setFlashSale] = useState<any>(null);
+  const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
+    async function fetchFlashSale() {
+      const { data } = await supabase.from('flash_sales').select('*').limit(1).maybeSingle();
+      if (data) setFlashSale(data);
+    }
+    fetchFlashSale();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!flashSale?.end_time) return;
+
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev.seconds > 0)
-          return { ...prev, seconds: prev.seconds - 1 };
+      const difference = new Date(flashSale.end_time).getTime() - new Date().getTime();
+      
+      if (difference <= 0) {
+        clearInterval(timer);
+        return;
+      }
 
-        if (prev.minutes > 0)
-          return {
-            ...prev,
-            minutes: prev.minutes - 1,
-            seconds: 59,
-          };
-
-        if (prev.hours > 0)
-          return {
-            ...prev,
-            hours: prev.hours - 1,
-            minutes: 59,
-            seconds: 59,
-          };
-
-        if (prev.days > 0)
-          return {
-            ...prev,
-            days: prev.days - 1,
-            hours: 23,
-            minutes: 59,
-            seconds: 59,
-          };
-
-        return prev;
+      setTimeLeft({
+        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((difference / 1000 / 60) % 60),
+        seconds: Math.floor((difference / 1000) % 60)
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [flashSale]);
 
   const TimeUnit = ({
     label,
@@ -68,6 +64,8 @@ export const FlashSale: React.FC = () => {
     </div>
   );
 
+  if (!flashSale) return null;
+
   return (
     <section className="relative w-full overflow-hidden bg-white py-12 sm:py-20">
       {/* Background */}
@@ -78,21 +76,23 @@ export const FlashSale: React.FC = () => {
 
           {/* IMAGE */}
           <div className="lg:col-span-6 relative">
-            <motion.div
-              initial={{ opacity: 0, x: -40 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-              className="relative aspect-[4/5] rounded-xl sm:rounded-2xl overflow-hidden group shadow-[0_30px_80px_rgba(0,0,0,0.15)]"
-            >
-              <img
-                src="/images/flash.jpg"
-                alt="Artisan Masterpiece"
-                className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-110"
-              />
-            </motion.div>
+            <Link href={flashSale.product_id ? `/products/${flashSale.product_id}` : '#'}>
+              <motion.div
+                initial={{ opacity: 0, x: -40 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8 }}
+                className="relative aspect-[4/5] rounded-xl sm:rounded-2xl overflow-hidden group shadow-[0_30px_80px_rgba(0,0,0,0.15)] cursor-pointer"
+              >
+                <img
+                  src={flashSale.image_url}
+                  alt={flashSale.title}
+                  className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-110"
+                />
+              </motion.div>
+            </Link>
 
-            {/* PRICE CARD (MOBILE FIXED) */}
+            {/* PRICE CARD */}
             <div className="absolute -bottom-2 -right-1 sm:-bottom-10 sm:right-6 bg-white p-3 sm:p-8 rounded-lg sm:rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] border border-accent-primary/5 z-20">
               <div className="space-y-1 sm:space-y-3">
                 <div className="flex flex-col">
@@ -100,16 +100,16 @@ export const FlashSale: React.FC = () => {
                     Seasonal Selection
                   </span>
                   <span className="text-lg sm:text-3xl font-display font-medium text-accent-primary">
-                    ৳৫,০০০
+                    ৳{flashSale.offer_price.toLocaleString()}
                   </span>
                 </div>
 
                 <div className="h-px w-full bg-accent-primary/10" />
 
                 <p className="text-[7px] sm:text-[10px] text-accent-primary/60 flex items-center gap-1">
-                  <span className="line-through">৳7,০০০</span>
+                  <span className="line-through">৳{flashSale.main_price.toLocaleString()}</span>
                   <span className="w-1 h-1 rounded-full bg-accent-hover" />
-                  <span>Save ৳2,০০০</span>
+                  <span>Save ৳{(flashSale.main_price - flashSale.offer_price).toLocaleString()}</span>
                 </p>
               </div>
             </div>
@@ -119,15 +119,14 @@ export const FlashSale: React.FC = () => {
           <div className="lg:col-span-6 space-y-10">
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <div className="h-px w-10 bg-accent-hover" />
+                <Zap className="h-5 w-5 text-accent-hover fill-accent-hover" />
                 <span className="text-accent-hover text-[10px] font-bold uppercase tracking-[0.4em]">
                   Limited Time Offer
                 </span>
               </div>
 
               <h2 className="text-3xl sm:text-5xl md:text-6xl font-display font-medium text-accent-primary leading-tight">
-                Limited <br />
-                <span className="italic">Time Exclusive</span>
+                {flashSale.title}
               </h2>
 
               <p className="text-text-secondary text-sm sm:text-lg font-light max-w-md">
@@ -145,7 +144,7 @@ export const FlashSale: React.FC = () => {
 
             {/* BUTTON */}
             <div>
-              <Link href="/products">
+              <Link href={flashSale.product_id ? `/products/${flashSale.product_id}` : '/products'}>
                 <Button className="h-12 sm:h-14 px-8 sm:px-10 bg-accent-primary text-white hover:bg-accent-hover rounded-lg sm:rounded-xl text-[10px] font-bold uppercase tracking-[0.3em] transition-all shadow-xl hover:-translate-y-1">
                   Shop Now <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>

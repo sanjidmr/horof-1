@@ -9,27 +9,52 @@ import { ShieldCheck, Truck, CreditCard, Apple as bKash, Wallet as Nagad, Packag
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { placeOrder } from '../../lib/actions/place-order';
 
 export default function CheckoutPage() {
   const { cart, subtotal, clearCart } = useCart();
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<'bkash' | 'nagad' | 'cod'>('cod');
   const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+  });
 
   const deliveryCharge = 60;
   const total = subtotal + deliveryCharge;
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const result = await placeOrder({
+        customer_name: formData.name,
+        customer_email: formData.email,
+        total: total,
+        items: cart.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          unit_price: item.discountPrice || item.price,
+          name: item.name
+        }))
+      });
+
+      if (result.ok) {
+        toast.success('Order placed successfully!');
+        clearCart();
+        router.push('/order-confirmation');
+      } else {
+        toast.error(result.message || 'Failed to place order');
+      }
+    } catch (error) {
+      toast.error('An error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
-      toast.success('Order placed successfully!');
-      clearCart();
-      router.push('/order-confirmation');
-    }, 2000);
+    }
   };
 
   if (cart.length === 0) {
@@ -52,9 +77,28 @@ export default function CheckoutPage() {
               Shipping Information
             </h2>
             <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input label="Full Name" placeholder="Your Name" required />
-              <Input label="Email Address" type="email" placeholder="youremail@gmail.com" required />
-              <Input label="Phone Number" placeholder="01XXXXXXXXX" required />
+              <Input 
+                label="Full Name" 
+                placeholder="Your Name" 
+                required 
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+              <Input 
+                label="Email Address" 
+                type="email" 
+                placeholder="youremail@gmail.com" 
+                required 
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+              <Input 
+                label="Phone Number" 
+                placeholder="01XXXXXXXXX" 
+                required 
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-text-secondary">Division</label>
                 <select className="flex h-11 w-full rounded-lg border border-border-forest bg-bg-card px-4 py-2 text-sm text-text-primary outline-none focus:border-accent-primary">
@@ -68,7 +112,13 @@ export default function CheckoutPage() {
               <Input label="District" placeholder="Enter District" required />
               <Input label="Upazila/Thana" placeholder="Enter Thana" required />
               <div className="md:col-span-2">
-                <TextArea label="Full Address" placeholder="House no, Street name, Sector..." required />
+                <TextArea 
+                  label="Full Address" 
+                  placeholder="House no, Street name, Sector..." 
+                  required 
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                />
               </div>
               <div className="md:col-span-2">
                 <TextArea label="Delivery Note (Optional)" placeholder="Any special instructions for the rider..." />
