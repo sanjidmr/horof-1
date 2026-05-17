@@ -118,8 +118,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
           (!isVisible || isCartOpen) && !isMobileMenuOpen ? '-translate-y-full opacity-0' : 'translate-y-0 opacity-100',
           // Scrolled vs Transparent logic
           (isScrolled || !isTransparentPage)
-            ? 'bg-white/80 backdrop-blur-md border-b border-black/5 py-3'
-            : 'bg-transparent py-5'
+            ? 'bg-white/80 backdrop-blur-md   '
+            : 'bg-transparent '
         )}
       >
         <div className="max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between relative">
@@ -358,7 +358,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                           My dashboard
                         </Button>
                       </Link>
-                      <Button 
+                      <Button
                         onClick={async () => {
                           await handleLogout();
                           setIsMobileMenuOpen(false);

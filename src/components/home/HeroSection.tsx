@@ -9,26 +9,59 @@ import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
 interface HeroSectionProps {
   initialImage?: string;
+  initialSubtitleNormal?: string;
+  initialSubtitleBold?: string;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({ initialImage }) => {
+const DEFAULT_SUBTITLE_NORMAL =
+  'Crafted with passion, inspired by timeless artistry — Horof brings warmth, creativity, and elegance into every corner of your home.';
+const DEFAULT_SUBTITLE_BOLD = 'DIY • HANDMADE • DECOR';
+
+export const HeroSection: React.FC<HeroSectionProps> = ({
+  initialImage,
+  initialSubtitleNormal,
+  initialSubtitleBold,
+}) => {
   const [heroImage, setHeroImage] = React.useState(initialImage || '');
+  const [subtitleNormal, setSubtitleNormal] = React.useState(
+    initialSubtitleNormal ?? DEFAULT_SUBTITLE_NORMAL
+  );
+  const [subtitleBold, setSubtitleBold] = React.useState(
+    initialSubtitleBold ?? DEFAULT_SUBTITLE_BOLD
+  );
   const supabase = createSupabaseBrowserClient();
 
   React.useEffect(() => {
-    if (initialImage) return;
+    if (initialImage && initialSubtitleNormal !== undefined) return;
 
-    async function getHero() {
-      const { data } = await supabase
-        .from('site_images')
-        .select('image_url')
-        .eq('section', 'hero')
-        .maybeSingle();
-      if (data?.image_url) setHeroImage(data.image_url);
+    async function getHeroData() {
+      const [imageRes, contentRes] = await Promise.all([
+        initialImage
+          ? Promise.resolve({ data: null })
+          : supabase
+            .from('site_images')
+            .select('image_url')
+            .eq('section', 'hero')
+            .maybeSingle(),
+        initialSubtitleNormal !== undefined
+          ? Promise.resolve({ data: null })
+          : supabase
+            .from('hero_content')
+            .select('subtitle_normal, subtitle_bold')
+            .limit(1)
+            .maybeSingle(),
+      ]);
+
+      if (imageRes.data?.image_url) setHeroImage(imageRes.data.image_url);
+      if (contentRes.data) {
+        if (contentRes.data.subtitle_normal)
+          setSubtitleNormal(contentRes.data.subtitle_normal);
+        if (contentRes.data.subtitle_bold)
+          setSubtitleBold(contentRes.data.subtitle_bold);
+      }
     }
-    getHero();
-  }, [supabase, initialImage]);
-
+    getHeroData();
+  }, [supabase, initialImage, initialSubtitleNormal]);
 
   return (
     <section className="relative min-h-screen flex items-center bg-black overflow-hidden pt-20">
@@ -101,11 +134,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ initialImage }) => {
                 Horof
               </h1>
 
-              <p className="text-lg md:text-2xl  text-white/60 leading-relaxed font-light max-w-2xl px-1">
-                Crafted with passion, inspired by timeless artistry — Horof brings warmth, creativity, and elegance into every corner of your home.
-
-                <span className="text-white font-bold"> <br></br>DIY</span> • <span className="text-white font-bold">HANDMADE</span> • <span className="text-white font-bold">DECOR</span>
-
+              <p className="text-lg md:text-2xl text-white/60 leading-relaxed font-light max-w-2xl px-1">
+                {subtitleNormal}
+                <span className="text-white font-bold">
+                  {' '}<br />{subtitleBold}
+                </span>
               </p>
 
             </motion.div>

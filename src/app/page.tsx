@@ -26,7 +26,8 @@ export default async function HomePage() {
     { data: productDayData },
     { data: allProdData },
     { data: decorImages },
-    { data: heroData }
+    { data: heroData },
+    { data: heroContent }
   ] = await Promise.all([
     supabase.from('categories').select('*, products(count)').eq('is_active', true),
     supabase
@@ -63,6 +64,11 @@ export default async function HomePage() {
       .from('site_images')
       .select('image_url')
       .eq('section', 'hero')
+      .maybeSingle(),
+    supabase
+      .from('hero_content')
+      .select('subtitle_normal, subtitle_bold')
+      .limit(1)
       .maybeSingle()
   ]);
 
@@ -105,10 +111,16 @@ export default async function HomePage() {
 
   const initialDecorImages = decorImages || [];
   const heroImage = heroData?.image_url || '';
+  const subtitleNormal = heroContent?.subtitle_normal || undefined;
+  const subtitleBold = heroContent?.subtitle_bold || undefined;
 
   return (
     <HomeMotionWrapper>
-      <HeroSection initialImage={heroImage} />
+      <HeroSection
+        initialImage={heroImage}
+        initialSubtitleNormal={subtitleNormal}
+        initialSubtitleBold={subtitleBold}
+      />
 
       <DecorShowcase initialImages={initialDecorImages} />
 
