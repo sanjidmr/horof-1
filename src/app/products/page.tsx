@@ -112,7 +112,10 @@ function ProductsPageContent() {
 
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    const cat = searchParams.get('category');
+    return cat ? decodeURIComponent(cat) : 'All';
+  });
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [sortBy, setSortBy] = useState('Newest');
   const [priceRange, setPriceRange] = useState(200000);

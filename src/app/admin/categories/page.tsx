@@ -206,7 +206,7 @@ export default function AdminCategoriesPage() {
                 <label htmlFor="isActive" className="text-sm text-slate-700">Active</label>
               </div>
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button className="bg-[#1B4332] text-white hover:bg-[#2D6A4F]" type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
                 <Button type="submit" disabled={uploading} className="bg-[#1B4332] text-white hover:bg-[#2D6A4F]">
                   {uploading ? 'Saving...' : 'Save Category'}
                 </Button>

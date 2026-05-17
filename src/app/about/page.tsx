@@ -343,10 +343,7 @@ export default function AboutPage() {
             viewport={{ once: true }}
             className="text-center max-w-2xl mx-auto mb-16 lg:mb-20 space-y-4"
           >
-            <span style={{ fontFamily: 'sans-serif' }}
-              className="text-[#c9a84c] text-[11px] font-bold uppercase tracking-[0.4em]">
-              Our Collection
-            </span>
+
             <h2 style={{ fontFamily: "'Cormorant Garamond', serif" }}
               className="text-4xl lg:text-6xl font-medium text-[#04342c]">
               Master Pieces

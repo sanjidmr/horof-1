@@ -23,7 +23,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
-  
+
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
     async function fetchProduct() {
       if (!id) return;
       setLoading(true);
-      
+
       const { data, error } = await supabase
         .from('products')
         .select('*, categories(name)')
@@ -199,9 +199,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
             </div>
           </div>
 
-          <p className="text-text-secondary leading-relaxed text-base md:text-lg">
-            {product.description}
-          </p>
+
 
           {/* Action Buttons - Stacked for better focus */}
           <div className="flex flex-col gap-5 pt-6 border-t border-white/5">
@@ -273,8 +271,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
           <div className="pt-10 space-y-12">
             {/* Description Section */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
-                <div className="h-[1px] w-8 bg-accent-hover"></div> General Description
+              <h3 className="text-[15px] font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                Description
               </h3>
               <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
                 {product.description || "No description available for this masterpiece."}
@@ -283,8 +281,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
             {/* Specifications Section */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
-                <div className="h-[1px] w-8 bg-accent-hover"></div> Technical Specifications
+              <h3 className="text-[15px] font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                Specifications
               </h3>
               <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
                 {product.specification ? (
@@ -297,12 +295,12 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
             {/* Perfect For Section */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
-                <div className="h-[1px] w-8 bg-accent-hover"></div> Perfect For
+              <h3 className="text-[15px] font-bold text-accent-hover uppercase tracking-[0.3em] flex items-center gap-3">
+                Perfect For
               </h3>
               <div className="bg-bg-card/40 p-6 md:p-8 rounded-[2rem] border border-white/5 backdrop-blur-sm text-text-secondary text-sm md:text-base leading-relaxed">
                 {product.perfect_for ? (
-                  <div className="italic text-accent-light/80">"{product.perfect_for}"</div>
+                  <div className="whitespace-pre-line">{product.perfect_for}</div>
                 ) : (
                   <p>Ideal for those who appreciate fine, handcrafted wood art.</p>
                 )}

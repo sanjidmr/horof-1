@@ -91,7 +91,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
                 </span>
               </div>
 
-              <button 
+              <button
                 disabled={product.stock <= 0}
                 className="w-full h-14 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-colors shadow-lg shadow-[#1B4332]/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >

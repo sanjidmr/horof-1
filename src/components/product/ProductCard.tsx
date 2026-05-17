@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import { Star, ShoppingCart, Heart, Eye } from 'lucide-react';
@@ -44,11 +46,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               Best Seller
             </Badge>
           )}
-          {product.discountPrice && (
-            <Badge className="bg-accent-primary text-white rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-[9px] sm:text-xs">
-              -{Math.round((1 - product.discountPrice / product.price) * 100)}%
-            </Badge>
-          )}
+
         </div>
 
         {/* Hover Actions - Hidden on mobile for better 2-column experience */}

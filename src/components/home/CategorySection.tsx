@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -67,7 +69,7 @@ export const CategorySection: React.FC<{ categories: Category[] }> = ({ categori
               transition={{ delay: index * 0.1, duration: 0.5 }}
               className="group relative w-[180px] sm:w-[220px]"
             >
-              <Link href={`/category/${category.slug}`} className="block">
+              <Link href={`/products?category=${encodeURIComponent(category.name)}`} className="block">
                 {/* Seamless Elegant Card */}
                 <div className="relative aspect-[4/5] rounded-2xl bg-bg-secondary border-none shadow-sm transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-gold/20 group-hover:-translate-y-2 overflow-hidden">
 

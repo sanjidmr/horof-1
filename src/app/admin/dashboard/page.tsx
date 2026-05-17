@@ -1,15 +1,15 @@
 import React from 'react';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { 
-  ShoppingBag, 
-  Users, 
-  Package, 
-  DollarSign, 
-  ArrowUpRight, 
-  AlertTriangle, 
-  Plus, 
-  Eye, 
+import {
+  ShoppingBag,
+  Users,
+  Package,
+  DollarSign,
+  ArrowUpRight,
+  AlertTriangle,
+  Plus,
+  Eye,
   TrendingUp,
   Clock,
   ChevronRight
@@ -81,12 +81,12 @@ export default async function AdminDashboard() {
               <Plus className="mr-2 h-4 w-4" /> Add Product
             </Link>
           </Button>
-          <Button asChild variant="outline" className="border-[#1a4731] text-[#1a4731] hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
+          <Button asChild variant="outline" className="border-[#1a4731] text-white bg-text-[#1a4731] hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
             <Link href="/admin/orders">
               <Eye className="mr-2 h-4 w-4" /> View Orders
             </Link>
           </Button>
-          <Button asChild variant="outline" className="border-[#1a4731] text-[#1a4731] hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
+          <Button asChild variant="outline" className="border-[#1a4731] text-white hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
             <Link href="/admin/customers">
               <Users className="mr-2 h-4 w-4" /> Manage Users
             </Link>
@@ -144,11 +144,10 @@ export default async function AdminDashboard() {
                           <p className="text-sm font-bold text-slate-900">{formatPrice(order.total)}</p>
                         </td>
                         <td className="px-8 py-5">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                            order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
-                            order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                            'bg-slate-100 text-slate-700'
-                          }`}>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
+                              order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                                'bg-slate-100 text-slate-700'
+                            }`}>
                             {order.status}
                           </span>
                         </td>
@@ -182,7 +181,7 @@ export default async function AdminDashboard() {
                       <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
                       <p className="text-xs text-slate-500">{formatPrice(p.price)}</p>
                     </div>
-                    <span className="text-[10px] font-black text-[#1a4731]/20">0{i+1}</span>
+                    <span className="text-[10px] font-black text-[#1a4731]/20">0{i + 1}</span>
                   </div>
                 ))}
               </div>
