@@ -17,16 +17,49 @@ export default function AdminCustomersPage() {
   const fetchCustomers = async () => {
     setLoading(true);
     // Fetch profiles with role = 'customer'
-    const { data, error } = await supabase
+    const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
-      .select('*, orders(id, total)')
+      .select('*')
       .eq('role', 'customer')
       .order('created_at', { ascending: false });
 
-    if (error) {
+    if (profilesError) {
       toast.error('Failed to load customers');
+      setLoading(false);
+      return;
+    }
+
+    const profilesList = profilesData || [];
+    if (profilesList.length === 0) {
+      setCustomers([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch orders in a single batch using user_id instead of customer_id
+    const userIds = profilesList.map(p => p.id);
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('id, user_id, total_price')
+      .in('user_id', userIds);
+
+    if (ordersError) {
+      console.error('Failed to load customer orders:', ordersError);
+      setCustomers(profilesList.map(p => ({ ...p, orders: [] })));
     } else {
-      setCustomers(data || []);
+      // Map orders to their respective profile
+      const ordersMap = new Map<string, any[]>();
+      ordersData?.forEach(o => {
+        const list = ordersMap.get(o.user_id) || [];
+        list.push(o);
+        ordersMap.set(o.user_id, list);
+      });
+
+      const combined = profilesList.map(p => ({
+        ...p,
+        orders: ordersMap.get(p.id) || []
+      }));
+      setCustomers(combined);
     }
     setLoading(false);
   };

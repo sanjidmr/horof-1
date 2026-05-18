@@ -221,18 +221,30 @@ export interface Database {
           image_url: string
           section: string
           created_at: string
+          title: string | null
+          subtitle: string | null
+          description: string | null
+          button_text: string | null
         }
         Insert: {
           id?: string
           image_url: string
           section: string
           created_at?: string
+          title?: string | null
+          subtitle?: string | null
+          description?: string | null
+          button_text?: string | null
         }
         Update: {
           id?: string
           image_url?: string
           section?: string
           created_at?: string
+          title?: string | null
+          subtitle?: string | null
+          description?: string | null
+          button_text?: string | null
         }
       }
       flash_sales: {

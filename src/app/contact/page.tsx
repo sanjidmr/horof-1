@@ -1,23 +1,82 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Phone, MapPin, Send, MessageSquare, Clock } from 'lucide-react';
 import { Input, TextArea } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import { useRequireAuth } from '../../context/AuthModalContext';
 
 export default function ContactPage() {
+  const { requireAuth } = useRequireAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Helper function to handle submission logic
+  const submitForm = (data: { name: string; email: string; subject: string; message: string }) => {
     setIsSubmitting(true);
     setTimeout(() => {
       setIsSubmitting(false);
-      toast.success('Message sent! We\'ll get back to you shortly.');
+      toast.success("Message sent! We'll get back to you shortly.");
+      // Clear local states
+      setName('');
+      setEmail('');
+      setSubject('');
+      setMessage('');
     }, 1500);
   };
+
+  // Handle manual submit trigger
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Store transient form data in localStorage before executing requireAuth.
+    // This allows recovery if the user gets redirected to a dedicated login page.
+    localStorage.setItem(
+      'horof_pending_contact_message',
+      JSON.stringify({ name, email, subject, message })
+    );
+
+    requireAuth(() => {
+      // Clear localStorage on direct execution so it doesn't trigger again on reload
+      localStorage.removeItem('horof_pending_contact_message');
+      submitForm({ name, email, subject, message });
+    }, "Please login first to send a message.");
+  };
+
+  // Restore and auto-submit if redirected from dedicated login page
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (isAuthenticated) {
+      const savedPending = localStorage.getItem('horof_pending_contact_message');
+      if (savedPending) {
+        try {
+          const parsed = JSON.parse(savedPending);
+          // Populate state so user sees what was submitted
+          setName(parsed.name || '');
+          setEmail(parsed.email || '');
+          setSubject(parsed.subject || '');
+          setMessage(parsed.message || '');
+          
+          // Clear storage immediately to prevent loop
+          localStorage.removeItem('horof_pending_contact_message');
+          
+          // Trigger submission
+          submitForm(parsed);
+        } catch (err) {
+          console.error('Failed to parse pending contact message', err);
+        }
+      }
+    }
+  }, [isAuthenticated, isLoading]);
 
   return (
     <div className="pt-24 md:pt-32 pb-16 md:pb-24">
@@ -103,12 +162,39 @@ export default function ContactPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              <Input label="Your Name" placeholder="Full Name" required className="rounded-lg text-sm" />
-              <Input label="Email Address" type="email" placeholder="Youremail@gmail.com" required className="rounded-lg text-sm" />
+              <Input 
+                label="Your Name" 
+                placeholder="Full Name" 
+                required 
+                className="rounded-lg text-sm" 
+                value={name || ''}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Input 
+                label="Email Address" 
+                type="email" 
+                placeholder="Youremail@gmail.com" 
+                required 
+                className="rounded-lg text-sm" 
+                value={email || ''}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
-            <Input label="Subject" placeholder="How can we help?" required className="rounded-lg text-sm" />
-            <TextArea label="Your Message" placeholder="Enter your detailed message here..." required
+            <Input 
+              label="Subject" 
+              placeholder="How can we help?" 
+              required 
+              className="rounded-lg text-sm" 
+              value={subject || ''}
+              onChange={(e) => setSubject(e.target.value)}
+            />
+            <TextArea 
+              label="Your Message" 
+              placeholder="Enter your detailed message here..." 
+              required
               className="min-h-[140px] sm:min-h-[180px] rounded-lg text-sm"
+              value={message || ''}
+              onChange={(e) => setMessage(e.target.value)}
             />
             <Button variant="primary" className="w-full h-12 sm:h-14 rounded-full group transition-all duration-300 hover:shadow-2xl hover:shadow-accent-primary/20 text-xs sm:text-sm" isLoading={isSubmitting}>
               <span className="flex items-center justify-center gap-2">

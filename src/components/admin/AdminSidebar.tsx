@@ -16,7 +16,8 @@ import {
   ChevronRight,
   TreePine,
   Layers,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -161,7 +162,21 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
           })}
         </nav>
       </ScrollArea>
-      <div className="p-6 mt-auto">
+      <div className="p-6 mt-auto flex flex-col gap-2.5">
+        <Link href="/" onClick={closeMobile} className="block w-full">
+          <Button
+            type="button"
+            variant="outline"
+            className={cn(
+              'w-full flex items-center gap-3 rounded-2xl py-7 text-sm font-bold text-[#1a4731] border-[#1a4731]/20 hover:bg-[#1a4731]/5 hover:text-[#1a4731] hover:border-[#1a4731]/40 transition-all tracking-wide shadow-sm',
+              collapsed && 'justify-center px-0'
+            )}
+          >
+            <Globe className="h-5 w-5 shrink-0" />
+            {!collapsed && <span>Visit Website</span>}
+          </Button>
+        </Link>
+
         <Button
           type="button"
           variant="ghost"

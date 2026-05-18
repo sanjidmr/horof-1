@@ -23,6 +23,22 @@ export default function SiteImagesPage() {
     'decor-3': ''
   });
 
+  // Showcase text state
+  const [showcaseTexts, setShowcaseTexts] = useState<{
+    [key: string]: {
+      title: string;
+      subtitle: string;
+      description: string;
+      button_text: string;
+    }
+  }>({
+    'decor-1': { title: '', subtitle: '', description: '', button_text: '' },
+    'decor-2': { title: '', subtitle: '', description: '', button_text: '' },
+    'decor-3': { title: '', subtitle: '', description: '', button_text: '' },
+  });
+
+  const [savingShowcaseText, setSavingShowcaseText] = useState<string | null>(null);
+
   // Hero text state
   const [subtitleNormal, setSubtitleNormal] = useState(DEFAULT_SUBTITLE_NORMAL);
   const [subtitleBold, setSubtitleBold] = useState(DEFAULT_SUBTITLE_BOLD);
@@ -39,10 +55,24 @@ export default function SiteImagesPage() {
 
       if (imagesRes.data) {
         const imgMap: { [key: string]: string } = {};
+        const textMap: typeof showcaseTexts = {
+          'decor-1': { title: '', subtitle: '', description: '', button_text: '' },
+          'decor-2': { title: '', subtitle: '', description: '', button_text: '' },
+          'decor-3': { title: '', subtitle: '', description: '', button_text: '' },
+        };
         imagesRes.data.forEach(item => {
           imgMap[item.section] = item.image_url;
+          if (item.section.startsWith('decor-')) {
+            textMap[item.section] = {
+              title: item.title || '',
+              subtitle: item.subtitle || '',
+              description: item.description || '',
+              button_text: item.button_text || '',
+            };
+          }
         });
         setImages(prev => ({ ...prev, ...imgMap }));
+        setShowcaseTexts(textMap);
       }
 
       if (heroContentRes.data) {
@@ -119,6 +149,31 @@ export default function SiteImagesPage() {
       toast.error(error.message || 'Failed to save hero text');
     } finally {
       setSavingText(false);
+    }
+  };
+
+  const handleSaveShowcaseText = async (section: string) => {
+    try {
+      setSavingShowcaseText(section);
+      const textData = showcaseTexts[section];
+      
+      const { error } = await supabase
+        .from('site_images')
+        .upsert({
+          section,
+          image_url: images[section] || '',
+          title: textData.title,
+          subtitle: textData.subtitle,
+          description: textData.description,
+          button_text: textData.button_text
+        }, { onConflict: 'section' });
+
+      if (error) throw error;
+      toast.success(`Showcase ${section.replace('decor-', '')} texts updated successfully!`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save showcase text');
+    } finally {
+      setSavingShowcaseText(null);
     }
   };
 
@@ -286,32 +341,104 @@ export default function SiteImagesPage() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900">Decor Showcase</h2>
-            <p className="text-sm text-slate-500">Curated gallery images for the showcase section.</p>
+            <p className="text-sm text-slate-500">Curated gallery images and their corresponding texts for the showcase section.</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {[1, 2, 3].map(num => (
-            <div key={num} className="space-y-3">
-              <div className="relative aspect-[4/5] rounded-2xl border-2 border-dashed border-slate-200 overflow-hidden group">
-                {images[`decor-${num}`] ? (
-                  <img src={images[`decor-${num}`]} alt={`Decor ${num}`} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
-                    <ImageIcon className="h-8 w-8 mb-2 opacity-20" />
-                    <span className="text-xs">Decor {num}</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[1, 2, 3].map(num => {
+            const sectionKey = `decor-${num}`;
+            const textData = showcaseTexts[sectionKey] || { title: '', subtitle: '', description: '', button_text: '' };
+
+            return (
+              <div key={num} className="bg-slate-50/50 rounded-2xl p-5 border border-slate-100 space-y-4">
+                <div className="relative aspect-[4/3] rounded-xl border border-slate-200 overflow-hidden group">
+                  {images[sectionKey] ? (
+                    <img src={images[sectionKey]} alt={`Decor ${num}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
+                      <ImageIcon className="h-8 w-8 mb-1 opacity-20" />
+                      <span className="text-xs">Decor Image {num}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <label className="bg-white text-slate-900 px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer hover:scale-105 transition-transform">
+                      Upload Image
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUpload(sectionKey, e.target.files[0])} />
+                    </label>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <label className="bg-white text-slate-900 px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer hover:scale-105 transition-transform">
-                    Upload
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files?.[0] && handleUpload(`decor-${num}`, e.target.files[0])} />
-                  </label>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Subtitle / Label
+                    </label>
+                    <input
+                      type="text"
+                      value={textData.subtitle}
+                      onChange={e => setShowcaseTexts(prev => ({
+                        ...prev,
+                        [sectionKey]: { ...prev[sectionKey], subtitle: e.target.value }
+                      }))}
+                      placeholder="e.g. Signature Sculpture"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Title
+                    </label>
+                    <input
+                      type="text"
+                      value={textData.title}
+                      onChange={e => setShowcaseTexts(prev => ({
+                        ...prev,
+                        [sectionKey]: { ...prev[sectionKey], title: e.target.value }
+                      }))}
+                      placeholder="e.g. The Eternal Root"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-purple-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Description / Body
+                    </label>
+                    <textarea
+                      value={textData.description}
+                      onChange={e => setShowcaseTexts(prev => ({
+                        ...prev,
+                        [sectionKey]: { ...prev[sectionKey], description: e.target.value }
+                      }))}
+                      rows={3}
+                      placeholder="Enter short description..."
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-xs leading-normal focus:outline-none focus:ring-1 focus:ring-purple-400 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={() => handleSaveShowcaseText(sectionKey)}
+                    disabled={savingShowcaseText === sectionKey}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-lg text-xs transition active:scale-95 shadow-sm"
+                  >
+                    {savingShowcaseText === sectionKey ? (
+                      <>
+                        <div className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-3.5 w-3.5" />
+                        Save Details {num}
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
-              <p className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-widest">Image {num}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

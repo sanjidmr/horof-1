@@ -11,16 +11,19 @@ export async function fetchAdminDashboard(supabase: SupabaseClient) {
 
   const { data: ordersAll } = await supabase
     .from('orders')
-    .select('id,order_number,total,status,payment_status,created_at,customer_id');
+    .select('id,total_price,status,created_at,user_id');
 
-  const orders = ordersAll ?? [];
+  const orders = (ordersAll ?? []).map(o => ({
+    ...o,
+    amount: (o as any).total_price ?? 0
+  }));
   const nonCancelled = orders.filter((o) => o.status !== 'cancelled');
-  const totalSales = nonCancelled.reduce((s, o) => s + Number(o.total ?? 0), 0);
+  const totalSales = nonCancelled.reduce((s, o) => s + Number(o.amount ?? 0), 0);
   const todayOrders = orders.filter((o) => o.created_at >= todayIso && o.created_at < tomorrowIso).length;
   const pendingOrders = orders.filter((o) => o.status === 'pending').length;
   const totalRevenue = orders
-    .filter((o) => o.payment_status === 'paid' && o.status !== 'cancelled')
-    .reduce((s, o) => s + Number(o.total ?? 0), 0);
+    .filter((o) => o.status === 'paid')
+    .reduce((s, o) => s + Number(o.amount ?? 0), 0);
 
   const { count: totalCustomers } = await supabase
     .from('profiles')
@@ -34,17 +37,17 @@ export async function fetchAdminDashboard(supabase: SupabaseClient) {
     (visitorsCount ?? 0) > 0 ? Math.round(((ordersCountAll / (visitorsCount ?? 1)) * 100) * 100) / 100 : 0;
 
   const recentOrderRows = [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
-  const customerIds = [...new Set(recentOrderRows.map((o) => o.customer_id))];
+  const customerIds = [...new Set(recentOrderRows.map((o) => o.user_id))];
   const { data: recentProfiles } = await supabase.from('profiles').select('id,full_name,email').in('id', customerIds);
   const recentOrders = recentOrderRows.map((o) => ({
     id: o.id,
-    order_number: o.order_number,
-    total: o.total,
+    order_number: `#${o.id.slice(0, 8)}`,
+    total: o.amount,
     status: o.status,
-    payment_status: o.payment_status,
+    payment_status: o.status === 'paid' ? 'paid' : o.status === 'failed' ? 'failed' : 'pending',
     created_at: o.created_at,
-    customer_id: o.customer_id,
-    customer: recentProfiles?.find((p) => p.id === o.customer_id) ?? null,
+    customer_id: o.user_id,
+    customer: recentProfiles?.find((p) => p.id === o.user_id) ?? null,
   }));
 
   const { data: lowStock } = await supabase
@@ -57,13 +60,12 @@ export async function fetchAdminDashboard(supabase: SupabaseClient) {
   const paidInRange = orders.filter(
     (o) =>
       o.created_at >= d30 &&
-      o.payment_status === 'paid' &&
-      o.status !== 'cancelled'
+      o.status === 'paid'
   );
   const revenueByDate: Record<string, number> = {};
   for (const row of paidInRange) {
     const d = format(new Date(row.created_at), 'yyyy-MM-dd');
-    revenueByDate[d] = (revenueByDate[d] ?? 0) + Number(row.total ?? 0);
+    revenueByDate[d] = (revenueByDate[d] ?? 0) + Number(row.amount ?? 0);
   }
   const revenueChart = [...Array(30)].map((_, i) => {
     const d = format(subDays(today, 29 - i), 'yyyy-MM-dd');
@@ -125,7 +127,7 @@ export async function fetchAdminDashboard(supabase: SupabaseClient) {
   const byCust = new Map<string, number>();
   for (const o of orders) {
     if (o.status === 'cancelled') continue;
-    byCust.set(o.customer_id, (byCust.get(o.customer_id) ?? 0) + Number(o.total ?? 0));
+    byCust.set(o.user_id, (byCust.get(o.user_id) ?? 0) + Number(o.amount ?? 0));
   }
   const topIds = [...byCust.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => id);
   let topSpenders: { id: string; full_name: string | null; email: string | null; spent: number }[] = [];

@@ -24,11 +24,14 @@ export default function CustomerOrdersPage() {
     const { data } = await supabase
       .from('orders')
       .select('*')
-      .eq('customer_id', user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (data) {
-      setOrders(data);
+      setOrders(data.map(o => ({
+        ...o,
+        amount: o.total_price ?? 0
+      })));
     }
     setLoading(false);
   };
@@ -101,7 +104,7 @@ export default function CustomerOrdersPage() {
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Total</p>
-                      <p className="text-sm font-medium text-slate-900">{formatPrice(Number(order.total))}</p>
+                      <p className="text-sm font-medium text-slate-900">{formatPrice(Number(order.amount))}</p>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Status</p>
@@ -169,7 +172,7 @@ export default function CustomerOrdersPage() {
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between text-slate-600">
                             <span>Subtotal</span>
-                            <span>{formatPrice(Number(order.total))}</span>
+                            <span>{formatPrice(Number(order.amount))}</span>
                           </div>
                           <div className="flex justify-between text-slate-600">
                             <span>Shipping</span>
@@ -177,7 +180,7 @@ export default function CustomerOrdersPage() {
                           </div>
                           <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100 mt-2">
                             <span>Total</span>
-                            <span>{formatPrice(Number(order.total))}</span>
+                            <span>{formatPrice(Number(order.amount))}</span>
                           </div>
                         </div>
                       </div>

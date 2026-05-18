@@ -18,17 +18,21 @@ export default function CustomerDashboardPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: orders } = await supabase
+    const { data: rawOrders } = await supabase
       .from('orders')
-      .select('id, total, status, created_at')
-      .eq('customer_id', user.id)
+      .select('id, total_price, status, created_at')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (orders) {
+    if (rawOrders) {
+      const orders = rawOrders.map(o => ({
+        ...o,
+        amount: (o as any).total_price ?? 0
+      }));
       setStats({
         totalOrders: orders.length,
         pendingOrders: orders.filter(o => ['pending', 'processing'].includes(o.status)).length,
-        totalSpent: orders.reduce((acc, o) => acc + Number(o.total), 0)
+        totalSpent: orders.reduce((acc, o) => acc + Number(o.amount), 0)
       });
       setRecentOrders(orders.slice(0, 3));
     }
@@ -92,7 +96,7 @@ export default function CustomerDashboardPage() {
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="font-bold text-slate-900">৳{Number(order.total).toLocaleString()}</p>
+                    <p className="font-bold text-slate-900">৳{Number(order.amount).toLocaleString()}</p>
                     <p className="text-xs font-bold text-slate-500 uppercase">{order.status}</p>
                   </div>
                   <Link href="/customer/orders" className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">

@@ -5,9 +5,14 @@ import { motion } from 'framer-motion';
 import { MessageCircle, Mail, ArrowRight, Paintbrush } from 'lucide-react';
 import { Button } from '../ui/Button';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { IoLogoWhatsapp } from "react-icons/io";
+import { useRequireAuth } from '../../context/AuthModalContext';
 
 export const CustomDesignCTA: React.FC = () => {
+  const { requireAuth } = useRequireAuth();
+  const router = useRouter();
+
   return (
     <section className="relative py-6 md:py-24 px-6 overflow-hidden bg-white">
       {/* Decorative Elements */}
@@ -48,7 +53,9 @@ export const CustomDesignCTA: React.FC = () => {
             className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-6 pt-2 md:pt-4 relative z-10"
           >
             <Button
-              onClick={() => window.open('https://wa.me/yournumber', '_blank')}
+              onClick={() => requireAuth(() => {
+                window.open('https://wa.me/yournumber', '_blank');
+              }, "Please login first to chat with our craftsmanship consultant.")}
               className="w-full sm:w-auto h-12 md:h-16 px-8 md:px-10 rounded-full bg-accent-light text-accent-primary hover:bg-white border-none shadow-lg shadow-black/20 flex items-center justify-center gap-3 text-[10px] md:text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
             >
               <IoLogoWhatsapp className="h-4 w-4 md:h-9 md:w-9 fill-current" />
@@ -59,6 +66,12 @@ export const CustomDesignCTA: React.FC = () => {
               <Button
                 variant="outline"
                 className="w-full sm:w-auto h-12 md:h-16 px-8 md:px-10 rounded-full border-white/20 text-white hover:bg-white hover:text-accent-primary flex items-center justify-center gap-3 text-[10px] md:text-sm font-bold uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-black/10"
+                onClick={(e) => {
+                  e.preventDefault();
+                  requireAuth(() => {
+                    router.push('/contact');
+                  }, "Please login first to submit a custom inquiry.");
+                }}
               >
                 <Mail className="h-4 w-4 md:h-5 md:w-5" />
                 Contact Inquiry

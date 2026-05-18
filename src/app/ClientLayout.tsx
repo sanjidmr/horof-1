@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
 import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
+import { AuthModalProvider } from '../context/AuthModalContext';
 import { WishlistProvider } from '../context/WishlistContext';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
@@ -26,10 +27,11 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthProvider>
-      <WishlistProvider>
-        <CartProvider>
-          <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
-            {!isAdminPath && !isDashboardPath && (
+      <AuthModalProvider>
+        <WishlistProvider>
+          <CartProvider>
+            <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
+              {!isAdminPath && !isDashboardPath && (
               <Navbar onOpenCart={() => setIsCartOpen(true)} />
             )}
             <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
@@ -55,6 +57,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
           </div>
         </CartProvider>
       </WishlistProvider>
+      </AuthModalProvider>
     </AuthProvider>
   );
 };

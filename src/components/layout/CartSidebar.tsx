@@ -6,6 +6,8 @@ import { Button } from '../ui/Button';
 import { formatPrice } from '../../lib/utils';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { saveCheckoutItems } from '../../lib/checkoutStorage';
+import { useRequireAuth } from '../../context/AuthModalContext';
 
 interface CartSidebarProps {
   isOpen: boolean;
@@ -15,10 +17,22 @@ interface CartSidebarProps {
 export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => {
   const { cart, removeFromCart, updateQuantity, subtotal, itemCount } = useCart();
   const router = useRouter();
+  const { requireAuth } = useRequireAuth();
 
   const handleCheckout = () => {
-    onClose();
-    router.push('/checkout');
+    requireAuth(() => {
+      if (cart.length > 0) {
+        saveCheckoutItems(cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.discountPrice || item.price,
+          image: item.images[0] || '',
+          quantity: item.quantity
+        })));
+      }
+      onClose();
+      router.push('/checkout');
+    }, "Please login first to proceed to secure checkout.");
   };
 
   return (

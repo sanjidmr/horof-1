@@ -16,12 +16,18 @@ export default async function AccountPage() {
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
 
-  const { data: orders } = await supabase
+  const { data: rawOrders } = await supabase
     .from('orders')
-    .select('id,order_number,total,status,created_at')
-    .eq('customer_id', user.id)
+    .select('id,total_price,status,created_at')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(3);
+
+  const orders = (rawOrders ?? []).map(o => ({
+    ...o,
+    amount: (o as any).total_price ?? 0,
+    order_number: `#${o.id.slice(0, 8)}`
+  }));
 
   return (
     <div className="space-y-8">
@@ -94,7 +100,7 @@ export default async function AccountPage() {
                     <div>
                       <div className="font-bold text-slate-900 text-sm">{order.order_number}</div>
                       <div className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-                        {new Date(order.created_at).toLocaleDateString()} · {formatPrice(order.total)}
+                        {new Date(order.created_at).toLocaleDateString()} · {formatPrice(order.amount)}
                       </div>
                     </div>
                     <Badge variant="secondary" className="capitalize text-[10px]">{order.status}</Badge>

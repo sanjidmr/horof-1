@@ -67,12 +67,16 @@ export default function AddProductPage() {
     try {
       const imageUrls = await uploadImages();
       
-      // If this is set as Product of the Day, unset any existing ones
+      // Check if we exceed the 4 Product of the Day limit
       if (formData.is_product_of_the_day) {
-        await supabase
+        const { count, error: countErr } = await supabase
           .from('products')
-          .update({ is_product_of_the_day: false })
+          .select('id', { count: 'exact', head: true })
           .eq('is_product_of_the_day', true);
+
+        if (!countErr && count !== null && count >= 4) {
+          throw new Error('You can select a maximum of 4 Products of the Day. Please deselect another product first.');
+        }
       }
 
       const payload = {
@@ -207,7 +211,7 @@ export default function AddProductPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <input type="checkbox" id="isProductDay" checked={formData.is_product_of_the_day} onChange={e => setFormData({...formData, is_product_of_the_day: e.target.checked})} className="accent-[#1B4332] h-4 w-4" />
-                    <label htmlFor="isProductDay" className="text-sm text-slate-700">Product of the Day (Limit 1)</label>
+                    <label htmlFor="isProductDay" className="text-sm text-slate-700">Product of the Day (Limit 4)</label>
                   </div>
                 </div>
               </div>

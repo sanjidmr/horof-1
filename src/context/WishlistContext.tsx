@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../lib/types';
 import toast from 'react-hot-toast';
+import { useRequireAuth } from './AuthModalContext';
 
 interface WishlistContextType {
   wishlist: Product[];
@@ -15,6 +16,7 @@ interface WishlistContextType {
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
 
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { requireAuth } = useRequireAuth();
   const [wishlist, setWishlist] = useState<Product[]>(() => {
     if (typeof window === 'undefined') return [];
     const saved = localStorage.getItem('horof_wishlist');
@@ -42,11 +44,13 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const toggleWishlist = (product: Product) => {
-    if (isInWishlist(product.id)) {
-      removeFromWishlist(product.id);
-    } else {
-      addToWishlist(product);
-    }
+    requireAuth(() => {
+      if (isInWishlist(product.id)) {
+        removeFromWishlist(product.id);
+      } else {
+        addToWishlist(product);
+      }
+    }, "Please login first to manage your personal wishlist.");
   };
 
   return (

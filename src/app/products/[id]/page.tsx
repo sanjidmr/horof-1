@@ -14,6 +14,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ProductCard } from '../../../components/product/ProductCard';
 import { appendRecentProductId } from '../../../lib/recentlyViewed';
 import { Product } from '../../../lib/types';
+import { saveCheckoutItems } from '../../../lib/checkoutStorage';
+import { useRequireAuth } from '../../../context/AuthModalContext';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -22,15 +24,14 @@ interface PageProps {
 export default function ProductDetailsPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
-
+  const { requireAuth } = useRequireAuth();
+  const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const { addToCart, clearCart } = useCart();
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState('description');
+  const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
     async function fetchProduct() {
@@ -101,9 +102,17 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
   const handleBuyNow = () => {
     if (!product) return;
-    clearCart();
-    addToCart(product, quantity);
-    router.push('/checkout');
+    
+    requireAuth(() => {
+      saveCheckoutItems([{
+        id: product.id,
+        name: product.name,
+        price: product.discountPrice || product.price,
+        image: product.images[0] || '',
+        quantity: quantity
+      }]);
+      router.push('/checkout');
+    }, "Please login first to proceed to checkout and buy this item.");
   };
 
   if (loading) {

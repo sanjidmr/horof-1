@@ -14,11 +14,17 @@ export default async function AccountOrdersPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: orders } = await supabase
+  const { data: rawOrders } = await supabase
     .from('orders')
-    .select('id,order_number,total,status,payment_status,created_at')
-    .eq('customer_id', user.id)
+    .select('id,total_price,status,payment_status,created_at')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false });
+
+  const orders = (rawOrders ?? []).map(o => ({
+    ...o,
+    amount: (o as any).total_price ?? 0,
+    order_number: `#${o.id.slice(0, 8)}`
+  }));
 
   return (
     <div className="space-y-6">
@@ -58,7 +64,7 @@ export default async function AccountOrdersPage() {
                       <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                         <span className="flex items-center gap-1"><Clock size={12} /> {new Date(order.created_at).toLocaleDateString()}</span>
                         <span>·</span>
-                        <span>{formatPrice(order.total)}</span>
+                        <span>{formatPrice(order.amount)}</span>
                       </div>
                     </div>
                   </div>

@@ -19,10 +19,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     .from('orders')
     .select('*')
     .eq('id', id)
-    .eq('customer_id', user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (!order) notFound();
+  (order as any).amount = (order as any).total_price ?? order.amount ?? 0;
+  (order as any).order_number = (order as any).order_number ?? `#${order.id.slice(0, 8)}`;
 
   const { data: items } = await supabase
     .from('order_items')
@@ -81,15 +83,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <div className="p-6 bg-slate-50/50 border-t space-y-2">
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Subtotal</span>
-                  <span>{formatPrice(order.subtotal)}</span>
+                  <span>{formatPrice(Number(order.amount))}</span>
                 </div>
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Delivery Charge</span>
-                  <span>{formatPrice(order.delivery_charge)}</span>
+                  <span>Free</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold text-slate-900 pt-2 border-t border-slate-200 mt-2">
                   <span>Total</span>
-                  <span className="text-accent-primary">{formatPrice(order.total)}</span>
+                  <span className="text-accent-primary">{formatPrice(Number(order.amount))}</span>
                 </div>
               </div>
             </CardContent>
@@ -140,12 +142,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="font-bold text-slate-900">{order.full_name}</div>
+              <div className="font-bold text-slate-900">{order.customer_name || order.full_name}</div>
               <div className="text-sm text-slate-600 leading-relaxed">
-                {order.shipping_address}<br />
-                {order.area && `${order.area}, `}{order.city}
+                {order.customer_address || order.shipping_address}
               </div>
-              <div className="text-sm text-slate-600">{order.phone}</div>
+              <div className="text-sm text-slate-600">{order.customer_phone || order.phone}</div>
             </CardContent>
           </Card>
 
@@ -159,11 +160,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-slate-500">Method</span>
-                <span className="text-sm font-bold uppercase">{order.payment_method}</span>
+                <span className="text-sm font-bold uppercase">{order.payment_method || 'SSLCommerz'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-slate-500">Status</span>
-                <Badge variant="outline" className="capitalize">{order.payment_status}</Badge>
+                <Badge variant="outline" className="capitalize">{order.status === 'paid' ? 'paid' : order.status === 'failed' ? 'failed' : 'pending'}</Badge>
               </div>
               {order.transaction_id && (
                 <div className="p-3 bg-slate-50 rounded-lg">

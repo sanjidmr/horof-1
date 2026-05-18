@@ -44,9 +44,12 @@ const PAYMENT_STATUS_OPTIONS = [
 ];
 
 export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps) {
+  if (order) {
+    order.amount = order.total_price ?? order.amount ?? 0;
+  }
   const router = useRouter();
   const [status, setStatus] = useState(order.status);
-  const [paymentStatus, setPaymentStatus] = useState(order.payment_status);
+  const [paymentStatus, setPaymentStatus] = useState(order.payment_status || (order.status === 'paid' ? 'paid' : order.status === 'failed' ? 'failed' : 'pending'));
   const [isUpdating, setIsUpdating] = useState(false);
   
   const supabase = createSupabaseBrowserClient();
@@ -107,7 +110,7 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-900">{order.order_number}</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{order.order_number || `#${order.id.slice(0, 8)}`}</h1>
               <Badge variant="secondary" className="capitalize">{status}</Badge>
             </div>
             <p className="text-xs text-slate-500 mt-1">Placed on {new Date(order.created_at).toLocaleString()}</p>
@@ -168,15 +171,15 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
               <div className="p-6 bg-slate-50/30 border-t flex flex-col items-end gap-2">
                 <div className="flex justify-between w-full max-w-[200px] text-xs text-slate-500">
                   <span>Subtotal:</span>
-                  <span>{formatPrice(order.subtotal)}</span>
+                  <span>{formatPrice(Number(order.amount))}</span>
                 </div>
                 <div className="flex justify-between w-full max-w-[200px] text-xs text-slate-500">
                   <span>Delivery Charge:</span>
-                  <span>{formatPrice(order.delivery_charge)}</span>
+                  <span>Free</span>
                 </div>
                 <div className="flex justify-between w-full max-w-[200px] text-lg font-bold text-slate-900 mt-2">
                   <span>Total:</span>
-                  <span className="text-accent-primary">{formatPrice(order.total)}</span>
+                  <span className="text-accent-primary">{formatPrice(Number(order.amount))}</span>
                 </div>
               </div>
             </CardContent>
@@ -259,9 +262,9 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
                   <User size={20} />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-900">{order.full_name}</div>
-                  <div className="text-xs text-slate-500">{order.email}</div>
-                  <div className="text-xs text-slate-500">{order.phone}</div>
+                  <div className="font-bold text-slate-900">{order.customer_name || order.full_name || 'Guest User'}</div>
+                  <div className="text-xs text-slate-500">{order.customer_email || order.email || '—'}</div>
+                  <div className="text-xs text-slate-500">{order.customer_phone || order.phone || '—'}</div>
                 </div>
               </div>
 
@@ -271,8 +274,7 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Shipping Address</div>
                     <div className="text-xs text-slate-700 mt-1 leading-relaxed">
-                      {order.shipping_address}<br />
-                      {order.area && `${order.area}, `}{order.city}
+                      {order.customer_address || order.shipping_address || 'No address provided'}
                     </div>
                   </div>
                 </div>
@@ -282,7 +284,7 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Payment Info</div>
                     <div className="text-xs text-slate-700 mt-1 capitalize">
-                      {order.payment_method}
+                      {order.payment_method || 'SSLCommerz'}
                       {order.transaction_id && <div className="font-mono text-accent-primary mt-1">Trx: {order.transaction_id}</div>}
                     </div>
                   </div>

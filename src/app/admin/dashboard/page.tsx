@@ -44,7 +44,7 @@ export default async function AdminDashboard() {
     { data: lowStockProducts },
     { data: bestSellingProducts },
     { count: newArrivalsCount },
-    { data: productOfDay }
+    { data: productOfDayData }
   ] = await Promise.all([
     supabase.from('products').select('*', { count: 'exact', head: true }),
     supabase.from('orders').select('*', { count: 'exact', head: true }),
@@ -53,12 +53,14 @@ export default async function AdminDashboard() {
     supabase.from('products').select('*').lte('stock', 5).limit(5),
     supabase.from('products').select('*').eq('is_best_selling', true).limit(5),
     supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_new_arrival', true),
-    supabase.from('products').select('*').eq('is_product_of_the_day', true).maybeSingle()
+    supabase.from('products').select('*').eq('is_product_of_the_day', true).limit(4)
   ]);
 
+  const productOfDay = productOfDayData?.[0] || null;
+
   // Calculate total revenue
-  const { data: allOrders } = await supabase.from('orders').select('total');
-  const totalRevenue = allOrders?.reduce((acc, order) => acc + (order.total || 0), 0) || 0;
+  const { data: allOrders } = await supabase.from('orders').select('total_price');
+  const totalRevenue = allOrders?.reduce((acc, order) => acc + (Number((order as any).total_price) || 0), 0) || 0;
 
   const stats = [
     { label: 'Total Products', value: productCount || 0, icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -141,7 +143,7 @@ export default async function AdminDashboard() {
                           <p className="text-sm font-medium text-slate-900">{(order as any).profiles?.full_name || 'Guest'}</p>
                         </td>
                         <td className="px-8 py-5">
-                          <p className="text-sm font-bold text-slate-900">{formatPrice(order.total)}</p>
+                          <p className="text-sm font-bold text-slate-900">{formatPrice(Number((order as any).total_price || order.amount || 0))}</p>
                         </td>
                         <td className="px-8 py-5">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :

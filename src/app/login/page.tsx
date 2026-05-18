@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { AuthCard } from '../../components/auth/AuthCard';
 import { LoginForm } from '../../components/auth/LoginForm';
 import { GoogleButton } from '../../components/auth/GoogleButton';
@@ -10,7 +10,9 @@ export default function LoginPage() {
       title="Welcome Back" 
       subtitle="Sign in to manage your account"
     >
-      <LoginForm />
+      <Suspense fallback={<div className="text-center py-4 text-slate-500 text-sm">Loading login portal...</div>}>
+        <LoginForm />
+      </Suspense>
       
       <div className="relative py-4">
         <div className="absolute inset-0 flex items-center">

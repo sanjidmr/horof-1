@@ -1,7 +1,7 @@
 import type { DbOrderRow } from './types';
 
-export function orderRowTotal(row: Pick<DbOrderRow, 'total' | 'total_price'>): number {
-  const raw = row.total ?? row.total_price;
+export function orderRowTotal(row: any): number {
+  const raw = row.amount ?? row.total ?? row.total_price;
   const n = typeof raw === 'string' ? parseFloat(raw) : raw;
   return Number.isFinite(n) ? Number(n) : 0;
 }

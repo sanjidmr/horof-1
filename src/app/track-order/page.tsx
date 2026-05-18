@@ -27,11 +27,19 @@ export default function TrackOrderPage() {
     const sb = createSupabaseBrowserClient();
     
     try {
-      const { data, error: fetchError } = await sb
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderNumber.trim());
+      const query = sb
         .from('orders')
-        .select('*, order_items(*, products(name, images))')
-        .eq('order_number', orderNumber.trim())
-        .eq('email', email.trim().toLowerCase())
+        .select('*, order_items(*, products(name, images))');
+
+      if (isUuid) {
+        query.eq('id', orderNumber.trim());
+      } else {
+        query.eq('transaction_id', orderNumber.trim());
+      }
+
+      const { data, error: fetchError } = await query
+        .or(`customer_email.eq.${email.trim().toLowerCase()},email.eq.${email.trim().toLowerCase()}`)
         .maybeSingle();
 
       if (fetchError) throw fetchError;
@@ -84,10 +92,10 @@ export default function TrackOrderPage() {
           >
             <form onSubmit={handleTrack} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="orderNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order Number</Label>
+                <Label htmlFor="orderNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order ID or Transaction ID</Label>
                 <Input 
                   id="orderNumber"
-                  placeholder="HRF-XXXXXXXX"
+                  placeholder="TRAN_XXXXXXXX or Order UUID"
                   value={orderNumber}
                   onChange={(e) => setOrderNumber(e.target.value)}
                   className="h-14 rounded-2xl bg-white border-slate-200 focus:ring-accent-primary"
@@ -133,8 +141,8 @@ export default function TrackOrderPage() {
                   </div>
                   <div className="flex gap-8">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 block mb-1">Order #</span>
-                      <span className="text-sm font-mono font-bold">{order.order_number}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 block mb-1">Order / Transaction ID</span>
+                      <span className="text-sm font-mono font-bold">{order.transaction_id || `#${order.id.slice(0, 8)}`}</span>
                     </div>
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 block mb-1">Items</span>
@@ -146,7 +154,7 @@ export default function TrackOrderPage() {
                   <div className="h-20 w-[1px] bg-white/20 hidden md:block" />
                   <div className="space-y-2">
                     <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/60 block">Shipped To</span>
-                    <p className="text-sm font-medium leading-relaxed max-w-[200px]">{order.shipping_address}</p>
+                    <p className="text-sm font-medium leading-relaxed max-w-[200px]">{order.customer_address || order.shipping_address}</p>
                   </div>
                 </div>
               </div>
@@ -221,11 +229,11 @@ export default function TrackOrderPage() {
                   <div className="pt-6 border-t border-slate-200 space-y-2">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
                       <span>Subtotal</span>
-                      <span>{formatPrice(order.total)}</span>
+                      <span>{formatPrice(order.amount)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-slate-900 pt-2">
                       <span>Total Collection Value</span>
-                      <span>{formatPrice(order.total)}</span>
+                      <span>{formatPrice(order.amount)}</span>
                     </div>
                   </div>
                 </div>

@@ -119,8 +119,8 @@ export default function AdminOrdersPage() {
                       {order.id.split('-')[0].toUpperCase()}
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm font-bold text-slate-900">{order.profiles?.full_name || 'Guest User'}</p>
-                      <p className="text-xs text-slate-500">{order.profiles?.email}</p>
+                      <p className="text-sm font-bold text-slate-900">{order.customer_name || order.profiles?.full_name || 'Guest User'}</p>
+                      <p className="text-xs text-slate-500">{order.customer_email || order.profiles?.email}</p>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-500">
                       {new Date(order.created_at).toLocaleDateString()}
@@ -129,7 +129,7 @@ export default function AdminOrdersPage() {
                       {getStatusBadge(order.status)}
                     </td>
                     <td className="px-6 py-4 font-bold text-slate-900">
-                      {formatPrice(Number(order.total))}
+                      {formatPrice(Number(order.total_price || order.amount || 0))}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Button onClick={() => openOrderDetails(order)} variant="ghost" size="sm" className="text-[#2D6A4F] hover:bg-[#E6F0EB]">
@@ -184,21 +184,13 @@ export default function AdminOrdersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-widest">Customer</h3>
-                  <p className="text-sm text-slate-700">{selectedOrder.profiles?.full_name}</p>
-                  <p className="text-sm text-slate-500">{selectedOrder.profiles?.email}</p>
-                  <p className="text-sm text-slate-500">{selectedOrder.profiles?.phone}</p>
+                  <p className="text-sm text-slate-700">{selectedOrder.customer_name || selectedOrder.profiles?.full_name}</p>
+                  <p className="text-sm text-slate-500">{selectedOrder.customer_email || selectedOrder.profiles?.email}</p>
+                  <p className="text-sm text-slate-500">{selectedOrder.customer_phone || selectedOrder.profiles?.phone}</p>
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 mb-2 uppercase tracking-widest">Shipping Address</h3>
-                  {selectedOrder.shipping_address ? (
-                    <div className="text-sm text-slate-700">
-                      <p>{selectedOrder.shipping_address.street}</p>
-                      <p>{selectedOrder.shipping_address.city}, {selectedOrder.shipping_address.state} {selectedOrder.shipping_address.postal_code}</p>
-                      <p>{selectedOrder.shipping_address.country}</p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">No address provided</p>
-                  )}
+                  <p className="text-sm text-slate-700">{selectedOrder.customer_address || selectedOrder.shipping_address || 'No address provided'}</p>
                 </div>
               </div>
 
@@ -232,7 +224,7 @@ export default function AdminOrdersPage() {
               {/* Totals */}
               <div className="border-t border-slate-200 pt-4 flex justify-between items-center">
                 <span className="font-bold text-slate-900">Total Amount</span>
-                <span className="text-2xl font-bold text-[#1B4332]">{formatPrice(Number(selectedOrder.total))}</span>
+                <span className="text-2xl font-bold text-[#1B4332]">{formatPrice(Number(selectedOrder.total_price || selectedOrder.amount || 0))}</span>
               </div>
             </div>
           </div>

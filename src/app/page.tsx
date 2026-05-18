@@ -49,7 +49,7 @@ export default async function HomePage() {
       .select('*, categories(name)')
       .eq('is_active', true)
       .eq('is_product_of_the_day', true)
-      .limit(1),
+      .limit(4),
     supabase
       .from('products')
       .select('*, categories(name)')
@@ -75,12 +75,12 @@ export default async function HomePage() {
   // Format Categories
   const categories = catData
     ? catData.map(c => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        image: c.image_url || '/images/category-placeholder.jpg',
-        productCount: c.products?.[0]?.count || 0
-      }))
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      image: c.image_url || '/images/category-placeholder.jpg',
+      productCount: c.products?.[0]?.count || 0
+    }))
     : [];
 
   // Helper to map products
@@ -129,10 +129,10 @@ export default async function HomePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6">
-        <FeaturedProducts 
-          title="Best Selling Products" 
-          subtitle="Top Favorites" 
-          limit={8} 
+        <FeaturedProducts
+          title="Best Selling Products"
+          subtitle="Top Favorites"
+          limit={8}
           products={featuredProducts}
         />
       </div>
@@ -145,14 +145,6 @@ export default async function HomePage() {
 
       <SpecialOffer />
 
-      <div className="max-w-7xl mx-auto px-6">
-        <FeaturedProducts 
-          title="Our Collection" 
-          subtitle="Latest Discoveries" 
-          limit={8} 
-          products={allProducts}
-        />
-      </div>
 
       <div className="max-w-7xl mx-auto px-6">
         <ProductOfTheDay products={dailyProducts} />

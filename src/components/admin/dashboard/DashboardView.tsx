@@ -113,7 +113,7 @@ export function DashboardView({ data }: { data: DashboardData }) {
                       <tr key={o.id} className="border-b border-slate-100 dark:border-slate-900">
                         <td className="py-2 pr-2 font-mono text-xs">
                           <Link className="text-slate-900 underline dark:text-slate-100" href={`/admin/orders/${o.id}`}>
-                            {o.order_number}
+                            {o.order_number || `#${o.id.slice(0, 8)}`}
                           </Link>
                         </td>
                         <td className="py-2 pr-2">{o.customer?.full_name ?? o.customer?.email ?? '—'}</td>

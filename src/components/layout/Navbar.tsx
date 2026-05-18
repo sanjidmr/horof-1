@@ -10,6 +10,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { IoLogoWhatsapp } from "react-icons/io";
 import toast from 'react-hot-toast';
+import { PremiumSearch } from './PremiumSearch';
+
 
 interface NavbarProps {
   onOpenCart: () => void;
@@ -26,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
 
   const lastScrollY = useRef(0);
   const { itemCount } = useCart();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, isAdmin, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -207,12 +209,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href="/dashboard"
+                  href={isAdmin ? "/admin/dashboard" : "/dashboard"}
                   className={cn(
                     "hidden sm:flex h-9 w-9 rounded-full items-center justify-center transition-all",
                     (isScrolled || !isTransparentPage) ? "bg-slate-100 text-slate-800" : "bg-white/10 text-white backdrop-blur-sm"
                   )}
-                  title="My dashboard"
+                  title={isAdmin ? "Admin Panel" : "My dashboard"}
                 >
                   <User size={18} />
                 </Link>
@@ -245,62 +247,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
         </div>
       </nav>
 
-      {/* Global Search Modal */}
-      <AnimatePresence>
-        {isSearchOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white/98 backdrop-blur-2xl z-[200] flex items-center justify-center p-6"
-          >
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="flex justify-between items-center mb-12">
-                <div className="flex items-center gap-3">
-                  <div className="h-1 w-8 bg-black rounded-full" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Search Products</span>
-                </div>
-                <button
-                  onClick={() => setIsSearchOpen(false)}
-                  className="p-3 bg-slate-50 hover:bg-black hover:text-white rounded-full transition-all"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSearch} className="relative group">
-                <input
-                  autoFocus
-                  type="text"
-                  placeholder="What are you looking for?"
-                  className="w-full text-3xl md:text-5xl font-light bg-transparent border-b border-slate-200 pb-6 outline-none focus:border-black transition-colors"
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                />
-                <button type="submit" className="absolute right-0 top-1/2 -translate-y-1/2 p-4 text-slate-400 group-focus-within:text-black">
-                  <Search size={32} />
-                </button>
-              </form>
-
-              <div className="mt-10 flex flex-wrap gap-3">
-                {["Heritage", "Limited Edition", "Wall Art", "Woodcraft"].map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => {
-                      setSearchValue(tag);
-                      router.push(`/products?search=${tag}`);
-                      setIsSearchOpen(false);
-                    }}
-                    className="text-[10px] font-bold px-5 py-2.5 bg-slate-50 rounded-full hover:bg-black hover:text-white transition-all uppercase tracking-widest border border-slate-100"
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Global Premium Search Modal */}
+      <PremiumSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       {/* Mobile Menu Sidebar */}
       <AnimatePresence>
@@ -353,9 +301,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                   )}
                   {isAuthenticated && (
                     <div className="space-y-4">
-                      <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                      <Link href={isAdmin ? "/admin/dashboard" : "/dashboard"} onClick={() => setIsMobileMenuOpen(false)}>
                         <Button className="w-full h-12 rounded-xl border border-[#1A3320] text-[#1A3320] hover:bg-slate-50 text-sm font-bold tracking-[0.2em] uppercase">
-                          My dashboard
+                          {isAdmin ? "Admin Panel" : "My dashboard"}
                         </Button>
                       </Link>
                       <Button

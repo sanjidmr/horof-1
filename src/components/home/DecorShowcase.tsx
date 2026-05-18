@@ -10,9 +10,20 @@ interface DecorShowcaseProps {
   initialImages?: any[];
 }
 
+interface DecorItem {
+  id: number;
+  title: string;
+  subtitle: string;
+  desc: string;
+  image: string;
+  path: string;
+  isLarge?: boolean;
+  buttonText?: string;
+}
+
 export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) => {
-  const [items, setItems] = React.useState(() => {
-    const defaultItems = [
+  const [items, setItems] = React.useState<DecorItem[]>(() => {
+    const defaultItems: DecorItem[] = [
       {
         id: 1,
         title: 'The Eternal Root',
@@ -20,7 +31,8 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
         desc: 'Hand-carved from century-old walnut, this piece captures the fluid motion of growing roots. A testament to time and artisanal patience.',
         image: '/images/hero1.jpg',
         path: '/products',
-        isLarge: true
+        isLarge: true,
+        buttonText: ''
       },
       {
         id: 2,
@@ -28,7 +40,8 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
         subtitle: 'Heritage Edition',
         desc: 'Abstract topography carved into solid oak, finished with organic oils to reveal the hidden soul of the wood.',
         image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=1000',
-        path: '/products'
+        path: '/products',
+        buttonText: ''
       },
       {
         id: 3,
@@ -36,14 +49,24 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
         subtitle: 'Sculpted Form',
         desc: 'A seamless blend of hollowed space and solid silhouette, perfect for bringing a piece of nature into your workspace.',
         image: 'https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?auto=format&fit=crop&q=80&w=1000',
-        path: '/products'
+        path: '/products',
+        buttonText: ''
       }
     ];
 
     if (initialImages && initialImages.length > 0) {
       return defaultItems.map(item => {
         const match = initialImages.find(d => d.section === `decor-${item.id}`);
-        return match ? { ...item, image: match.image_url || item.image } : item;
+        return match 
+          ? { 
+              ...item, 
+              image: match.image_url || item.image,
+              title: match.title || item.title,
+              subtitle: match.subtitle || item.subtitle,
+              desc: match.description || item.desc,
+              buttonText: match.button_text || ''
+            } 
+          : item;
       });
     }
     return defaultItems;
@@ -63,7 +86,16 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
       if (data && data.length > 0) {
         setItems(prev => prev.map(item => {
           const match = data.find(d => d.section === `decor-${item.id}`);
-          return match ? { ...item, image: match.image_url } : item;
+          return match 
+            ? { 
+                ...item, 
+                image: match.image_url || item.image,
+                title: match.title || item.title,
+                subtitle: match.subtitle || item.subtitle,
+                desc: match.description || item.desc,
+                buttonText: match.button_text || ''
+              } 
+            : item;
         }));
       }
     }
@@ -120,8 +152,6 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
               <p className="text-white/60 text-xs sm:text-sm md:text-base max-w-md line-clamp-2 md:line-clamp-3 font-light leading-relaxed">
                 {items[0].desc}
               </p>
-
-
             </div>
           </div>
         </div>
@@ -150,7 +180,11 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
                   {item.title}
                 </h3>
 
-
+                {item.desc && (
+                  <p className="text-white/60 text-[10px] sm:text-xs font-light line-clamp-1 mt-1 hidden md:block">
+                    {item.desc}
+                  </p>
+                )}
               </div>
             </div>
 

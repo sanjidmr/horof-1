@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, Minus, Plus, ShoppingCart, Heart, ShieldCheck, Truck, RotateCcw, Share2 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
+import { useRequireAuth } from '@/context/AuthModalContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shadcn/tabs';
 import { Button } from '@/components/ui/Button';
 import { ProductCard } from '../product/ProductCard';
@@ -25,6 +26,7 @@ interface ProductDetailClientProps {
 
 export function ProductDetailClient({ product, images, variants, relatedProducts }: ProductDetailClientProps) {
   const { addToCart } = useCart();
+  const { requireAuth } = useRequireAuth();
   const [activeImg, setActiveImg] = useState(0);
   const [qty, setQty] = useState(1);
   const [selectedSize, setSelectedSize] = useState<string | null>(variants.find(v => v.size)?.size || null);
@@ -298,7 +300,13 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
                       </p>
                     </div>
                   ))}
-                  <Button variant="outline" className="w-full h-14 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] mt-10">
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-14 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] mt-10"
+                    onClick={() => requireAuth(() => {
+                      alert("Review submission feature coming soon!");
+                    }, "Please login first to write a review.")}
+                  >
                     Write a Review
                   </Button>
                 </div>

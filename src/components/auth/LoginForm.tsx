@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +11,7 @@ export const LoginForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +41,12 @@ export const LoginForm: React.FC = () => {
           .single();
 
         const role = profile?.role || 'customer';
-        router.push(role === 'admin' ? '/admin/dashboard' : '/dashboard');
+        if (role === 'admin') {
+          router.push('/admin/dashboard');
+        } else {
+          const nextTarget = searchParams?.get('next') || '/dashboard';
+          router.push(nextTarget);
+        }
         router.refresh();
       }
     } catch (err) {

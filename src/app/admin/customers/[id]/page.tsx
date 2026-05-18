@@ -7,11 +7,16 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', id).single();
-  const { data: orders } = await supabase.from('orders').select('id,order_number,total,status,created_at').eq('customer_id', id).order('created_at', { ascending: false });
+  const { data: ordersAll } = await supabase.from('orders').select('id,total_price,status,created_at').eq('user_id', id).order('created_at', { ascending: false });
+  const orders = (ordersAll ?? []).map(o => ({
+    ...o,
+    amount: (o as any).total_price ?? 0,
+    order_number: `#${o.id.slice(0, 8)}`
+  }));
 
   if (!profile) return <p className="text-sm">Not found</p>;
 
-  const spent = (orders ?? []).filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.total), 0);
+  const spent = (orders ?? []).filter((o) => o.status !== 'cancelled').reduce((s, o) => s + Number(o.amount || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -34,8 +39,8 @@ export default async function AdminCustomerDetailPage({ params }: { params: Prom
           <ul className="divide-y rounded-md border">
             {(orders ?? []).map((o) => (
               <li key={o.id} className="flex justify-between px-3 py-2">
-                <span className="font-mono text-xs">{o.order_number}</span>
-                <span>{formatPrice(Number(o.total))}</span>
+                <span className="font-mono text-xs">{o.order_number || `#${o.id.slice(0, 8)}`}</span>
+                <span>{formatPrice(Number(o.amount || 0))}</span>
               </li>
             ))}
           </ul>
