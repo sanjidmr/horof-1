@@ -9,7 +9,7 @@ import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 export const FAQSection: React.FC = () => {
   const [faqs, setFaqs] = useState<any[]>([]);
   const [openIndex, setOpenIndex] = useState<number | null>(0);
-  const supabase = createSupabaseBrowserClient();
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
     async function fetchFaqs() {

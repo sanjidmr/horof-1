@@ -29,7 +29,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [subtitleBold, setSubtitleBold] = React.useState(
     initialSubtitleBold ?? DEFAULT_SUBTITLE_BOLD
   );
-  const supabase = createSupabaseBrowserClient();
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   React.useEffect(() => {
     if (initialImage && initialSubtitleNormal !== undefined) return;

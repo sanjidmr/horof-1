@@ -26,6 +26,8 @@ export async function POST(request: Request) {
         transaction_id: tran_id,
         amount: total_amount,
         status: 'pending',
+        payment_method: 'online',
+        payment_status: 'pending',
         product_details: items,
         customer_name: customer.name,
         customer_email: customer.email,

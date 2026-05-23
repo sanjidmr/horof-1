@@ -7,7 +7,7 @@ import Link from 'next/link';
 export default function SignupPage() {
   return (
     <AuthCard 
-      title="Create Account" 
+      title="Sign In" 
       subtitle="Join us and start shopping"
     >
       <SignupForm />

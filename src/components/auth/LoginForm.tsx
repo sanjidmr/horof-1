@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createClient } from '../../lib/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -12,6 +12,15 @@ export const LoginForm: React.FC = () => {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const errorParam = searchParams?.get('error');
+    if (errorParam === 'verify_required') {
+      setError('Please verify your email address to access that page.');
+    } else if (errorParam === 'Invalid_or_expired_link') {
+      setError('The verification link is invalid or has expired. Please try signing up again or request a new link.');
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +43,10 @@ export const LoginForm: React.FC = () => {
       }
 
       if (data.user) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('has_account', 'true');
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -44,7 +57,7 @@ export const LoginForm: React.FC = () => {
         if (role === 'admin') {
           router.push('/admin/dashboard');
         } else {
-          const nextTarget = searchParams?.get('next') || '/dashboard';
+          const nextTarget = searchParams?.get('next') || '/';
           router.push(nextTarget);
         }
         router.refresh();
@@ -93,7 +106,7 @@ export const LoginForm: React.FC = () => {
         disabled={loading}
         className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50"
       >
-        {loading ? 'Signing in...' : 'Sign In'}
+        {loading ? 'Signing in...' : 'login'}
       </button>
     </form>
   );

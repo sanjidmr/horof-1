@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useRequireAuth } from '../../context/AuthModalContext';
+import { submitContactMessage } from '@/lib/actions/contact';
 
 export default function ContactPage() {
   const { requireAuth } = useRequireAuth();
@@ -20,17 +21,26 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Helper function to handle submission logic
-  const submitForm = (data: { name: string; email: string; subject: string; message: string }) => {
+  const submitForm = async (data: { name: string; email: string; subject: string; message: string }) => {
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const result = await submitContactMessage(data);
+      if (result.success) {
+        toast.success("Message sent! We'll get back to you shortly.");
+        // Clear local states
+        setName('');
+        setEmail('');
+        setSubject('');
+        setMessage('');
+      } else {
+        toast.error(result.error || "Failed to send message. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
       setIsSubmitting(false);
-      toast.success("Message sent! We'll get back to you shortly.");
-      // Clear local states
-      setName('');
-      setEmail('');
-      setSubject('');
-      setMessage('');
-    }, 1500);
+    }
   };
 
   // Handle manual submit trigger

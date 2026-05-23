@@ -12,7 +12,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
   if (productError || !product) notFound();
 
   const [{ data: images }, { data: variants }, { data: categories }, { data: brands }] = await Promise.all([
-    supabase.from('product_images').select('image_url').eq('product_id', id).order('sort_order', { ascending: true }),
+    supabase.from('product_images').select('url').eq('product_id', id).order('sort_order', { ascending: true }),
     supabase.from('product_variants').select('size, color, stock, price_modifier').eq('product_id', id).order('created_at', { ascending: true }),
     supabase.from('categories').select('id, name, parent_id').eq('is_active', true).order('sort_order', { ascending: true }),
     supabase.from('brands').select('id, name').eq('is_active', true).order('name', { ascending: true }),

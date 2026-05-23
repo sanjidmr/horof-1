@@ -25,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [authHref, setAuthHref] = useState('/signup');
 
   const lastScrollY = useRef(0);
   const { itemCount } = useCart();
@@ -67,6 +68,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
     }
     return () => { document.body.style.overflow = 'unset'; };
   }, [isSearchOpen, isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasAccount = localStorage.getItem('has_account');
+      if (hasAccount === 'true') {
+        setAuthHref('/login');
+      } else {
+        setAuthHref('/signup');
+      }
+    }
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,17 +153,30 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             ))}
           </div>
 
-          {/* Left: Mobile Menu Toggle */}
+          {/* Left: Mobile Login / Account Button */}
           <div className="lg:hidden flex items-center flex-1">
-            <button
-              className={cn(
-                "p-2 transition-colors",
-                (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white"
-              )}
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            {isAuthenticated ? (
+              <Link
+                href="/customer/dashboard"
+                className={cn(
+                  "p-2 flex items-center justify-center transition-all hover:scale-110",
+                  (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white"
+                )}
+                title="My Dashboard"
+              >
+                <User size={20} />
+              </Link>
+            ) : (
+              <Link
+                href={authHref}
+                className={cn(
+                  "text-[11px] font-bold uppercase tracking-widest transition-all p-2",
+                  (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white"
+                )}
+              >
+                Login
+              </Link>
+            )}
           </div>
 
           {/* Center: Logo */}
@@ -209,7 +234,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href={isAdmin ? "/admin/dashboard" : "/dashboard"}
+                  href={isAdmin ? "/admin/dashboard" : "/customer/dashboard"}
                   className={cn(
                     "hidden sm:flex h-9 w-9 rounded-full items-center justify-center transition-all",
                     (isScrolled || !isTransparentPage) ? "bg-slate-100 text-slate-800" : "bg-white/10 text-white backdrop-blur-sm"
@@ -230,7 +255,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                 </button>
               </div>
             ) : (
-              <Link href="/login" className="hidden sm:block">
+              <Link href={authHref} className="hidden sm:block">
                 <Button
                   size="sm"
                   variant={(isScrolled || !isTransparentPage) ? "primary" : "secondary"}
@@ -293,15 +318,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
 
                 <div className="pt-8 border-t border-slate-100">
                   {!isAuthenticated && (
-                    <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                    <Link href={authHref} onClick={() => setIsMobileMenuOpen(false)}>
                       <Button className="w-full h-12 rounded-xl bg-[#1A3320] text-white hover:bg-[#1A3320]/90 text-sm font-bold tracking-[0.2em] uppercase">
-                        Login / Register
+                        Login 
                       </Button>
                     </Link>
                   )}
                   {isAuthenticated && (
                     <div className="space-y-4">
-                      <Link href={isAdmin ? "/admin/dashboard" : "/dashboard"} onClick={() => setIsMobileMenuOpen(false)}>
+                      <Link href={isAdmin ? "/admin/dashboard" : "/customer/dashboard"} onClick={() => setIsMobileMenuOpen(false)}>
                         <Button className="w-full h-12 rounded-xl border border-[#1A3320] text-[#1A3320] hover:bg-slate-50 text-sm font-bold tracking-[0.2em] uppercase">
                           {isAdmin ? "Admin Panel" : "My dashboard"}
                         </Button>

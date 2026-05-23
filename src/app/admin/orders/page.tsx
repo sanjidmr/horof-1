@@ -116,7 +116,7 @@ export default function AdminOrdersPage() {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-mono text-slate-500">
-                      {order.id.split('-')[0].toUpperCase()}
+                      {String(order.id).split('-')[0].toUpperCase()}
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm font-bold text-slate-900">{order.customer_name || order.profiles?.full_name || 'Guest User'}</p>
@@ -150,7 +150,7 @@ export default function AdminOrdersPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Order #{selectedOrder.id.split('-')[0].toUpperCase()}</h2>
+                <h2 className="text-xl font-bold text-slate-900">Order #{String(selectedOrder.id).split('-')[0].toUpperCase()}</h2>
                 <p className="text-sm text-slate-500">{new Date(selectedOrder.created_at).toLocaleString()}</p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)}>

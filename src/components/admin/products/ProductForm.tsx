@@ -74,7 +74,7 @@ export type ProductFormInitial = {
   is_best_selling?: boolean;
   is_new_arrival?: boolean;
   is_product_of_the_day?: boolean;
-  images?: { image_url: string }[];
+  images?: { url: string }[];
   variants?: { size?: string | null; color?: string | null; stock: number; price_modifier: number }[];
 };
 
@@ -119,7 +119,7 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
     }
     const imgs =
       initial.images?.map((row) => {
-        const url = row.image_url;
+        const url = row.url;
         const path = extractStoragePath(url) ?? `legacy:${url.slice(-40)}`;
         return { path, url };
       }) ?? [];

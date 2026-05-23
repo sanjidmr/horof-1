@@ -57,8 +57,8 @@ export default async function OrdersPage() {
 
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('id, total_price, status, created_at, order_items(id, product_id, quantity, price)')
-    .eq('user_id', user.id)
+    .select('id, total_price, status, created_at, order_items(id, product_id, quantity, price, products(name, slug))')
+    .eq('customer_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -93,9 +93,23 @@ export default async function OrdersPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-4 border-t border-border-forest">
-                <p className="text-sm text-text-secondary">
-                  Items: <span className="font-bold text-text-primary">{o.order_items?.length ?? 0}</span>
-                </p>
+                <div className="space-y-1 text-sm text-text-secondary">
+                  <p>Items: <span className="font-bold text-text-primary">{o.order_items?.length ?? 0}</span></p>
+                  
+                  {o.status === 'delivered' && o.order_items && o.order_items.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {o.order_items.map((item: any) => (
+                        <Link 
+                          key={item.id} 
+                          href={`/product/${item.products?.slug}#reviews`}
+                          className="inline-flex items-center text-xs font-semibold text-[#2D6A4F] bg-[#D8F3DC] px-2 py-1 rounded-md hover:bg-[#B7E4C7] transition-colors"
+                        >
+                          Review {item.products?.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <p className="text-lg font-display font-bold text-gold">৳{Number(o.total_price).toFixed(2)}</p>
               </div>
             </div>

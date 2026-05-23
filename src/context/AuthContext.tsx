@@ -8,7 +8,7 @@ interface AuthContextType {
   user: SupabaseUser | null;
   session: Session | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean } | void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -106,24 +106,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) {
       throw new Error('Supabase is not configured.');
     }
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
 
-    // ✅ Signup এর পরে auto login
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const resultData = await res.json();
+
+    if (!res.ok) {
+      throw new Error(resultData.error || 'Signup failed');
+    }
+
+    // Auto login immediately since email confirmation is bypassed
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     if (loginError) throw loginError;
-
-    // Create admin notification
-    try {
-      const { createNotification } = await import('@/lib/actions/notifications');
-      await createNotification(
-        'New Customer Registered',
-        `A new user (${email}) has just registered on the platform.`,
-        'customer'
-      );
-    } catch (e) {
-      console.error('Failed to create notification:', e);
-    }
+    
+    return { needsEmailConfirmation: false };
   };
 
   const logout = async () => {

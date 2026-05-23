@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Product, CartItem } from '../lib/types';
 import toast from 'react-hot-toast';
+import { useAuth } from './AuthContext';
+import { createSupabaseBrowserClient } from '../lib/supabase/client';
 
 interface CartContextType {
   cart: CartItem[];
@@ -25,6 +27,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     | null
   >(null);
 
+  const { user } = useAuth();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
+
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
@@ -39,6 +44,133 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setIsLoaded(true);
   }, []);
+
+  // Sync Supabase cart to state on login / load
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const syncDBCart = async () => {
+      if (!user) return;
+      try {
+        // Fetch cart items from Supabase
+        const { data, error } = await supabase
+          .from('cart_items')
+          .select(`
+            quantity,
+            product_id,
+            products (
+              id,
+              name,
+              description,
+              price,
+              compare_price,
+              stock,
+              perfect_for,
+              product_images (
+                url,
+                sort_order
+              ),
+              categories (
+                name
+              )
+            )
+          `)
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Error fetching cart from DB:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const dbCart: CartItem[] = data.map((item: any) => {
+            const prod = item.products;
+            if (!prod) return null;
+
+            const images = (prod.product_images ?? [])
+              .slice()
+              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((i: any) => i.url)
+              .filter(Boolean);
+
+            const categoryName = Array.isArray(prod.categories)
+              ? prod.categories[0]?.name
+              : prod.categories?.name;
+
+            return {
+              id: String(item.product_id),
+              name: prod.name,
+              description: prod.description || '',
+              price: Number(prod.price),
+              discountPrice: prod.compare_price ? Number(prod.compare_price) : undefined,
+              images: images.length ? images : ['/images/about.jpg'],
+              category: categoryName || 'General',
+              rating: 0,
+              reviewCount: 0,
+              stock: prod.stock || 0,
+              tags: prod.perfect_for || [],
+              quantity: item.quantity
+            };
+          }).filter(Boolean) as CartItem[];
+
+          // Merge local cart with database cart
+          setCart((prevCart) => {
+            const merged = [...dbCart];
+
+            prevCart.forEach((localItem) => {
+              const exists = merged.find((item) => item.id === localItem.id);
+              if (!exists) {
+                merged.push(localItem);
+                // Add to Supabase
+                supabase
+                  .from('cart_items')
+                  .insert({
+                    user_id: user.id,
+                    product_id: parseInt(localItem.id),
+                    quantity: localItem.quantity
+                  })
+                  .then(({ error: err }) => {
+                    if (err) console.error('Error syncing local item to DB:', err);
+                  });
+              } else if (exists.quantity < localItem.quantity) {
+                // If local quantity is higher, use it and update DB
+                exists.quantity = localItem.quantity;
+                supabase
+                  .from('cart_items')
+                  .update({ quantity: localItem.quantity })
+                  .eq('user_id', user.id)
+                  .eq('product_id', parseInt(localItem.id))
+                  .then(({ error: err }) => {
+                    if (err) console.error('Error updating DB quantity:', err);
+                  });
+              }
+            });
+
+            return merged;
+          });
+        } else {
+          // If DB is empty, but local has items, sync local to DB
+          setCart((prevCart) => {
+            if (prevCart.length > 0) {
+              const itemsToSync = prevCart.map(item => ({
+                user_id: user.id,
+                product_id: parseInt(item.id),
+                quantity: item.quantity
+              }));
+              supabase.from('cart_items').insert(itemsToSync).then(({ error: err }) => {
+                if (err) console.error('Error syncing local cart to DB:', err);
+              });
+            }
+            return prevCart;
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync DB cart:', err);
+      }
+    };
+
+    syncDBCart();
+  }, [user, isLoaded, supabase]);
 
   useEffect(() => {
     if (isLoaded) {
@@ -77,9 +209,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {
+        const newQty = existingItem.quantity + quantity;
+        if (user) {
+          supabase
+            .from('cart_items')
+            .update({ quantity: newQty })
+            .eq('user_id', user.id)
+            .eq('product_id', parseInt(product.id))
+            .then(({ error }) => {
+              if (error) console.error('Error updating cart quantity in Supabase:', error);
+            });
+        }
         return prevCart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+          item.id === product.id ? { ...item, quantity: newQty } : item
         );
+      }
+
+      if (user) {
+        supabase
+          .from('cart_items')
+          .insert({
+            user_id: user.id,
+            product_id: parseInt(product.id),
+            quantity
+          })
+          .then(({ error }) => {
+            if (error) console.error('Error adding to cart in Supabase:', error);
+          });
       }
       return [...prevCart, { ...product, quantity }];
     });
@@ -93,17 +249,49 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingToastRef.current = { type: 'removed', productName: itemToRemove.name };
     }
 
+    if (user) {
+      supabase
+        .from('cart_items')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('product_id', parseInt(productId))
+        .then(({ error }) => {
+          if (error) console.error('Error removing from cart in Supabase:', error);
+        });
+    }
+
     setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
     if (quantity < 1) return;
+
+    if (user) {
+      supabase
+        .from('cart_items')
+        .update({ quantity })
+        .eq('user_id', user.id)
+        .eq('product_id', parseInt(productId))
+        .then(({ error }) => {
+          if (error) console.error('Error updating quantity in Supabase:', error);
+        });
+    }
+
     setCart(prevCart =>
       prevCart.map(item => (item.id === productId ? { ...item, quantity } : item))
     );
   };
 
   const clearCart = () => {
+    if (user) {
+      supabase
+        .from('cart_items')
+        .delete()
+        .eq('user_id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Error clearing cart in Supabase:', error);
+        });
+    }
     setCart([]);
   };
 

@@ -224,7 +224,7 @@ export default function AboutPage() {
                     <span style={{ fontFamily: 'sans-serif' }}
                       className="text-[#c9a84c] text-[10px] font-bold uppercase tracking-[0.4em]">Founder & Master Artisan</span>
                     <h3 style={{ fontFamily: "'Cormorant Garamond', serif" }}
-                      className="text-3xl text-white font-medium mt-1">Abdul Karim Horof</h3>
+                      className="text-3xl text-white font-medium mt-1"></h3>
                   </div>
                 </div>
 
@@ -335,80 +335,6 @@ export default function AboutPage() {
       </section>
 
       {/* ── MASTERPIECE PRODUCTS ── */}
-      <section className="py-20 lg:py-40 bg-[#faf9f7]">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center max-w-2xl mx-auto mb-16 lg:mb-20 space-y-4"
-          >
-
-            <h2 style={{ fontFamily: "'Cormorant Garamond', serif" }}
-              className="text-4xl lg:text-6xl font-medium text-[#04342c]">
-              Master Pieces
-            </h2>
-            <p style={{ fontFamily: 'sans-serif' }}
-              className="text-[#718096] font-light leading-relaxed">
-              Each creation is a testament to our philosophy — where forest heritage meets contemporary living.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-            {products.map((product, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                whileHover={{ y: -8 }}
-                className="group cursor-pointer"
-              >
-                <div className="relative rounded-2xl lg:rounded-3xl overflow-hidden aspect-[3/4] shadow-lg">
-                  <img src={product.image} alt={product.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#04342c] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-                  {/* Hover overlay info */}
-                  <div className="absolute inset-0 p-6 flex flex-col justify-end translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
-                    <span style={{ fontFamily: 'sans-serif' }}
-                      className="text-[#c9a84c] text-[9px] font-bold uppercase tracking-[0.3em]">{product.category}</span>
-                    <h3 style={{ fontFamily: "'Cormorant Garamond', serif" }}
-                      className="text-white text-xl font-medium mt-1">{product.name}</h3>
-                    <div className="flex items-center justify-between mt-3">
-                      <span style={{ fontFamily: 'sans-serif' }} className="text-white/80 text-sm font-light">{product.price}</span>
-                      <div className="h-8 w-8 rounded-full bg-[#c9a84c] flex items-center justify-center">
-                        <ArrowRight className="h-3.5 w-3.5 text-white" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card info below */}
-                <div className="mt-4 px-1">
-                  <span style={{ fontFamily: 'sans-serif' }}
-                    className="text-[#c9a84c] text-[9px] font-bold uppercase tracking-[0.3em]">{product.category}</span>
-                  <h3 style={{ fontFamily: "'Cormorant Garamond', serif" }}
-                    className="text-[#04342c] text-lg lg:text-xl font-medium mt-0.5">{product.name}</h3>
-                  <span style={{ fontFamily: 'sans-serif' }} className="text-[#718096] text-sm">{product.price}</span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="text-center mt-12">
-            <motion.a
-              href="#"
-              whileHover={{ scale: 1.03 }}
-              style={{ fontFamily: 'sans-serif' }}
-              className="inline-flex items-center gap-3 px-10 py-4 bg-[#04342c] text-white rounded-full text-sm font-bold tracking-widest uppercase hover:bg-[#c9a84c] transition-colors duration-300 shadow-xl"
-            >
-              View Full Collection <ArrowRight className="h-4 w-4" />
-            </motion.a>
-          </div>
-        </div>
-      </section>
 
       {/* ── JOURNEY TIMELINE ── */}
       <section className="py-20 lg:py-40 bg-[#04342c] relative overflow-hidden">
@@ -624,7 +550,7 @@ export default function AboutPage() {
       {/* ── CTA FOOTER BANNER ── */}
       <section className="relative py-24 lg:py-40 overflow-hidden bg-[#04342c]">
         <img
-          src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=1800"
+          src="/images/about.jpg"
           className="absolute inset-0 w-full h-full object-cover opacity-10"
           alt="Wood texture"
         />

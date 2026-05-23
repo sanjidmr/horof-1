@@ -96,7 +96,7 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
     for (let i = 0; i < imgs.length; i++) {
       const { error: ie } = await supabase.from('product_images').insert({
         product_id: d.id,
-        image_url: imgs[i].url,
+        url: imgs[i].url,
         sort_order: i,
       });
       if (ie) return { ok: false, message: ie.message };
@@ -136,7 +136,7 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   for (let i = 0; i < imgs.length; i++) {
     const { error: ie } = await supabase.from('product_images').insert({
       product_id: pid,
-      image_url: imgs[i].url,
+      url: imgs[i].url,
       sort_order: i,
     });
     if (ie) return { ok: false, message: ie.message };

@@ -2,19 +2,37 @@
 
 import React, { useState } from 'react';
 import { createClient } from '../../lib/supabase/client';
+import { useSearchParams } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 
 export const GoogleButton: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
+  const searchParams = useSearchParams();
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      setLoading(true);
+      const nextUrl = searchParams?.get('next') || '/';
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        },
+      });
+
+      if (error) throw error;
+      
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      toast.error(error.message || 'Failed to initialize Google login');
+      setLoading(false);
+    }
   };
 
   return (

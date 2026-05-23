@@ -40,7 +40,7 @@ export default function CustomerLayoutClient({
       <aside className="w-full md:w-64 bg-white border-r border-slate-200 flex-shrink-0 flex flex-col">
         <div className="p-6 border-b border-slate-100 flex items-center justify-center md:justify-start">
           <Link href="/" className="text-xl font-display font-bold text-[#1B4332]">
-            Anti<span className="text-[#40916C]">gravity</span>
+            Horof
           </Link>
         </div>
         
@@ -73,19 +73,16 @@ export default function CustomerLayoutClient({
               </Link>
             );
           })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-100 space-y-2">
           <Link href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
             <ArrowLeft className="h-5 w-5" /> Back to Store
           </Link>
-          <button
+           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
           >
             <LogOut className="h-5 w-5" /> Sign Out
           </button>
-        </div>
+        </nav>
       </aside>
 
       {/* Main Content */}

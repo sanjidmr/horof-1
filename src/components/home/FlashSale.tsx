@@ -15,7 +15,7 @@ export const FlashSale: React.FC = () => {
     seconds: 0,
   });
   const [flashSale, setFlashSale] = useState<any>(null);
-  const supabase = createSupabaseBrowserClient();
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
     async function fetchFlashSale() {

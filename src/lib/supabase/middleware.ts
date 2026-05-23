@@ -36,11 +36,23 @@ export async function updateSession(request: NextRequest) {
   // 1. Route Protection Logic
   const pathname = request.nextUrl.pathname
 
+  // Redirect legacy /dashboard to /customer/dashboard
+  if (pathname === '/dashboard') {
+    return NextResponse.redirect(new URL('/customer/dashboard', request.url))
+  }
+  if (pathname.startsWith('/dashboard/')) {
+    const newPath = pathname.replace('/dashboard/', '/customer/')
+    return NextResponse.redirect(new URL(newPath, request.url))
+  }
+
   // Public routes that don't need auth check redirects
   if (pathname.startsWith('/auth/callback')) return supabaseResponse
 
+  // Check if user has verified their email
+  const isVerified = user ? !!user.email_confirmed_at : false;
+
   // If already logged in and hitting login/signup, redirect to dashboard based on role
-  if (user && (pathname === '/login' || pathname === '/signup')) {
+  if (user && isVerified && (pathname === '/login' || pathname === '/signup')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -48,13 +60,13 @@ export async function updateSession(request: NextRequest) {
       .single()
 
     const role = profile?.role || 'customer'
-    return NextResponse.redirect(new URL(role === 'admin' ? '/admin/dashboard' : '/dashboard', request.url))
+    return NextResponse.redirect(new URL(role === 'admin' ? '/admin/dashboard' : '/customer/dashboard', request.url))
   }
 
   // Admin protection
   if (pathname.startsWith('/admin')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
+    if (!user || !isVerified) {
+      return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
     }
 
     const { data: profile } = await supabase
@@ -64,14 +76,14 @@ export async function updateSession(request: NextRequest) {
       .single()
 
     if (profile?.role !== 'admin') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      return NextResponse.redirect(new URL('/customer/dashboard', request.url))
     }
   }
 
   // Customer protection
-  if (pathname === '/dashboard') {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/customer')) {
+    if (!user || !isVerified) {
+      return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
     }
   }
 

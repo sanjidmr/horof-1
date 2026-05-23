@@ -16,7 +16,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const [hasMounted, setHasMounted] = useState(false);
   const pathname = usePathname();
   const isAdminPath = pathname?.startsWith('/admin');
-  const isDashboardPath = pathname?.startsWith('/dashboard');
+  const isDashboardPath = pathname?.startsWith('/dashboard') || pathname?.startsWith('/customer');
 
   useEffect(() => {
     setHasMounted(true);
@@ -32,7 +32,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
           <CartProvider>
             <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
               {!isAdminPath && !isDashboardPath && (
-              <Navbar onOpenCart={() => setIsCartOpen(true)} />
+              <Navbar onOpenCart={() => setIsCartOpen(true)} isCartOpen={isCartOpen} />
             )}
             <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
             

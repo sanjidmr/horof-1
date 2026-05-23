@@ -26,34 +26,33 @@ export async function getHomepageData() {
       supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('sort_order', { ascending: true }).limit(12),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,offer_price,stock,section,perfect_for,product_images(image_url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
         .eq('is_active', true)
-        .eq('section', 'best_selling')
+        .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,offer_price,stock,section,perfect_for,product_images(image_url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
         .eq('is_active', true)
-        .eq('section', 'new_arrival')
+        .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,offer_price,stock,section,perfect_for,flash_sale_ends_at,product_images(image_url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
         .eq('is_active', true)
-        .eq('section', 'flash_sale')
-        .gt('flash_sale_ends_at', new Date().toISOString())
+        .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,offer_price,stock,section,perfect_for,product_images(image_url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
         .eq('is_active', true)
-        .eq('section', 'exclusive_offer')
+        .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,offer_price,stock,section,perfect_for,product_images(image_url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
         .eq('is_active', true)
-        .eq('section', 'product_of_the_day')
+        .eq('is_product_of_the_day', true)
         .limit(1),
       supabase.from('site_settings').select('value').eq('key', 'homepage').maybeSingle(),
     ]);
@@ -123,22 +122,25 @@ export async function getProducts(params: {
   let query = supabase
     .from('products')
     .select(
-      'id,name,slug,description,price,offer_price,stock,section,perfect_for,product_images(image_url,sort_order),categories!inner(name,slug),brands(name)',
+      'id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories!inner(name,slug)',
       { count: 'exact' }
     )
     .eq('is_active', true);
 
   if (category) query = query.eq('categories.slug', category);
   if (brand) query = query.eq('brand_id', brand);
-  if (section) query = query.eq('section', section);
+  if (section === 'best_selling') query = query.eq('is_best_selling', true);
+  else if (section === 'new_arrival') query = query.eq('is_new_arrival', true);
+  else if (section === 'product_of_the_day') query = query.eq('is_product_of_the_day', true);
+  else if (section) query = query.eq('is_active', true);
   if (minPrice) query = query.gte('price', minPrice);
   if (maxPrice) query = query.lte('price', maxPrice);
   if (search) query = query.ilike('name', `%${search}%`);
 
   // Sorting
-  if (sort === 'price_low') query = query.order('offer_price', { ascending: true });
-  else if (sort === 'price_high') query = query.order('offer_price', { ascending: false });
-  else if (sort === 'best_selling') query = query.eq('section', 'best_selling').order('created_at', { ascending: false });
+  if (sort === 'price_low') query = query.order('price', { ascending: true });
+  else if (sort === 'price_high') query = query.order('price', { ascending: false });
+  else if (sort === 'best_selling') query = query.eq('is_best_selling', true).order('created_at', { ascending: false });
   else query = query.order('created_at', { ascending: false });
 
   // Pagination

@@ -141,12 +141,7 @@ const socialLinks = [
   { icon: Youtube, href: '#', label: 'YouTube', hoverBg: 'hover:bg-[#FF0000]' },
 ];
 
-const trustBadges = [
-  { icon: Truck, label: 'Free Delivery', sub: 'Orders over ৳2000' },
-  { icon: RefreshCcw, label: 'Easy Returns', sub: '7-day policy' },
-  { icon: Shield, label: 'Secure Payment', sub: '256-bit SSL' },
-  { icon: HeadphonesIcon, label: '24/7 Support', sub: 'Always here' },
-];
+
 
 // ─── Category type ────────────────────────────────────────────────────────────
 interface Category {
@@ -176,23 +171,7 @@ export const Footer: React.FC = () => {
     <footer className="bg-[#0F2016] text-white overflow-hidden">
 
       {/* ── Trust Strip ────────────────────────────────────────────────── */}
-      <div className="bg-[#1A3320] border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {trustBadges.map((b) => (
-              <div key={b.label} className="flex items-center gap-2.5 group">
-                <div className="flex-shrink-0 h-8 w-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-accent-light/10 group-hover:border-accent-light/20 transition-all duration-300">
-                  <b.icon className="h-3.5 w-3.5 text-accent-light" />
-                </div>
-                <div>
-                  <p className="text-white text-[10px] font-bold uppercase tracking-wider leading-none">{b.label}</p>
-                  <p className="text-white/35 text-[10px] font-light mt-0.5">{b.sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+     
 
       {/* ── Main Body ──────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-10 lg:py-14">
@@ -233,7 +212,7 @@ export const Footer: React.FC = () => {
                 <div className="h-6 w-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
                   <MapPin className="h-3 w-3 text-accent-light" />
                 </div>
-                <span className="text-[12px] font-light">Dhaka, Bangladesh</span>
+                <span className="text-[12px] font-light">Mymensingh, Dhaka</span>
               </div>
             </div>
 

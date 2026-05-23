@@ -17,7 +17,8 @@ import {
   TreePine,
   Layers,
   Image as ImageIcon,
-  Globe
+  Globe,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -41,6 +42,7 @@ const nav: NavItem[] = [
   { title: 'Products', href: '/admin/products', icon: Package },
   { title: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { title: 'Customers', href: '/admin/customers', icon: Users },
+  { title: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { 
     title: 'Marketing', 
     icon: ImageIcon,

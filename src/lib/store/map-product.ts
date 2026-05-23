@@ -6,11 +6,12 @@ type DbProduct = {
   slug: string;
   description: string | null;
   price: number | string;
-  offer_price: number | string | null;
+  compare_price?: number | string | null;
   stock: number;
   perfect_for?: string[] | null;
-  section?: string | null;
-  product_images?: { image_url: string; sort_order: number | null }[] | null;
+  is_new_arrival?: boolean;
+  is_best_selling?: boolean;
+  product_images?: { url: string; sort_order: number | null }[] | null;
   categories?: { name: string } | null;
 };
 
@@ -19,10 +20,10 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
     (row.product_images ?? [])
       .slice()
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((i) => i.image_url)
+      .map((i) => i.url)
       .filter(Boolean) || [];
   const price = typeof row.price === 'string' ? parseFloat(row.price) : Number(row.price);
-  const offer = row.offer_price != null ? (typeof row.offer_price === 'string' ? parseFloat(row.offer_price) : Number(row.offer_price)) : undefined;
+  const offer = row.compare_price != null ? (typeof row.compare_price === 'string' ? parseFloat(row.compare_price) : Number(row.compare_price)) : undefined;
 
   return {
     id: row.id,
@@ -37,8 +38,8 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
     reviewCount: 0,
     stock: row.stock,
     tags: row.perfect_for ?? [],
-    isNew: row.section === 'new_arrival',
-    isFeatured: row.section === 'best_selling',
+    isNew: row.is_new_arrival ?? false,
+    isFeatured: row.is_best_selling ?? false,
   };
 }
 

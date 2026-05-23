@@ -72,7 +72,7 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
     return defaultItems;
   });
 
-  const supabase = createSupabaseBrowserClient();
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   React.useEffect(() => {
     if (initialImages && initialImages.length > 0) return;

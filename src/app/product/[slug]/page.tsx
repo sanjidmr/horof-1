@@ -2,7 +2,9 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatPrice } from '@/lib/utils';
-import { ShoppingCart, Check, ShieldCheck, Truck } from 'lucide-react';
+import { ShoppingCart, Check, ShieldCheck, Truck, Star } from 'lucide-react';
+import { ReviewSection } from '@/components/product/ReviewSection';
+import { getReviewStats } from '@/lib/actions/reviews';
 
 export const revalidate = 60; // Revalidate every minute
 
@@ -27,8 +29,12 @@ export default async function ProductPage({ params }: { params: { slug: string }
     .select('*, categories(name)')
     .eq('category_id', product.category_id)
     .neq('id', product.id)
+    .eq('category_id', product.category_id)
+    .neq('id', product.id)
     .eq('is_active', true)
     .limit(4);
+
+  const stats = await getReviewStats(product.id);
 
   return (
     <div className="min-h-screen bg-white pt-24 pb-20">
@@ -77,6 +83,18 @@ export default async function ProductPage({ params }: { params: { slug: string }
                   <span className="text-lg text-slate-400 line-through">{formatPrice(Number(product.compare_price))}</span>
                 )}
               </div>
+              {stats.total > 0 && (
+                <div className="flex items-center gap-2 mt-3 text-sm text-slate-600">
+                  <div className="flex items-center text-[#F59E0B]">
+                    <Star className="w-4 h-4 fill-current" />
+                    <span className="font-bold ml-1 text-slate-900">{stats.average.toFixed(1)}</span>
+                  </div>
+                  <span>•</span>
+                  <a href="#reviews" className="hover:text-[#2D6A4F] hover:underline transition-all">
+                    {stats.total} review{stats.total === 1 ? '' : 's'}
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="prose prose-slate mb-10">
@@ -112,6 +130,15 @@ export default async function ProductPage({ params }: { params: { slug: string }
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Reviews Section */}
+        <div className="mt-16">
+          <ReviewSection 
+            productId={product.id} 
+            productName={product.name} 
+            slug={product.slug} 
+          />
         </div>
 
         {/* Related Products */}

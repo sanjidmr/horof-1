@@ -7,16 +7,22 @@ import {
   Package,
   DollarSign,
   ArrowUpRight,
-  AlertTriangle,
   Plus,
   Eye,
   TrendingUp,
   Clock,
-  ChevronRight
+  ChevronRight,
+  MessageSquare,
+  AlertCircle,
+  Truck,
+  CheckCircle2,
+  XCircle,
+  Mail
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/shadcn/button';
 import { formatPrice } from '@/lib/utils';
+import { format } from 'date-fns';
 
 export default async function AdminDashboard() {
   const supabase = await createSupabaseServerClient();
@@ -41,33 +47,48 @@ export default async function AdminDashboard() {
     { count: orderCount },
     { count: customerCount },
     { data: orders },
-    { data: lowStockProducts },
-    { data: bestSellingProducts },
-    { count: newArrivalsCount },
-    { data: productOfDayData }
+    { data: recentMessages },
+    { data: newArrivals },
+    { data: allOrdersData },
+    { data: orderItemsData }
   ] = await Promise.all([
     supabase.from('products').select('*', { count: 'exact', head: true }),
     supabase.from('orders').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer'),
     supabase.from('orders').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(5),
-    supabase.from('products').select('*').lte('stock', 5).limit(5),
-    supabase.from('products').select('*').eq('is_best_selling', true).limit(5),
-    supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_new_arrival', true),
-    supabase.from('products').select('*').eq('is_product_of_the_day', true).limit(4)
+    supabase.from('contact_messages').select('*').order('created_at', { ascending: false }).limit(5),
+    supabase.from('products').select('*').order('created_at', { ascending: false }).limit(5),
+    supabase.from('orders').select('total_price, status'),
+    supabase.from('order_items').select('product_id, quantity, products(*)')
   ]);
 
-  const productOfDay = productOfDayData?.[0] || null;
-
   // Calculate total revenue
-  const { data: allOrders } = await supabase.from('orders').select('total_price');
-  const totalRevenue = allOrders?.reduce((acc, order) => acc + (Number((order as any).total_price) || 0), 0) || 0;
+  const totalRevenue = allOrdersData?.reduce((acc, order) => acc + (Number((order as any).total_price) || 0), 0) || 0;
+
+
+  // Real Best Selling Products
+  const salesCount: Record<string, { product: any, count: number }> = {};
+  if (orderItemsData) {
+    orderItemsData.forEach((item: any) => {
+      if (!item.products) return;
+      if (!salesCount[item.product_id]) {
+        salesCount[item.product_id] = { product: item.products, count: 0 };
+      }
+      salesCount[item.product_id].count += item.quantity || 1;
+    });
+  }
+  
+  const bestSellingProducts = Object.values(salesCount)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 
   const stats = [
-    { label: 'Total Products', value: productCount || 0, icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Total Revenue', value: formatPrice(totalRevenue), icon: DollarSign, color: 'text-forest-600', bg: 'bg-forest-50' },
     { label: 'Total Orders', value: orderCount || 0, icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Total Customers', value: customerCount || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { label: 'Total Revenue', value: formatPrice(totalRevenue), icon: DollarSign, color: 'text-forest-600', bg: 'bg-forest-50' },
+    { label: 'Total Products', value: productCount || 0, icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ];
+
 
   return (
     <div className="space-y-10 pb-12">
@@ -89,8 +110,8 @@ export default async function AdminDashboard() {
             </Link>
           </Button>
           <Button asChild variant="outline" className="border-[#1a4731] text-white hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
-            <Link href="/admin/customers">
-              <Users className="mr-2 h-4 w-4" /> Manage Users
+            <Link href="/admin/messages">
+              <MessageSquare className="mr-2 h-4 w-4" /> Messages
             </Link>
           </Button>
         </div>
@@ -99,9 +120,9 @@ export default async function AdminDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow group">
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-3 rounded-2xl ${stat.bg}`}>
+              <div className={`p-3 rounded-2xl ${stat.bg} group-hover:scale-110 transition-transform`}>
                 <stat.icon className={`h-6 w-6 ${stat.color === 'text-forest-600' ? 'text-[#1a4731]' : stat.color}`} />
               </div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live Status</span>
@@ -112,10 +133,13 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Orders Table */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        {/* Left Column (Main Content) */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {/* Recent Orders Table */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between">
               <h3 className="text-xl font-display font-bold text-[#1a4731]">Recent Orders</h3>
               <Link href="/admin/orders" className="text-xs font-bold text-[#1a4731] hover:underline flex items-center gap-1">
@@ -146,10 +170,12 @@ export default async function AdminDashboard() {
                           <p className="text-sm font-bold text-slate-900">{formatPrice(Number((order as any).total_price || order.amount || 0))}</p>
                         </td>
                         <td className="px-8 py-5">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
-                              order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                                'bg-slate-100 text-slate-700'
-                            }`}>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                            order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
+                            order.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                            order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
                             {order.status}
                           </span>
                         </td>
@@ -165,113 +191,117 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-          {/* Highlights Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Best Selling */}
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-display font-bold text-[#1a4731]">Best Selling</h3>
-                <TrendingUp className="h-5 w-5 text-[#1a4731]/40" />
+          {/* Recent Messages */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+            <div className="p-8 border-b border-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-50 rounded-xl">
+                  <Mail className="h-5 w-5 text-[#1a4731]" />
+                </div>
+                <h3 className="text-xl font-display font-bold text-[#1a4731]">Recent Messages</h3>
               </div>
-              <div className="space-y-4">
-                {bestSellingProducts?.map((p, i) => (
+              <Link href="/admin/messages" className="text-xs font-bold text-[#1a4731] hover:underline flex items-center gap-1">
+                View All <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {recentMessages && recentMessages.length > 0 ? (
+                recentMessages.map((msg) => (
+                  <div key={msg.id} className="p-6 flex items-start gap-4 hover:bg-slate-50/50 transition-colors">
+                    <div className="h-10 w-10 rounded-full bg-[#1a4731]/10 flex items-center justify-center flex-shrink-0 text-[#1a4731] font-bold text-sm">
+                      {msg.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className="text-sm font-bold text-slate-900 truncate pr-4">{msg.name}</h4>
+                        <span className="text-[10px] text-slate-400 whitespace-nowrap">{format(new Date(msg.created_at), 'MMM d')}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700 truncate mb-1">{msg.subject}</p>
+                      <p className="text-xs text-slate-500 line-clamp-2">{msg.message}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-400 text-sm">No new messages.</div>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Column (Sidebar Info) */}
+        <div className="space-y-8">
+          
+          {/* Best Selling (Real Data) */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-display font-bold text-[#1a4731]">Best Selling</h3>
+              <TrendingUp className="h-5 w-5 text-[#1a4731]/40" />
+            </div>
+            <div className="space-y-5">
+              {bestSellingProducts && bestSellingProducts.length > 0 ? (
+                bestSellingProducts.map((p, i) => (
+                  <div key={p.product.id} className="flex items-center gap-4 group">
+                    <div className="h-12 w-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0 group-hover:shadow-md transition-shadow">
+                      {p.product.images?.[0] && <img src={p.product.images[0]} alt="" className="h-full w-full object-cover" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900 truncate">{p.product.name}</p>
+                      <p className="text-xs text-emerald-600 font-bold">{p.count} sold</p>
+                    </div>
+                    <span className="text-xs font-black text-[#1a4731]/20">#{i + 1}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-slate-400 text-sm">Not enough data to calculate best sellers yet.</div>
+              )}
+            </div>
+          </div>
+
+          {/* New Arrivals (Latest added) */}
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-display font-bold text-[#1a4731]">New Arrivals</h3>
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            </div>
+            <div className="space-y-5">
+              {newArrivals && newArrivals.length > 0 ? (
+                newArrivals.map((p) => (
                   <div key={p.id} className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
+                    <div className="h-12 w-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
                       {p.images?.[0] && <img src={p.images[0]} alt="" className="h-full w-full object-cover" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
                       <p className="text-xs text-slate-500">{formatPrice(p.price)}</p>
                     </div>
-                    <span className="text-[10px] font-black text-[#1a4731]/20">0{i + 1}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Product of Day */}
-            <div className="bg-[#1a4731] p-8 rounded-[2.5rem] text-white relative overflow-hidden shadow-xl shadow-forest-900/20">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl rounded-full -mr-16 -mt-16" />
-              <div className="relative z-10 space-y-6">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-emerald-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-400">Daily Spotlight</span>
-                </div>
-                {productOfDay ? (
-                  <div className="space-y-4">
-                    <div className="h-32 w-full rounded-2xl overflow-hidden shadow-2xl">
-                      <img src={productOfDay.images?.[0]} alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-display font-bold leading-tight">{productOfDay.name}</h4>
-                      <p className="text-white/60 text-xs mt-1 font-light line-clamp-2">{productOfDay.description}</p>
-                    </div>
-                    <Button asChild size="sm" className="w-full bg-white text-[#1a4731] hover:bg-slate-100 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 transition-all">
-                      <Link href={`/admin/products/${productOfDay.id}/edit`}>Edit Product</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="py-10 text-center text-white/40 italic text-sm">No product highlighted today.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Info */}
-        <div className="space-y-8">
-          {/* Low Stock Alerts */}
-          <div className="bg-red-50/30 p-8 rounded-[2.5rem] border border-red-100">
-            <div className="flex items-center gap-3 mb-6">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <h3 className="text-lg font-bold text-red-900">Low Stock Alert</h3>
-            </div>
-            <div className="space-y-4">
-              {lowStockProducts && lowStockProducts.length > 0 ? (
-                lowStockProducts.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-red-100 shadow-sm">
-                    <div className="min-w-0 flex-1 mr-4">
-                      <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
-                      <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest">{p.stock} Units left</p>
-                    </div>
-                    <Button asChild size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-[#1a4731]">
-                      <Link href={`/admin/products/${p.id}/edit`}><Plus className="h-4 w-4 rotate-45" /></Link>
-                    </Button>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-slate-400 text-sm italic">Stock levels are healthy.</div>
+                <div className="text-center py-4 text-slate-400 text-sm">No new products added recently.</div>
               )}
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-            <h3 className="text-lg font-display font-bold text-[#1a4731] mb-6">Store Insights</h3>
-            <div className="space-y-6">
+          {/* Quick Insights */}
+          <div className="bg-gradient-to-br from-[#1a4731] to-forest-900 p-8 rounded-[2.5rem] text-white shadow-xl shadow-forest-900/20 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl rounded-full -mr-16 -mt-16" />
+            <h3 className="text-lg font-display font-bold mb-6 relative z-10">Store Insights</h3>
+            <div className="space-y-6 relative z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-[#1a4731]" />
+                  <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+                    <ArrowUpRight className="h-4 w-4 text-emerald-400" />
                   </div>
-                  <span className="text-sm font-medium text-slate-600">New Arrivals</span>
+                  <span className="text-sm font-medium text-white/80">Avg Order Value</span>
                 </div>
-                <span className="text-lg font-display font-bold text-slate-900">{newArrivalsCount || 0}</span>
-              </div>
-              <div className="h-px bg-slate-50" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-                    <ArrowUpRight className="h-4 w-4 text-[#1a4731]" />
-                  </div>
-                  <span className="text-sm font-medium text-slate-600">Avg Order Value</span>
-                </div>
-                <span className="text-lg font-display font-bold text-slate-900">
+                <span className="text-lg font-display font-bold text-white">
                   {orderCount && orderCount > 0 ? formatPrice(totalRevenue / (orderCount || 1)) : formatPrice(0)}
                 </span>
               </div>
             </div>
           </div>
+
         </div>
       </div>
     </div>

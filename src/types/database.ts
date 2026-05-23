@@ -14,6 +14,7 @@ export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export type RefundStatus = 'pending' | 'approved' | 'rejected';
 export type CouponType = 'percent' | 'fixed';
 export type ShipmentStatus = 'pending' | 'in_transit' | 'delivered' | 'failed';
+export type ReviewRating = 1 | 2 | 3 | 4 | 5;
 
 export interface Database {
   public: {
@@ -448,6 +449,33 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['banners']['Insert']>;
+      };
+      product_reviews: {
+        Row: {
+          id: string;
+          product_id: string;
+          customer_id: string;
+          order_id: string;
+          rating: number;
+          title: string | null;
+          body: string | null;
+          is_approved: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          customer_id: string;
+          order_id: string;
+          rating: number;
+          title?: string | null;
+          body?: string | null;
+          is_approved?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['product_reviews']['Insert']>;
       };
     };
     Views: Record<string, never>;

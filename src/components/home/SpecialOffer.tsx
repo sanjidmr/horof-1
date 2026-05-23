@@ -9,7 +9,7 @@ import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
 export const SpecialOffer: React.FC = () => {
   const [offer, setOffer] = useState<any>(null);
-  const supabase = createSupabaseBrowserClient();
+  const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
     async function fetchOffer() {

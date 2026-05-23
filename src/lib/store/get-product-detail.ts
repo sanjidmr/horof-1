@@ -9,7 +9,7 @@ export async function getProductDetail(slug: string) {
   let row = null as unknown;
   const bySlug = await supabase
     .from('products')
-    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(image_url,sort_order),categories(name)')
+    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(url,sort_order),categories(name)')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle();
@@ -17,7 +17,7 @@ export async function getProductDetail(slug: string) {
   else {
     const byId = await supabase
       .from('products')
-      .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(image_url,sort_order),categories(name)')
+      .select('id,name,slug,description,price,compare_price,stock,specification,perfect_for,product_images(url,sort_order),categories(name)')
       .eq('id', slug)
       .eq('is_active', true)
       .maybeSingle();
@@ -28,10 +28,10 @@ export async function getProductDetail(slug: string) {
 
   const { data: variants } = await supabase.from('product_variants').select('id,size,color,stock,price_modifier').eq('product_id', (row as { id: string }).id);
 
-  const imgs = ((row as { product_images?: { image_url: string; sort_order: number | null }[] }).product_images ?? [])
+  const imgs = ((row as { product_images?: { url: string; sort_order: number | null }[] }).product_images ?? [])
     .slice()
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((i) => i.image_url);
+    .map((i) => i.url);
 
   const product = mapDbProductToCardProduct(row as never, (row as { categories?: { name?: string } }).categories?.name);
 
