@@ -177,12 +177,12 @@ export const ProductListingClient: React.FC<ProductListingClientProps> = ({
               <SheetTrigger asChild>
                 <Button variant="outline" size="sm" className="lg:hidden gap-2">
                   <SlidersHorizontal size={16} />
-                  Filters
+                  Cetagory
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-[300px] sm:w-[400px]">
                 <SheetHeader>
-                  <SheetTitle>Filters</SheetTitle>
+                  <SheetTitle>Cetagory</SheetTitle>
                 </SheetHeader>
                 <div className="py-6 h-full overflow-y-auto">
                   <FilterContent />

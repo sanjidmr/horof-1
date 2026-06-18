@@ -174,6 +174,24 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
             </motion.div>
 
+            {/* Let's Talk Button */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
+              className="pt-4 flex justify-center"
+            >
+              <Link href="/contact" className="w-full sm:w-auto flex justify-center">
+                <Button
+                  variant="secondary"
+                  className="bg-transparent border border-white/15 hover:border-accent-light text-white/80 hover:text-white rounded-full px-8 sm:px-12 h-12 sm:h-16 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold transition-all hover:bg-white/5 active:scale-95 flex items-center justify-center gap-2.5 shadow-lg"
+                >
+                  Let's Contact
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-light animate-ping shrink-0" />
+                </Button>
+              </Link>
+            </motion.div>
+
           </div>
 
         </div>

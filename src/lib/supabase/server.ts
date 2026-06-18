@@ -1,12 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getSupabasePublicEnv } from './public-env'
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
+  const env = getSupabasePublicEnv()
+
+  if (!env) {
+    console.error('[Supabase Server Client] Cannot initialize: Missing environment variables.')
+  }
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    env?.url || '',
+    env?.anonKey || '',
     {
       cookies: {
         getAll() {
@@ -29,3 +35,4 @@ export async function createSupabaseServerClient() {
 }
 
 export const createClient = createSupabaseServerClient;
+

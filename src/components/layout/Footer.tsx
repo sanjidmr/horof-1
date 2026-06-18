@@ -318,38 +318,7 @@ export const Footer: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Payment Methods ────────────────────────────────────────────── */}
-      <div className="border-t border-white/5 bg-[#0B1A10]">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            {/* Label */}
-            <div className="flex-shrink-0 flex items-center gap-2">
-              <Shield className="h-3.5 w-3.5 text-accent-light flex-shrink-0" />
-              <div>
-                <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] leading-none">Secure Payments</p>
-                <p className="text-white/20 text-[9.5px] font-light mt-0.5">256-bit SSL Encrypted</p>
-              </div>
-            </div>
-
-            <div className="hidden sm:block w-px h-8 bg-white/8 flex-shrink-0" />
-
-            {/* Payment icons */}
-            <div className="flex flex-wrap items-center gap-2">
-              {paymentMethods.map((method) => (
-                <div
-                  key={method.name}
-                  title={method.name}
-                  className="h-7 px-2 min-w-[48px] bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 rounded-md flex items-center justify-center transition-all duration-200 hover:scale-105 cursor-default group"
-                >
-                  <div className="opacity-75 group-hover:opacity-100 transition-opacity">
-                    {method.el}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      
 
       {/* ── Legal Bar ──────────────────────────────────────────────────── */}
       <div className="border-t border-white/5 bg-[#091410]">

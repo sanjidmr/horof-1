@@ -1,14 +1,20 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabasePublicEnv } from './public-env'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   })
 
+  const env = getSupabasePublicEnv()
+  if (!env) {
+    console.error('[Supabase Middleware] Cannot update session: Missing environment variables.')
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    env?.url || '',
+    env?.anonKey || '',
     {
       cookies: {
         getAll() {
@@ -29,9 +35,14 @@ export async function updateSession(request: NextRequest) {
 
   // This will refresh session if expired - required for Server Components
   // https://supabase.com/docs/guides/auth/server-side/nextjs
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch (error) {
+    console.error('[Supabase Middleware] Error fetching user session:', error)
+  }
+
 
   // 1. Route Protection Logic
   const pathname = request.nextUrl.pathname

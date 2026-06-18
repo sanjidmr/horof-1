@@ -241,7 +241,7 @@ function ProductsPageContent() {
                 className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white z-[70] p-8 lg:hidden shadow-2xl overflow-y-auto"
               >
                 <div className="flex items-center justify-between mb-10">
-                  <h2 className="text-2xl font-display font-bold">Filters</h2>
+                  <h2 className="text-2xl font-display font-bold">Category</h2>
                   <button onClick={() => setIsMobileFilterOpen(false)} className="p-2 bg-bg-secondary rounded-full">
                     <Filter className="h-5 w-5 text-accent-primary" />
                   </button>
@@ -267,7 +267,7 @@ function ProductsPageContent() {
                 onClick={() => setIsMobileFilterOpen(true)}
                 className="lg:hidden flex-1 flex items-center justify-center gap-3 h-14 bg-bg-secondary border border-border-forest rounded-2xl text-[10px] font-bold uppercase tracking-widest text-accent-primary"
               >
-                <SlidersHorizontal className="h-4 w-4" /> Filters
+                <SlidersHorizontal className="h-4 w-4" />Category
               </button>
               <div className="relative flex-1 sm:flex-none">
                 <button
