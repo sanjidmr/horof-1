@@ -19,6 +19,49 @@ export interface Product {
   specification?: string;
   perfect_for?: string;
   createdAt?: string;
+  order_config?: {
+    quantity_discounts: { quantity: number; discount_percent: number }[];
+    specification_steps: {
+      id: string;
+      name: string;
+      description: string;
+      type: 'select' | 'radio' | 'text' | 'file';
+      additional_price?: number;
+      required: boolean;
+      active: boolean;
+      options: { name: string; price_modifier: number }[];
+    }[];
+    design_charge: {
+      enabled: boolean;
+      amount: number;
+      description: string;
+    };
+    customer_notes_settings: {
+      enabled: boolean;
+      title: string;
+      placeholder: string;
+    };
+    pricing_config: {
+      min_order_qty: number;
+      max_order_qty?: number | null;
+    };
+    order_request_settings: {
+      enable_order_requests: boolean;
+      enable_add_to_cart: boolean;
+      enable_direct_order: boolean;
+      auto_approval: boolean;
+    };
+    display_controls: {
+      show_discount_table: boolean;
+      show_specifications: boolean;
+      show_customer_notes: boolean;
+      show_quantity_selector: boolean;
+      show_design_charge: boolean;
+      show_total_price: boolean;
+      show_send_request: boolean;
+      show_add_to_cart: boolean;
+    };
+  };
 }
 
 export interface Category {
@@ -31,6 +74,13 @@ export interface Category {
 
 export interface CartItem extends Product {
   quantity: number;
+  selectedOptions?: {
+    size?: string;
+    acrylicColor?: string;
+    letterColor?: string;
+    lighting?: string;
+  };
+  customPrice?: number;
 }
 
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';

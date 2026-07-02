@@ -9,37 +9,50 @@ export type SaveProductResult =
   | { ok: true; id: string }
   | { ok: false; message: string; issues?: { path: (string | number)[]; message: string }[] };
 
-function buildPayload(d: ProductFormParsed) {
+function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls: string[]) {
   const specObj = rowsToSpecification(d.specification ?? []);
-  const perfectFor = (d.perfect_for_str ?? '')
+  const perfectForStr = (d.perfect_for_str ?? '')
     .split(',')
     .map((s) => s.trim())
-    .filter(Boolean);
-
-  const flashEnds =
-    d.section === 'flash_sale' && d.flash_sale_ends_at
-      ? new Date(d.flash_sale_ends_at).toISOString()
-      : null;
+    .filter(Boolean)
+    .join(', ');
 
   return {
     name: d.name.trim(),
     slug: d.slug.trim().toLowerCase(),
-    sku: d.sku.trim(),
     price: d.price,
-    offer_price: d.offer_price ?? null,
+    compare_price: d.offer_price ?? null,
     stock: d.stock,
-    description: d.description?.trim() || null,
+    description: d.description?.trim() || '',
+    image: firstImageUrl,
+    images: allImageUrls,
     specification: specObj,
-    perfect_for: perfectFor,
-    section: d.section,
+    perfect_for: perfectForStr || null,
     is_best_selling: d.is_best_selling,
     is_new_arrival: d.is_new_arrival,
     is_product_of_the_day: d.is_product_of_the_day,
-    flash_sale_ends_at: flashEnds,
-    meta_title: d.meta_title?.trim() || null,
-    meta_description: d.meta_description?.trim() || null,
     category_id: d.category_id ?? null,
+    quantity_discounts: d.order_config?.quantity_discounts ?? [],
+    specification_steps: d.order_config?.specification_steps ?? [],
+    design_charge_enabled: d.order_config?.design_charge?.enabled ?? false,
+    design_charge_amount: d.order_config?.design_charge?.amount ?? 0,
+    design_charge_notes: d.order_config?.design_charge?.description ?? '',
+    custom_placeholder: d.order_config?.customer_notes_settings?.placeholder ?? '',
+    // Missing fields added:
+    sku: d.sku ?? '',
+    section: d.section,
+    flash_sale_ends_at: d.section === 'flash_sale' && d.flash_sale_ends_at
+      ? new Date(d.flash_sale_ends_at).toISOString()
+      : null,
+    meta_title: d.meta_title ?? '',
+    meta_description: d.meta_description ?? '',
     brand_id: d.brand_id ?? null,
+    customer_notes_enabled: d.order_config?.customer_notes_settings?.enabled ?? false,
+    customer_notes_title: d.order_config?.customer_notes_settings?.title ?? '',
+    min_order_qty: d.order_config?.pricing_config?.min_order_qty ?? 1,
+    max_order_qty: d.order_config?.pricing_config?.max_order_qty ?? null,
+    order_request_settings: d.order_config?.order_request_settings ?? null,
+    display_controls: d.order_config?.display_controls ?? null,
   };
 }
 
@@ -74,21 +87,21 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (profile?.role !== 'admin') return { ok: false, message: 'Admin only' };
 
-  const payload = buildPayload(d);
   const imgs = (d.images ?? []).slice(0, 3);
+  const firstImageUrl = imgs[0]?.url || '';
+  const allImageUrls = imgs.map((img) => img.url);
+
+  const payload = buildPayload(d, firstImageUrl, allImageUrls);
   const variants = cleanVariants(d);
 
   if (d.id) {
     const { error: upErr } = await supabase
       .from('products')
-      .update({
-        ...payload,
-        updated_at: new Date().toISOString(),
-      })
+      .update(payload)
       .eq('id', d.id);
 
     if (upErr) {
-      if (upErr.code === '23505') return { ok: false, message: 'SKU or slug already exists' };
+      if (upErr.code === '23505') return { ok: false, message: 'Slug already exists' };
       return { ok: false, message: upErr.message };
     }
 
@@ -118,16 +131,16 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
     revalidatePath(`/admin/products/${d.id}/edit`);
     revalidatePath('/products');
 
-    // Check for low stock
-    await checkLowStock();
+    // Check for low stock (non-fatal)
+    try { await checkLowStock(); } catch (_) {}
 
-    return { ok: true, id: d.id };
+    return { ok: true, id: String(d.id) };
   }
 
   const { data: inserted, error: insErr } = await supabase.from('products').insert(payload).select('id').single();
 
   if (insErr || !inserted) {
-    if (insErr?.code === '23505') return { ok: false, message: 'SKU or slug already exists' };
+    if (insErr?.code === '23505') return { ok: false, message: 'Slug already exists' };
     return { ok: false, message: insErr?.message ?? 'Insert failed' };
   }
 
@@ -156,15 +169,17 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   revalidatePath('/admin/products');
   revalidatePath('/products');
 
-  // Create notification
-  await createNotification(
-    'New Product Added',
-    `Product "${payload.name}" has been added to the store.`,
-    'product'
-  );
+  // Create notification (non-fatal)
+  try {
+    await createNotification(
+      'New Product Added',
+      `Product "${payload.name}" has been added to the store.`,
+      'product'
+    );
+  } catch (_) {}
 
-  // Check for low stock
-  await checkLowStock();
+  // Check for low stock (non-fatal)
+  try { await checkLowStock(); } catch (_) {}
 
-  return { ok: true, id: pid };
+  return { ok: true, id: String(pid) };
 }

@@ -78,7 +78,7 @@ export default function FAQAdminPage() {
         {!isAdding && (
           <Button 
             onClick={() => { setIsAdding(true); setFormData({ question: '', answer: '' }); }}
-            className="bg-forest hover:bg-forest/90 text-white rounded-xl px-6 h-12 font-bold flex items-center gap-2"
+            className="bg-forest hover:bg-forest/90 text-gray-800 rounded-xl px-6 h-12 font-bold flex items-center gap-2"
           >
             <Plus className="h-5 w-5" /> Add New FAQ
           </Button>

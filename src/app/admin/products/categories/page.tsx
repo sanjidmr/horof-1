@@ -4,7 +4,7 @@ import { CategoryManager } from '@/components/admin/products/CategoryManager';
 export default async function AdminCategoriesPage() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data } = await supabase.from('categories').select('*').order('sort_order');
+  const { data } = await supabase.from('categories').select('*').order('order');
 
   return (
     <div className="space-y-6">

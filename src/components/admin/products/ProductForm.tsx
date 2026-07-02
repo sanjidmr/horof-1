@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Upload, X, Image as ImageIcon, Settings, Tag, DollarSign, Layers, Sparkles, FileText, Globe, CheckCircle, Package } from 'lucide-react';
+import { Plus, Trash2, Upload, X, Image as ImageIcon, Settings, Tag, DollarSign, Layers, Sparkles, FileText, Globe, CheckCircle, Package, Percent, ChevronDown, ChevronUp, ToggleLeft, Eye, MessageSquare, SlidersHorizontal, ClipboardList } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { saveProduct, type SaveProductResult } from '@/lib/actions/save-product';
 import {
@@ -26,8 +26,8 @@ function slugify(s: string) {
   return s
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
+    .replace(/[^\p{L}\p{N}-]/gu, '')
     .replace(/^-+|-+$/g, '');
 }
 
@@ -76,6 +76,24 @@ export type ProductFormInitial = {
   is_product_of_the_day?: boolean;
   images?: { url: string }[];
   variants?: { size?: string | null; color?: string | null; stock: number; price_modifier: number }[];
+  order_config?: {
+    quantity_discounts?: { quantity: number; discount_percent: number }[];
+    specification_steps?: {
+      id: string;
+      name: string;
+      description?: string;
+      type: 'select' | 'radio' | 'text' | 'file';
+      additional_price?: number;
+      required: boolean;
+      active: boolean;
+      options?: { name: string; price_modifier: number }[];
+    }[];
+    design_charge?: { enabled: boolean; amount: number; description: string };
+    customer_notes_settings?: { enabled: boolean; title: string; placeholder: string };
+    pricing_config?: { min_order_qty: number; max_order_qty?: number | null };
+    order_request_settings?: { enable_order_requests: boolean; enable_add_to_cart: boolean; enable_direct_order: boolean; auto_approval: boolean };
+    display_controls?: { show_discount_table: boolean; show_specifications: boolean; show_customer_notes: boolean; show_quantity_selector: boolean; show_design_charge: boolean; show_total_price: boolean; show_send_request: boolean; show_add_to_cart: boolean };
+  } | null;
 };
 
 type ProductFormProps = {
@@ -106,7 +124,17 @@ const defaultValuesBase: Partial<ProductFormValues> = {
   is_new_arrival: false,
   is_product_of_the_day: false,
   variants: [{ size: '', color: '', stock: 0, price_modifier: 0 }],
+  order_config: {
+    quantity_discounts: [],
+    specification_steps: [],
+    design_charge: { enabled: false, amount: 0, description: '' },
+    customer_notes_settings: { enabled: false, title: 'Specification Need Details', placeholder: '' },
+    pricing_config: { min_order_qty: 1, max_order_qty: null },
+    order_request_settings: { enable_order_requests: true, enable_add_to_cart: true, enable_direct_order: false, auto_approval: false },
+    display_controls: { show_discount_table: true, show_specifications: true, show_customer_notes: true, show_quantity_selector: true, show_design_charge: true, show_total_price: true, show_send_request: true, show_add_to_cart: true },
+  },
 };
+
 
 export function ProductForm({ mode, categories, brands, initial }: ProductFormProps) {
   const router = useRouter();
@@ -138,8 +166,8 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
       perfect_for_str: Array.isArray(initial.perfect_for)
         ? initial.perfect_for.join(', ')
         : typeof initial.perfect_for === 'string'
-        ? initial.perfect_for
-        : '',
+          ? initial.perfect_for
+          : '',
       section: (initial.section as ProductFormValues['section']) ?? 'best_selling',
       flash_sale_ends_at: isoToDatetimeLocal(initial.flash_sale_ends_at ?? undefined),
       meta_title: initial.meta_title ?? '',
@@ -153,14 +181,33 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
       variants:
         initial.variants && initial.variants.length > 0
           ? initial.variants.map((v) => ({
-              size: v.size ?? '',
-              color: v.color ?? '',
-              stock: Number(v.stock),
-              price_modifier: Number(v.price_modifier),
-            }))
+            size: v.size ?? '',
+            color: v.color ?? '',
+            stock: Number(v.stock),
+            price_modifier: Number(v.price_modifier),
+          }))
           : [{ size: '', color: '', stock: 0, price_modifier: 0 }],
+      order_config: {
+        quantity_discounts: initial.order_config?.quantity_discounts ?? [],
+        specification_steps: (initial.order_config?.specification_steps ?? []).map(s => ({
+          id: s.id || crypto.randomUUID(),
+          name: s.name,
+          description: s.description ?? '',
+          type: s.type ?? 'select',
+          additional_price: Number(s.additional_price ?? 0),
+          required: !!s.required,
+          active: s.active !== false,
+          options: (s.options ?? []).map(o => ({ name: o.name, price_modifier: Number(o.price_modifier ?? 0) })),
+        })),
+        design_charge: initial.order_config?.design_charge ?? { enabled: false, amount: 0, description: '' },
+        customer_notes_settings: initial.order_config?.customer_notes_settings ?? { enabled: false, title: 'Specification Need Details', placeholder: '' },
+        pricing_config: initial.order_config?.pricing_config ?? { min_order_qty: 1, max_order_qty: null },
+        order_request_settings: initial.order_config?.order_request_settings ?? { enable_order_requests: true, enable_add_to_cart: true, enable_direct_order: false, auto_approval: false },
+        display_controls: initial.order_config?.display_controls ?? { show_discount_table: true, show_specifications: true, show_customer_notes: true, show_quantity_selector: true, show_design_charge: true, show_total_price: true, show_send_request: true, show_add_to_cart: true },
+      },
     } as ProductFormValues;
   }, [initial]);
+
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -177,6 +224,22 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
     control: form.control,
     name: 'variants',
   });
+
+  const { fields: discountFields, append: appendDiscount, remove: removeDiscount, move: moveDiscount } = useFieldArray({
+    control: form.control,
+    name: 'order_config.quantity_discounts',
+  });
+
+  const { fields: stepFields, append: appendStep, remove: removeStep, move: moveStep } = useFieldArray({
+    control: form.control,
+    name: 'order_config.specification_steps',
+  });
+
+  const [draggedDiscountIdx, setDraggedDiscountIdx] = useState<number | null>(null);
+  const [draggedStepIdx, setDraggedStepIdx] = useState<number | null>(null);
+
+  const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({});
+  const toggleStep = (id: string) => setOpenSteps(p => ({ ...p, [id]: !p[id] }));
 
   const section = form.watch('section');
   const name = form.watch('name');
@@ -249,55 +312,79 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
     form.setValue('images', current, { shouldValidate: true, shouldDirty: true });
   };
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    // Check if we exceed the 4 Product of the Day limit
-    if (values.is_product_of_the_day) {
-      const sb = createSupabaseBrowserClient();
-      if (sb) {
-        let query = sb
-          .from('products')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_product_of_the_day', true);
-        
-        if (values.id) {
-          query = query.neq('id', values.id);
-        }
+  const onSubmit = form.handleSubmit(
+    async (values) => {
+      // Check if we exceed the 4 Product of the Day limit
+      if (values.is_product_of_the_day) {
+        const sb = createSupabaseBrowserClient();
+        if (sb) {
+          let query = sb
+            .from('products')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_product_of_the_day', true);
 
-        const { count, error: countErr } = await query;
-        if (!countErr && count !== null && count >= 4) {
-          toast.error('You can select a maximum of 4 Products of the Day. Please deselect another product first.');
-          return;
+          if (values.id) {
+            query = query.neq('id', values.id);
+          }
+
+          const { count, error: countErr } = await query;
+          if (!countErr && count !== null && count >= 4) {
+            toast.error('You can select a maximum of 4 Products of the Day. Please deselect another product first.');
+            return;
+          }
         }
+      }
+
+      const payload: ProductFormValues = {
+        ...values,
+        slug: values.slug.trim().toLowerCase(),
+        flash_sale_ends_at:
+          values.section === 'flash_sale' && values.flash_sale_ends_at
+            ? new Date(values.flash_sale_ends_at).toISOString()
+            : null,
+      };
+
+      const res = (await saveProduct(payload)) as SaveProductResult;
+      if (res.ok) {
+        toast.success(mode === 'create' ? 'Product created' : 'Product updated');
+        router.refresh();
+        router.push('/admin/products');
+      } else {
+        const err = res as Extract<SaveProductResult, { ok: false }>;
+        toast.error(err.message);
+        if (err.issues?.length) {
+          for (const i of err.issues.slice(0, 5)) {
+            const path = i.path.map(String).join('.');
+            form.setError(path as never, { message: i.message });
+          }
+        }
+      }
+    },
+    // ✅ এটা দিয়ে replace করো:
+    (errors) => {
+      const extractErrors = (obj: any, prefix = ''): string[] => {
+        const msgs: string[] = [];
+        for (const [key, val] of Object.entries(obj)) {
+          const path = prefix ? `${prefix}.${key}` : key;
+          if (val && typeof val === 'object' && 'message' in val) {
+            msgs.push(`${path}: ${(val as any).message}`);
+          } else if (val && typeof val === 'object') {
+            msgs.push(...extractErrors(val, path));
+          }
+        }
+        return msgs;
+      };
+
+      const allErrors = extractErrors(errors);
+      console.error('FORM VALIDATION ERRORS:', allErrors);
+
+      if (allErrors.length > 0) {
+        allErrors.slice(0, 3).forEach(msg => toast.error(msg));
+      } else {
+        toast.error('Form validation failed. Check console.');
       }
     }
-
-    const payload: ProductFormValues = {
-      ...values,
-      slug: values.slug.trim().toLowerCase(),
-      flash_sale_ends_at:
-        values.section === 'flash_sale' && values.flash_sale_ends_at
-          ? new Date(values.flash_sale_ends_at).toISOString()
-          : null,
-    };
-
-    const res = (await saveProduct(payload)) as SaveProductResult;
-    if (res.ok) {
-      toast.success(mode === 'create' ? 'Product created' : 'Product updated');
-      router.refresh();
-      if (mode === 'create') {
-        router.push(`/admin/products/${res.id}/edit`);
-      }
-    } else {
-      const err = res as Extract<SaveProductResult, { ok: false }>;
-      toast.error(err.message);
-      if (err.issues?.length) {
-        for (const i of err.issues.slice(0, 5)) {
-          const path = i.path.map(String).join('.');
-          form.setError(path as never, { message: i.message });
-        }
-      }
-    }
-  });
+  );
 
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-7xl space-y-8 pb-16">
@@ -318,6 +405,17 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
           >
             Cancel
           </Button>
+
+          {Object.keys(form.formState.errors).length > 0 && (
+            <pre className="text-xs text-red-600 bg-red-50 p-3 rounded-xl overflow-auto max-h-40">
+              {JSON.stringify(
+                Object.fromEntries(
+                  Object.entries(form.formState.errors).map(([k, v]) => [k, (v as any)?.message || 'error'])
+                ),
+                null, 2
+              )}
+            </pre>
+          )}
           <Button
             type="submit"
             disabled={form.formState.isSubmitting}
@@ -331,7 +429,7 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column - Main product details */}
         <div className="lg:col-span-8 space-y-8">
-          
+
           {/* Card 1: Basic details */}
           <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
             <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
@@ -343,7 +441,7 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
                 <Label htmlFor="name" className="text-xs font-bold text-slate-500 uppercase tracking-widest">Product name *</Label>
                 <Input
                   id="name"
-                  className="h-11 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-medium"
+                  className="h-11 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-black font-medium"
                   placeholder="Enter a premium title for the product"
                   {...form.register('name')}
                 />
@@ -408,7 +506,7 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
                 />
               </div>
               {form.formState.errors.images && <p className="text-xs text-red-600 font-medium">{String(form.formState.errors.images.message)}</p>}
-              
+
               <div className="flex flex-wrap gap-4 pt-2 bg-white">
                 {images.map((img, idx) => (
                   <div key={`${img.path}-${idx}`} className="relative h-28 w-28 overflow-hidden rounded-xl border border-slate-150 bg-white shadow-sm group">
@@ -547,11 +645,304 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
               ))}
             </CardContent>
           </Card>
+
+          {/* ───── ORDER CONFIGURATION ───── */}
+
+          {/* Quantity Discount Settings */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
+              <div className="flex items-center gap-2">
+                <Percent className="h-5 w-5 text-[#1a4731]" />
+                <CardTitle className="text-base font-bold text-slate-900">Quantity Discount Settings</CardTitle>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white" onClick={() => appendDiscount({ quantity: 5, discount_percent: 0 })}>
+                <Plus className="mr-1 h-4 w-4" /> Add Tier
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3 bg-white">
+              {discountFields.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No discount tiers yet. Add tiers to offer quantity-based discounts.</p>}
+              {discountFields.map((field, index) => (
+                <div
+                  key={field.id}
+                  draggable
+                  onDragStart={() => setDraggedDiscountIdx(index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (draggedDiscountIdx !== null && draggedDiscountIdx !== index) {
+                      moveDiscount(draggedDiscountIdx, index);
+                    }
+                    setDraggedDiscountIdx(null);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 transition-all",
+                    draggedDiscountIdx === index ? "opacity-40 border-dashed border-[#1a4731]" : ""
+                  )}
+                >
+                  <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1">☰</div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity (PCS)</Label>
+                    <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.quantity`, { valueAsNumber: true })} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Discount %</Label>
+                    <Input type="number" min={0} max={100} step="0.1" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.discount_percent`, { valueAsNumber: true })} />
+                  </div>
+                  <div className="flex items-center gap-1 mt-5 shrink-0">
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === 0} onClick={() => moveDiscount(index, index - 1)}>
+                      ▲
+                    </Button>
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === discountFields.length - 1} onClick={() => moveDiscount(index, index + 1)}>
+                      ▼
+                    </Button>
+                    <Button type="button" size="icon" variant="ghost" className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-9 w-9 shrink-0" onClick={() => removeDiscount(index)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Specification Steps Builder */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-[#1a4731]" />
+                <CardTitle className="text-base font-bold text-slate-900">Product Specification Steps</CardTitle>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white"
+                onClick={() => { const nid = crypto.randomUUID(); appendStep({ id: nid, name: '', description: '', type: 'select', additional_price: 0, required: false, active: true, options: [] }); setOpenSteps(p => ({ ...p, [nid]: true })); }}>
+                <Plus className="mr-1 h-4 w-4" /> Add Step
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 bg-white">
+              {stepFields.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No steps yet. Add steps to let customers configure their order.</p>}
+              {stepFields.map((field, stepIdx) => {
+                const isOpen = openSteps[field.id] ?? false;
+                const stepType = form.watch(`order_config.specification_steps.${stepIdx}.type`);
+                const stepActive = form.watch(`order_config.specification_steps.${stepIdx}.active`);
+                const stepName = form.watch(`order_config.specification_steps.${stepIdx}.name`);
+                return (
+                  <div
+                    key={field.id}
+                    draggable
+                    onDragStart={() => setDraggedStepIdx(stepIdx)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (draggedStepIdx !== null && draggedStepIdx !== stepIdx) {
+                        moveStep(draggedStepIdx, stepIdx);
+                      }
+                      setDraggedStepIdx(null);
+                    }}
+                    className={cn(
+                      'rounded-2xl border transition-all duration-200 bg-white',
+                      stepActive ? 'border-slate-200' : 'border-slate-150 opacity-60',
+                      draggedStepIdx === stepIdx ? "opacity-40 border-dashed border-[#1a4731]" : ""
+                    )}
+                  >
+                    <div className="flex items-center gap-3 p-4">
+                      <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1">☰</div>
+                      <button type="button" onClick={() => toggleStep(field.id)} className="flex-1 flex items-center gap-3 text-left">
+                        <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0', stepActive ? 'bg-[#1a4731] text-white' : 'bg-slate-200 text-slate-500')}>{stepIdx + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-800 truncate">{stepName || 'Untitled Step'}</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">{stepType} · {stepActive ? 'Active' : 'Inactive'}</p>
+                        </div>
+                        {isOpen ? <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />}
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-slate-700 rounded-lg" disabled={stepIdx === 0} onClick={() => moveStep(stepIdx, stepIdx - 1)}>
+                          ▲
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-slate-700 rounded-lg" disabled={stepIdx === stepFields.length - 1} onClick={() => moveStep(stepIdx, stepIdx + 1)}>
+                          ▼
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-8 w-8 shrink-0" onClick={() => removeStep(stepIdx)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    {isOpen && (
+                      <div className="border-t border-slate-100 p-4 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Step Name *</Label>
+                            <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" placeholder="e.g. Choose Size" {...form.register(`order_config.specification_steps.${stepIdx}.name`)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Input Type</Label>
+                            <Controller control={form.control} name={`order_config.specification_steps.${stepIdx}.type`} render={({ field: f }) => (
+                              <Select value={f.value} onValueChange={f.onChange}>
+                                <SelectTrigger className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm"><SelectValue /></SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  <SelectItem value="select">Dropdown Select</SelectItem>
+                                  <SelectItem value="radio">Radio Buttons</SelectItem>
+                                  <SelectItem value="text">Text Input</SelectItem>
+                                  <SelectItem value="file">File Upload</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )} />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description (optional)</Label>
+                          <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" placeholder="Helper text shown to the customer" {...form.register(`order_config.specification_steps.${stepIdx}.description`)} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add. Price (BDT)</Label>
+                            <Input type="number" min={0} step="0.01" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" {...form.register(`order_config.specification_steps.${stepIdx}.additional_price`, { valueAsNumber: true })} />
+                          </div>
+                          <div className="flex flex-col gap-2 pt-1">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Required</Label>
+                            <label className="flex items-center gap-2 cursor-pointer mt-1">
+                              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register(`order_config.specification_steps.${stepIdx}.required`)} />
+                              <span className="text-xs font-semibold text-slate-600">Required</span>
+                            </label>
+                          </div>
+                          <div className="flex flex-col gap-2 pt-1">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibility</Label>
+                            <label className="flex items-center gap-2 cursor-pointer mt-1">
+                              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register(`order_config.specification_steps.${stepIdx}.active`)} />
+                              <span className="text-xs font-semibold text-slate-600">Active</span>
+                            </label>
+                          </div>
+                        </div>
+                        {(stepType === 'select' || stepType === 'radio') && (
+                          <StepOptionsEditor form={form} stepIdx={stepIdx} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Design Charge */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <DollarSign className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Design Charge</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 bg-white">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none">
+                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register('order_config.design_charge.enabled')} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800">Enable Design Charge</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider mt-0.5">Add a fixed design fee to orders</span>
+                </div>
+              </label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Design Fee (BDT)</Label>
+                <Input type="number" min={0} step="0.01" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="0.00" {...form.register('order_config.design_charge.amount', { valueAsNumber: true })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</Label>
+                <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" placeholder="e.g. Professional design service" {...form.register('order_config.design_charge.description')} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Customer Notes Box */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <MessageSquare className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Customer Notes Box</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 bg-white">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none">
+                <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register('order_config.customer_notes_settings.enabled')} />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800">Show Notes Field</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider mt-0.5">Let customers add special instructions</span>
+                </div>
+              </label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Field Title</Label>
+                <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" placeholder="Specification Need Details" {...form.register('order_config.customer_notes_settings.title')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Placeholder Text</Label>
+                <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" placeholder="e.g. Describe your design requirements..." {...form.register('order_config.customer_notes_settings.placeholder')} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Advanced Pricing Config */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <SlidersHorizontal className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Advanced Pricing Config</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4 bg-white">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Min Order Qty *</Label>
+                  <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register('order_config.pricing_config.min_order_qty', { valueAsNumber: true })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Order Qty</Label>
+                  <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="Unlimited" {...form.register('order_config.pricing_config.max_order_qty', { valueAsNumber: true })} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Order Request Settings */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <ToggleLeft className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Order Request Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3 bg-white">
+              {([
+                { field: 'order_config.order_request_settings.enable_order_requests' as const, label: 'Enable Order Requests', sub: 'Show the "Send Request" button on product page' },
+                { field: 'order_config.order_request_settings.enable_add_to_cart' as const, label: 'Enable Add to Cart', sub: 'Show the "Add to Cart" button on product page' },
+                { field: 'order_config.order_request_settings.enable_direct_order' as const, label: 'Enable Direct Order', sub: 'Allow instant checkout without approval' },
+                { field: 'order_config.order_request_settings.auto_approval' as const, label: 'Auto-Approve Requests', sub: 'Approve order requests automatically' },
+              ] as const).map(({ field, label, sub }) => (
+                <label key={field} className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none">
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register(field)} />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800">{label}</span>
+                    <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider mt-0.5">{sub}</span>
+                  </div>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Display Controls */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <Eye className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Display Controls</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3 bg-white">
+              {([
+                { field: 'order_config.display_controls.show_discount_table' as const, label: 'Show Discount Table' },
+                { field: 'order_config.display_controls.show_specifications' as const, label: 'Show Spec Steps' },
+                { field: 'order_config.display_controls.show_customer_notes' as const, label: 'Show Notes Field' },
+                { field: 'order_config.display_controls.show_quantity_selector' as const, label: 'Show Quantity Selector' },
+                { field: 'order_config.display_controls.show_design_charge' as const, label: 'Show Design Charge' },
+                { field: 'order_config.display_controls.show_total_price' as const, label: 'Show Total Price' },
+                { field: 'order_config.display_controls.show_send_request' as const, label: 'Show Send Request Button' },
+                { field: 'order_config.display_controls.show_add_to_cart' as const, label: 'Show Add to Cart Button' },
+              ] as const).map(({ field, label }) => (
+                <label key={field} className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none">
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-[#1a4731]" {...form.register(field)} />
+                  <span className="text-xs font-bold text-slate-800">{label}</span>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+
         </div>
 
         {/* Right Column - Publishing Details */}
         <div className="lg:col-span-4 space-y-8 bg-white">
-          
+
           {/* Card 5: Pricing */}
           <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
             <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
@@ -813,3 +1204,68 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
     </form>
   );
 }
+
+interface StepOptionsEditorProps {
+  form: UseFormReturn<any>;
+  stepIdx: number;
+}
+
+import { UseFormReturn } from 'react-hook-form';
+
+function StepOptionsEditor({ form, stepIdx }: StepOptionsEditorProps) {
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: `order_config.specification_steps.${stepIdx}.options`
+  });
+
+  return (
+    <div className="space-y-3 pt-3 border-t border-slate-100 mt-3">
+      <div className="flex items-center justify-between">
+        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Options / Choices</Label>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs border border-[#1a4731]/20 text-[#1a4731] hover:bg-[#E6F0EB]/50 font-bold rounded-lg"
+          onClick={() => append({ name: '', price_modifier: 0 })}
+        >
+          <Plus className="mr-1 h-3 w-3" /> Add Option
+        </Button>
+      </div>
+      {fields.length === 0 && (
+        <p className="text-[11px] text-slate-400 italic">No options added yet. Add options for select/radio inputs.</p>
+      )}
+      <div className="space-y-2">
+        {fields.map((field, optionIdx) => (
+          <div key={field.id} className="flex items-center gap-2">
+            <Input
+              placeholder="Option name (e.g. Red, XL)"
+              className="h-8 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-xs flex-1"
+              {...form.register(`order_config.specification_steps.${stepIdx}.options.${optionIdx}.name`)}
+            />
+            <div className="relative w-28 shrink-0">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">৳</span>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Modifier"
+                className="h-8 pl-5 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-xs"
+                {...form.register(`order_config.specification_steps.${stepIdx}.options.${optionIdx}.price_modifier`, { valueAsNumber: true })}
+              />
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-8 w-8 shrink-0"
+              onClick={() => remove(optionIdx)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+

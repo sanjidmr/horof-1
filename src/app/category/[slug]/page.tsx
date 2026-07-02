@@ -58,7 +58,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
             {products.map((product) => (
-              <Link key={product.id} href={`/product/${product.slug}`} className="group block">
+              <Link key={product.id} href={`/products/${product.id}`} className="group block">
                 <div className="relative aspect-[4/5] rounded-2xl bg-slate-100 overflow-hidden mb-4 shadow-sm group-hover:shadow-lg transition-shadow">
                   {product.images && product.images[0] ? (
                     <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />

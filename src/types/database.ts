@@ -106,6 +106,7 @@ export interface Database {
           meta_title: string | null;
           meta_description: string | null;
           og_image_url: string | null;
+          order_config: Json;
           created_at: string;
           updated_at: string;
         };
@@ -128,6 +129,7 @@ export interface Database {
           meta_title?: string | null;
           meta_description?: string | null;
           og_image_url?: string | null;
+          order_config?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -476,6 +478,43 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['product_reviews']['Insert']>;
+      };
+      order_requests: {
+        Row: {
+          id: string;
+          product_id: string | null;
+          product_name: string;
+          user_id: string | null;
+          customer_info: Json;
+          selected_specifications: Json;
+          quantity: number;
+          discount_percent: number;
+          discount_amount: number;
+          design_charge: number;
+          customer_notes: string | null;
+          final_total_price: number;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id?: string | null;
+          product_name: string;
+          user_id?: string | null;
+          customer_info: Json;
+          selected_specifications: Json;
+          quantity: number;
+          discount_percent?: number;
+          discount_amount?: number;
+          design_charge?: number;
+          customer_notes?: string | null;
+          final_total_price: number;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['order_requests']['Insert']>;
       };
     };
     Views: Record<string, never>;

@@ -174,7 +174,7 @@ export default function SpecialOfferPage() {
         <div className="pt-8 border-t border-slate-50 flex justify-end">
           <Button 
             disabled={saving || !data.image_url} 
-            className="bg-forest hover:bg-forest/90 text-white rounded-2xl px-10 h-14 font-bold shadow-xl shadow-forest/20 flex items-center gap-3"
+            className="bg-forest hover:bg-forest/90 text-gray-800 rounded-2xl px-10 h-14 font-bold shadow-xl shadow-forest/20 flex items-center gap-3"
           >
             {saving ? (
               <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

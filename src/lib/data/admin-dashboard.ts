@@ -52,7 +52,7 @@ export async function fetchAdminDashboard(supabase: SupabaseClient) {
 
   const { data: lowStock } = await supabase
     .from('products')
-    .select('id,name,sku,stock,slug')
+    .select('id,name,stock,slug')
     .lte('stock', 10)
     .order('stock', { ascending: true })
     .limit(20);

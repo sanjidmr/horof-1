@@ -104,12 +104,12 @@ export default async function AdminDashboard() {
               <Plus className="mr-2 h-4 w-4" /> Add Product
             </Link>
           </Button>
-          <Button asChild variant="outline" className="border-[#1a4731] text-white bg-text-[#1a4731] hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
+          <Button asChild variant="outline" className="border-[#1a4731] text-gray-800 bg-text-[#1a4731] hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
             <Link href="/admin/orders">
               <Eye className="mr-2 h-4 w-4" /> View Orders
             </Link>
           </Button>
-          <Button asChild variant="outline" className="border-[#1a4731] text-white hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
+          <Button asChild variant="outline" className="border-[#1a4731] text-gray-800 hover:bg-[#1a4731]/5 rounded-xl px-6 h-12 transition-all">
             <Link href="/admin/messages">
               <MessageSquare className="mr-2 h-4 w-4" /> Messages
             </Link>
@@ -161,7 +161,7 @@ export default async function AdminDashboard() {
                     orders.map((order) => (
                       <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-8 py-5">
-                          <span className="text-sm font-bold text-[#1a4731]">#{order.id.slice(0, 8)}</span>
+                          <span className="text-sm font-bold text-[#1a4731]">#{String(order.id).slice(0, 8)}</span>
                         </td>
                         <td className="px-8 py-5">
                           <p className="text-sm font-medium text-slate-900">{(order as any).profiles?.full_name || 'Guest'}</p>

@@ -18,7 +18,8 @@ import {
   Layers,
   Image as ImageIcon,
   Globe,
-  MessageSquare
+  MessageSquare,
+  ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -27,7 +28,7 @@ import { useAdminSidebar } from '@/stores/admin-sidebar-store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type NavItem = {
   title: string;
@@ -41,6 +42,7 @@ const nav: NavItem[] = [
   { title: 'Categories', href: '/admin/categories', icon: Layers },
   { title: 'Products', href: '/admin/products', icon: Package },
   { title: 'Orders', href: '/admin/orders', icon: ShoppingCart },
+  { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList },
   { title: 'Customers', href: '/admin/customers', icon: Users },
   { title: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { 
@@ -65,6 +67,31 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
     });
     return init;
   });
+
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const sb = createSupabaseBrowserClient();
+    const fetchPending = async () => {
+      const { count } = await sb
+        .from('order_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      setPendingCount(count || 0);
+    };
+    fetchPending();
+
+    const channel = sb
+      .channel('sidebar_requests_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_requests' }, () => {
+        fetchPending();
+      })
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, []);
 
   const toggleGroup = (title: string) => setOpenGroups((g) => ({ ...g, [title]: !g[title] }));
 

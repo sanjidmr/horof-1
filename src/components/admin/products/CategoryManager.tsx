@@ -15,21 +15,21 @@ export function CategoryManager({ initialCategories }: { initialCategories: any[
   const [categories, setCategories] = useState(initialCategories);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState({ name: '', slug: '', sort_order: 0 });
+  const [formData, setFormData] = useState({ name: '', slug: '', order: 0 });
   const [isLoading, setIsLoading] = useState(false);
 
   const supabase = createSupabaseBrowserClient();
 
   const handleEdit = (cat: any) => {
     setEditingId(cat.id);
-    setFormData({ name: cat.name, slug: cat.slug, sort_order: cat.sort_order });
+    setFormData({ name: cat.name, slug: cat.slug, order: cat.order });
     setIsAdding(false);
   };
 
   const handleCancel = () => {
     setEditingId(null);
     setIsAdding(false);
-    setFormData({ name: '', slug: '', sort_order: 0 });
+    setFormData({ name: '', slug: '', order: 0 });
   };
 
   const handleSave = async () => {
@@ -56,7 +56,7 @@ export function CategoryManager({ initialCategories }: { initialCategories: any[
       }
 
       // Refresh list
-      const { data } = await supabase.from('categories').select('*').order('sort_order');
+      const { data } = await supabase.from('categories').select('*').order('order');
       setCategories(data || []);
       handleCancel();
     } catch (err: any) {
@@ -102,7 +102,7 @@ export function CategoryManager({ initialCategories }: { initialCategories: any[
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px]">Order: {cat.sort_order}</Badge>
+                    <Badge variant="outline" className="text-[10px]">Order: {cat.order}</Badge>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(cat)}>
                       <Edit2 size={14} />
                     </Button>
@@ -150,8 +150,8 @@ export function CategoryManager({ initialCategories }: { initialCategories: any[
                 <Label>Sort Order</Label>
                 <Input 
                   type="number"
-                  value={formData.sort_order} 
-                  onChange={e => setFormData({ ...formData, sort_order: parseInt(e.target.value) })} 
+                  value={formData.order} 
+                  onChange={e => setFormData({ ...formData, order: parseInt(e.target.value) })} 
                 />
               </div>
               <div className="pt-4 flex gap-2">

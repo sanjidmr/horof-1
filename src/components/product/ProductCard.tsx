@@ -26,15 +26,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       initial={{ opacity: 0, scale: 0.95 }}
       whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
-      className="group bg-transparent rounded-2xl overflow-hidden transition-all duration-700 hover:-translate-y-2"
+      className="group bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(45,106,79,0.08)] transition-all duration-500 hover:-translate-y-2 flex flex-col h-full"
     >
       {/* Image Area */}
-      <div className="relative aspect-[4/5] overflow-hidden bg-bg-secondary rounded-2xl border border-border-forest/30 transition-all duration-500 group-hover:border-accent-hover/30">
+      <div className="relative aspect-[4/5] overflow-hidden bg-bg-secondary rounded-2xl m-3 border border-border-forest/20 transition-all duration-500 group-hover:border-[#2D6A4F]/30">
         <Link href={`/products/${product.id}`}>
           <img
             src={product.images[0]}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
           />
         </Link>
 
@@ -46,16 +46,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               Best Seller
             </Badge>
           )}
-
         </div>
 
         {/* Hover Actions - Hidden on mobile for better 2-column experience */}
-        <div className="absolute inset-0 bg-accent-primary/5 backdrop-blur-[2px] opacity-0 md:group-hover:opacity-100 transition-all duration-500 hidden md:flex items-center justify-center gap-3">
+        <div className="absolute inset-0 bg-[#1B4332]/5 backdrop-blur-[2px] opacity-0 md:group-hover:opacity-100 transition-all duration-500 hidden md:flex items-center justify-center gap-3">
           <button
             onClick={() => toggleWishlist(product)}
             className={cn(
               "p-4 rounded-full transition-all duration-300 transform translate-y-8 group-hover:translate-y-0 shadow-xl",
-              isWishlisted ? "bg-accent-primary text-white" : "bg-white text-accent-primary hover:bg-accent-hover hover:text-white"
+              isWishlisted ? "bg-[#1B4332] text-white" : "bg-white text-[#1B4332] hover:bg-[#2D6A4F] hover:text-white"
             )}
             title="Wishlist"
           >
@@ -63,7 +62,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </button>
           <Link href={`/products/${product.id}`}>
             <span
-              className="p-4 bg-white text-accent-primary rounded-full hover:bg-accent-hover hover:text-white transition-all duration-300 transform translate-y-8 group-hover:translate-y-0 delay-75 shadow-xl flex items-center justify-center cursor-pointer"
+              className="p-4 bg-white text-[#1B4332] rounded-full hover:bg-[#2D6A4F] hover:text-white transition-all duration-300 transform translate-y-8 group-hover:translate-y-0 delay-75 shadow-xl flex items-center justify-center cursor-pointer"
               title="Quick View"
             >
               <Eye className="h-5 w-5" />
@@ -71,7 +70,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </Link>
           <button
             onClick={() => addToCart(product)}
-            className="p-4 bg-white text-accent-primary rounded-full hover:bg-accent-hover hover:text-white transition-all duration-300 transform translate-y-8 group-hover:translate-y-0 delay-150 shadow-xl"
+            className="p-4 bg-white text-[#1B4332] rounded-full hover:bg-[#2D6A4F] hover:text-white transition-all duration-300 transform translate-y-8 group-hover:translate-y-0 delay-150 shadow-xl"
             title="Add to Cart"
           >
             <ShoppingCart className="h-5 w-5" />
@@ -80,38 +79,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Content Area */}
-      <div className="p-4 sm:p-6 space-y-2 sm:space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[8px] sm:text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">{product.category}</span>
-          <div className="flex items-center gap-1 bg-bg-secondary px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-full">
-            <Star className="h-2.5 w-2.5 sm:h-3 w-3 text-gold fill-gold" />
-            <span className="text-[8px] sm:text-[10px] text-accent-primary font-bold">{product.rating}</span>
+      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{product.category}</span>
+            <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
+              <Star className="h-2.5 w-2.5 sm:h-3 w-3 text-gold fill-gold" />
+              <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold">{product.rating || '4.5'}</span>
+            </div>
           </div>
+
+          <Link href={`/products/${product.id}`} className="block">
+            <h3 className="text-sm sm:text-lg font-display font-bold text-slate-800 group-hover:text-[#2D6A4F] transition-colors line-clamp-1 leading-tight">
+              {product.name}
+            </h3>
+          </Link>
         </div>
 
-        <Link href={`/products/${product.id}`} className="block">
-          <h3 className="text-sm sm:text-xl font-display font-medium text-accent-primary group-hover:text-accent-hover transition-colors line-clamp-1 leading-tight">
-            {product.name}
-          </h3>
-        </Link>
-
-        <div className="flex items-center justify-between gap-2 sm:gap-3 pt-1 sm:pt-2">
+        <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-50">
           <div className="flex flex-col">
-            <span className="text-base sm:text-xl font-bold text-accent-primary">
-              {formatPrice(product.discountPrice || product.price)}
-            </span>
-            {product.discountPrice && (
-              <span className="text-[10px] sm:text-xs text-text-muted line-through">
+            <div className="flex items-baseline text-slate-900">
+              <span className="text-base sm:text-lg font-bold leading-none">
                 {formatPrice(product.price)}
               </span>
-            )}
+              <span className="text-[10px] sm:text-xs font-semibold text-slate-400 ml-1">
+                / Piece
+              </span>
+            </div>
+            <span className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mt-1">
+              Starting From
+            </span>
           </div>
 
           <button
             onClick={() => addToCart(product)}
-            className="h-9 w-9 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl bg-bg-secondary border border-border-forest flex items-center justify-center text-accent-primary hover:bg-accent-primary hover:text-white hover:border-accent-primary transition-all duration-300"
+            className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center text-[#1B4332] hover:bg-[#1B4332] hover:text-white hover:border-[#1B4332] transition-all duration-300 shadow-sm"
           >
-            <ShoppingCart className="h-4 w-4 sm:h-5 sm:w-5" />
+            <ShoppingCart className="h-4.5 w-4.5" />
           </button>
         </div>
       </div>

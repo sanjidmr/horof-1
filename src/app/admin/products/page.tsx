@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Filter, Edit3, Trash2, Package, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, Filter, Edit3, Trash2, Package, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/shadcn/button';
@@ -139,12 +139,17 @@ export default function AdminProductsPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#2D6A4F] hover:bg-slate-100">
+                          <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-slate-100" title="Manage Pricing & Options">
+                            <Link href={`/admin/products/${p.id}/pricing`}>
+                              <DollarSign className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#2D6A4F] hover:bg-slate-100" title="Edit Product">
                             <Link href={`/admin/products/${p.id}/edit`}>
                               <Edit3 className="h-4 w-4" />
                             </Link>
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)} className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50">
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)} className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50" title="Delete Product">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

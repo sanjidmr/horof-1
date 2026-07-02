@@ -14,7 +14,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
   const [{ data: images }, { data: variants }, { data: categories }, { data: brands }] = await Promise.all([
     supabase.from('product_images').select('url').eq('product_id', id).order('sort_order', { ascending: true }),
     supabase.from('product_variants').select('size, color, stock, price_modifier').eq('product_id', id).order('created_at', { ascending: true }),
-    supabase.from('categories').select('id, name, parent_id').eq('is_active', true).order('sort_order', { ascending: true }),
+    supabase.from('categories').select('id, name, parent_id').eq('is_active', true).order('order', { ascending: true }),
     supabase.from('brands').select('id, name').eq('is_active', true).order('name', { ascending: true }),
   ]);
 
@@ -22,19 +22,19 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     id: product.id,
     name: product.name,
     slug: product.slug,
-    sku: product.sku,
+    sku: '',
     price: Number(product.price),
-    offer_price: product.offer_price != null ? Number(product.offer_price) : null,
+    offer_price: product.compare_price != null ? Number(product.compare_price) : null,
     stock: product.stock,
     description: product.description,
     specification: product.specification,
-    perfect_for: product.perfect_for,
-    section: product.section,
-    flash_sale_ends_at: product.flash_sale_ends_at,
-    meta_title: product.meta_title,
-    meta_description: product.meta_description,
+    perfect_for: typeof product.perfect_for === 'string' ? product.perfect_for.split(',').map((s: string) => s.trim()) : null,
+    section: product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling',
+    flash_sale_ends_at: null,
+    meta_title: '',
+    meta_description: '',
     category_id: product.category_id,
-    brand_id: product.brand_id,
+    brand_id: null,
     images: images ?? [],
     variants: (variants ?? []).map((v) => ({
       size: v.size,
@@ -42,6 +42,40 @@ export default async function AdminProductEditPage({ params }: { params: Promise
       stock: Number(v.stock),
       price_modifier: Number(v.price_modifier),
     })),
+    order_config: {
+      quantity_discounts: product.quantity_discounts || [],
+      specification_steps: product.specification_steps || [],
+      design_charge: {
+        enabled: !!product.design_charge_enabled,
+        amount: Number(product.design_charge_amount || 0),
+        description: product.design_charge_notes || '',
+      },
+      customer_notes_settings: {
+        enabled: !!product.custom_placeholder,
+        title: 'Specification Need Details',
+        placeholder: product.custom_placeholder || '',
+      },
+      pricing_config: {
+        min_order_qty: 1,
+        max_order_qty: null,
+      },
+      order_request_settings: {
+        enable_order_requests: true,
+        enable_add_to_cart: true,
+        enable_direct_order: false,
+        auto_approval: false,
+      },
+      display_controls: {
+        show_discount_table: true,
+        show_specifications: true,
+        show_customer_notes: true,
+        show_quantity_selector: true,
+        show_design_charge: true,
+        show_total_price: true,
+        show_send_request: true,
+        show_add_to_cart: true,
+      },
+    },
   };
 
   return (

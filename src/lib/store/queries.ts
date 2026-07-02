@@ -23,7 +23,7 @@ export async function getHomepageData() {
   const [{ data: banners }, { data: cats }, { data: best }, { data: neu }, { data: flash }, { data: excl }, { data: potdRows }, { data: hp }] =
     await Promise.all([
       supabase.from('banners').select('id,title,subtitle,image_url,link').eq('is_active', true).order('sort_order', { ascending: true }),
-      supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('sort_order', { ascending: true }).limit(12),
+      supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('order', { ascending: true }).limit(12),
       supabase
         .from('products')
         .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')

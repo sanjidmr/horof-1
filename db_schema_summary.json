@@ -7,6 +7,7 @@
     "/payments",
     "/faqs",
     "/orders",
+    "/product_config_options",
     "/contact_messages",
     "/shipping_zones",
     "/profiles",
@@ -22,6 +23,7 @@
     "/flash_sales",
     "/order_items",
     "/coupons",
+    "/quantity_discounts",
     "/cart_items",
     "/visitors",
     "/order_timeline",
@@ -31,6 +33,7 @@
     "/categories",
     "/shipments",
     "/reviews",
+    "/order_requests",
     "/rpc/is_admin",
     "/rpc/is_customer",
     "/rpc/create_order_from_cart"
@@ -42,6 +45,7 @@
     "payments",
     "faqs",
     "orders",
+    "product_config_options",
     "contact_messages",
     "shipping_zones",
     "profiles",
@@ -57,6 +61,7 @@
     "flash_sales",
     "order_items",
     "coupons",
+    "quantity_discounts",
     "cart_items",
     "visitors",
     "order_timeline",
@@ -65,6 +70,7 @@
     "addresses",
     "categories",
     "shipments",
-    "reviews"
+    "reviews",
+    "order_requests"
   ]
 }
