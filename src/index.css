@@ -117,3 +117,18 @@
     display: none; /* Chrome, Safari and Opera */
   }
 }
+
+/* Swiper Custom Pagination Styles */
+.swiper-pagination-bullet {
+  background: #cbd5e1 !important;
+  opacity: 0.6 !important;
+  transition: all 0.3s ease !important;
+}
+
+.swiper-pagination-bullet-active {
+  background: #1A3320 !important;
+  opacity: 1 !important;
+  width: 24px !important;
+  border-radius: 9999px !important;
+}
+

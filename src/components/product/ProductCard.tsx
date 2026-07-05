@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Star, ShoppingCart, Heart, Eye } from 'lucide-react';
+import { Star, ShoppingCart, Heart, Eye, ArrowRight } from 'lucide-react';
 import { Product } from '../../lib/types';
 import { formatPrice } from '../../lib/utils';
 import { useCart } from '../../context/CartContext';
@@ -84,8 +84,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <div className="flex items-center justify-between">
             <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{product.category}</span>
             <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
-              <Star className="h-2.5 w-2.5 sm:h-3 w-3 text-gold fill-gold" />
-              <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold">{product.rating || '4.5'}</span>
+              <Star className={cn("h-2.5 w-2.5 sm:h-3 w-3", product.rating > 0 ? "text-gold fill-gold" : "text-slate-300 fill-none")} />
+              <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold">
+                {product.rating > 0 ? product.rating.toFixed(1) : '0.0'}
+              </span>
             </div>
           </div>
 
@@ -109,6 +111,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <span className="text-[10px] sm:text-[11px] text-slate-400 font-semibold mt-1">
               Starting From
             </span>
+            <Link
+              href={`/products/${product.id}`}
+              className="text-[11px] font-bold text-[#1B4332] hover:text-[#2D6A4F] mt-1.5 flex items-center gap-1 transition-colors group/btn"
+            >
+              <span>View Details</span>
+              <ArrowRight className="h-3 w-3 transform group-hover/btn:translate-x-0.5 transition-transform" />
+            </Link>
           </div>
 
           <button

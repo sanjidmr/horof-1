@@ -13,7 +13,19 @@ export async function placeOrder(orderData: {
   delivery_charge: number;
   delivery_type: string;
   total: number;
-  items: { product_id: string; quantity: number; unit_price: number; name: string }[];
+  items: { 
+    product_id: string; 
+    quantity: number; 
+    unit_price: number; 
+    name: string;
+    selectedSpecs?: Record<string, string>;
+    designCharge?: number;
+    customerNotes?: string;
+    originalPrice?: number;
+    discountPercent?: number;
+    discountAmount?: number;
+    finalTotal?: number;
+  }[];
 }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { ok: false, message: 'Supabase not configured' };
@@ -39,6 +51,7 @@ export async function placeOrder(orderData: {
       delivery_type: orderData.delivery_type,
       user_id: user.id,
       customer_id: user.id,
+      product_details: orderData.items, // Save the detailed configurations in product_details column
     })
     .select('id')
     .single();

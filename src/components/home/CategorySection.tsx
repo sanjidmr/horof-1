@@ -67,7 +67,7 @@ export const CategorySection: React.FC<{ categories: Category[] }> = ({ categori
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1, duration: 0.5 }}
-              className="group relative w-[180px] sm:w-[220px]"
+              className="group relative w-[240px] sm:w-[300px]"
             >
               <Link href={`/products?category=${encodeURIComponent(category.name)}`} className="block">
                 {/* Seamless Elegant Card */}
@@ -85,10 +85,10 @@ export const CategorySection: React.FC<{ categories: Category[] }> = ({ categori
                     <div className="absolute inset-0 bg-gradient-to-t from-accent-primary/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                     {/* Info available on hover */}
-                    <div className="absolute bottom-4 left-4 right-4 translate-y-8 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                    <div className="absolute bottom-5 left-5 right-5 translate-y-8 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500">
                       <div className="flex items-center justify-between text-white">
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Explore</span>
-                        <ArrowRight className="h-4 w-4" />
+                        <span className="text-xs font-bold uppercase tracking-widest">Explore</span>
+                        <ArrowRight className="h-5 w-5" />
                       </div>
                     </div>
                   </div>
@@ -96,10 +96,10 @@ export const CategorySection: React.FC<{ categories: Category[] }> = ({ categori
 
                 {/* Sub-label below the card */}
                 <div className="mt-4 text-center space-y-1">
-                  <h3 className="text-lg font-display font-bold text-accent-primary group-hover:text-gold transition-colors">
+                  <h3 className="text-xl sm:text-2xl font-display font-bold text-accent-primary group-hover:text-gold transition-colors">
                     {category.name}
                   </h3>
-                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-[0.2em]">
                     {category.productCount} Pieces
                   </p>
                 </div>

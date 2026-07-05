@@ -230,7 +230,14 @@ export default function CheckoutPage() {
           product_id: i.id,
           quantity: i.quantity,
           unit_price: i.price,
-          name: i.name
+          name: i.name,
+          selectedSpecs: i.selectedSpecs,
+          designCharge: i.designCharge,
+          customerNotes: i.customerNotes,
+          originalPrice: i.originalPrice,
+          discountPercent: i.discountPercent,
+          discountAmount: i.discountAmount,
+          finalTotal: i.finalTotal
         }))
       });
 

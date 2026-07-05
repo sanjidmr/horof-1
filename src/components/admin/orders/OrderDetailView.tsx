@@ -148,24 +148,60 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden">
-                            <img src={item.product?.image_url || '/placeholder.png'} alt="" className="w-full h-full object-cover" />
+                  {items.map((item) => {
+                    // Find matching product details in order.product_details
+                    const matchingDetail = Array.isArray(order.product_details)
+                      ? order.product_details.find((d: any) => String(d.product_id) === String(item.product_id))
+                      : null;
+                      
+                    const specs = matchingDetail?.selectedSpecs || item.selectedSpecs;
+                    const notes = matchingDetail?.customerNotes || item.customerNotes;
+                    const designCharge = matchingDetail?.designCharge || item.designCharge;
+
+                    return (
+                      <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden">
+                              <img src={item.product?.image_url || '/placeholder.png'} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900">{item.product?.name || 'Unknown Product'}</div>
+                              <div className="text-xs text-slate-500">
+                                {item.variant?.size && `Size: ${item.variant.size}`} {item.variant?.color && `Color: ${item.variant.color}`}
+                              </div>
+                              {/* Render custom specifications */}
+                              {specs && Object.keys(specs).length > 0 && (
+                                <div className="mt-1.5 p-2 bg-emerald-50/30 border border-emerald-100/50 rounded-lg space-y-0.5 max-w-md">
+                                  <div className="text-[10px] font-black text-[#1B4332] uppercase tracking-wider">Specifications:</div>
+                                  {Object.entries(specs).map(([key, val]) => (
+                                    <div key={key} className="text-xs text-slate-700">
+                                      <span className="font-bold">{key}:</span> {val as string}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {/* Render custom item notes */}
+                              {notes && (
+                                <div className="mt-1 text-xs text-amber-700 font-medium">
+                                  <span className="font-bold text-amber-800">Note:</span> {notes}
+                                </div>
+                              )}
+                              {/* Render design charge */}
+                              {designCharge && designCharge > 0 ? (
+                                <div className="mt-0.5 text-xs text-[#2D6A4F] font-bold">
+                                  + Design Charge: {formatPrice(designCharge)}
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-bold text-slate-900">{item.product?.name || 'Unknown Product'}</div>
-                            <div className="text-xs text-slate-500">{item.variant?.size && `Size: ${item.variant.size}`} {item.variant?.color && `Color: ${item.variant.color}`}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center font-medium">{item.quantity}</td>
-                      <td className="px-6 py-4 text-right">{formatPrice(item.price)}</td>
-                      <td className="px-6 py-4 text-right font-bold text-accent-primary">{formatPrice(item.total)}</td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 text-center font-medium">{item.quantity}</td>
+                        <td className="px-6 py-4 text-right">{formatPrice(item.price)}</td>
+                        <td className="px-6 py-4 text-right font-bold text-accent-primary">{formatPrice(item.total)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <div className="p-6 bg-slate-50/30 border-t flex flex-col items-end gap-2">

@@ -6,6 +6,7 @@ import { Search, MoreVertical, Package, Clock, CheckCircle, Truck, XCircle, Chev
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn, formatPrice } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 
 export const OrdersTab = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -150,9 +151,9 @@ export const OrdersTab = () => {
                       {new Date(order.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-8 py-6 text-right">
-                      <button className="h-10 w-10 rounded-xl bg-[#071A12] hover:bg-[#14532D] text-[#A7F3D0] hover:text-[#ECFDF5] border border-[#22C55E]/20 flex items-center justify-center transition-all shadow-sm ml-auto">
+                      <Link href={`/admin/orders/${order.id}`} className="h-10 w-10 rounded-xl bg-[#071A12] hover:bg-[#14532D] text-[#A7F3D0] hover:text-[#ECFDF5] border border-[#22C55E]/20 flex items-center justify-center transition-all shadow-sm ml-auto">
                         <Eye className="h-4 w-4" />
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 ))

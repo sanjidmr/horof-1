@@ -50,6 +50,7 @@ const nav: NavItem[] = [
     icon: ImageIcon,
     children: [
       { title: 'Site Visuals', href: '/admin/marketing/site-images' },
+      { title: 'Our Services', href: '/admin/marketing/services' },
       { title: 'Flash Sale', href: '/admin/marketing/flash-sale' },
       { title: 'Special Offer', href: '/admin/marketing/special-offer' },
       { title: 'FAQ', href: '/admin/marketing/faq' }

@@ -14,6 +14,7 @@ import { CustomDesignCTA } from '../components/home/CustomDesignCTA';
 import { createSupabaseServerClient } from '../lib/supabase/server';
 import { Product } from '../lib/types';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
+import { OurServices } from '../components/home/OurServices';
 
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
@@ -27,7 +28,8 @@ export default async function HomePage() {
     { data: allProdData },
     { data: decorImages },
     { data: heroData },
-    { data: heroContent }
+    { data: heroContent },
+    { data: servicesData }
   ] = await Promise.all([
     supabase.from('categories').select('*, products(count)').eq('is_active', true),
     supabase
@@ -69,7 +71,12 @@ export default async function HomePage() {
       .from('hero_content')
       .select('subtitle_normal, subtitle_bold')
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
+    supabase
+      .from('site_images')
+      .select('*')
+      .eq('section', 'services')
+      .order('created_at', { ascending: true })
   ]);
 
   // Format Categories
@@ -135,6 +142,10 @@ export default async function HomePage() {
           limit={8}
           products={featuredProducts}
         />
+      </div>
+
+      <div className="max-w-[1400px] mx-auto px-6 mt-16">
+        <OurServices services={servicesData || []} />
       </div>
 
       <FlashSale />

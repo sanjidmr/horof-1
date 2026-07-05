@@ -4,6 +4,13 @@ export type CheckoutItem = {
   price: number;
   image: string;
   quantity: number;
+  selectedSpecs?: Record<string, string>;
+  designCharge?: number;
+  customerNotes?: string;
+  originalPrice?: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  finalTotal?: number;
 };
 
 const CHECKOUT_KEY = "checkout_items";

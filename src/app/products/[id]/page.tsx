@@ -39,6 +39,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../lib/utils';
 import toast from 'react-hot-toast';
+import { saveCheckoutItems } from '../../../lib/checkoutStorage';
 
 import { ProductCard } from '../../../components/product/ProductCard';
 import { appendRecentProductId } from '../../../lib/recentlyViewed';
@@ -402,17 +403,11 @@ export default function ProductDetailsPage({ params }: PageProps) {
     return match ? Number(match.discount_percent) : 0;
   }, [product, quantity]);
 
-  // Quantity discounts calculation with base tier
+  // Quantity discounts calculation with base tier - Filtered to exclude 1+ tier / 0% discounts
   const discountTiers = useMemo(() => {
     const discounts = product?.order_config?.quantity_discounts ?? [];
-    const minQty = product?.order_config?.pricing_config?.min_order_qty ?? 1;
-    const baseTier = { quantity: minQty, discount_percent: 0 };
     const sorted = [...discounts].sort((a, b) => a.quantity - b.quantity);
-    const list = [baseTier, ...sorted];
-    const unique = list.filter((item, index, self) =>
-      self.findIndex(t => t.quantity === item.quantity) === index
-    );
-    return unique;
+    return sorted.filter(tier => tier.discount_percent > 0);
   }, [product]);
 
   // Design charge amount
@@ -426,8 +421,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
   const discountAmount = Math.round(subtotal * (discountPercent / 100));
   const finalTotal = subtotal - discountAmount + designChargeAmount;
 
-  // Live stock evaluation
-  const stockAvailable = activeVariant ? activeVariant.stock : (product?.stock ?? 0);
+  // Live stock evaluation (always treat stock as unlimited)
+  const stockAvailable = 999999;
 
   // Dynamic price range calculation for display
   const priceRange = useMemo(() => {
@@ -727,7 +722,50 @@ export default function ProductDetailsPage({ params }: PageProps) {
     }
 
     requireAuth(() => {
-      setShowOrderModal(true);
+      // Gather all choices and custom inputs
+      const choices: Record<string, string> = {};
+      if (selectedSize) choices['Size'] = selectedSize;
+      if (selectedColor) choices['Finish/Color'] = selectedColor;
+      
+      if (product.order_config?.specification_steps) {
+        product.order_config.specification_steps.forEach((step: any) => {
+          const val = selectedSpecs[step.id];
+          if (val) choices[step.name] = val;
+        });
+      }
+
+      // Add other custom specs
+      Object.entries(selectedSpecs).forEach(([key, val]) => {
+        if (val && !choices[key]) {
+          // If it's a step ID, find step name
+          const step = product.order_config?.specification_steps?.find((s: any) => s.id === key);
+          const name = step ? step.name : key;
+          choices[name] = val as string;
+        }
+      });
+
+      // Prepare the item for checkout
+      const checkoutItem = {
+        id: product.id.toString(),
+        name: product.name,
+        price: finalTotal / quantity, // average unit price including discounts + design charges
+        image: product.image || (product.images && product.images[0]) || '/placeholder.png',
+        quantity: quantity,
+        // Custom fields for order request details:
+        selectedSpecs: choices,
+        designCharge: designChargeAmount,
+        customerNotes: customerNotes,
+        originalPrice: unitPrice,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
+        finalTotal: finalTotal
+      };
+
+      // Save to sessionStorage
+      saveCheckoutItems([checkoutItem]);
+
+      // Redirect to checkout
+      router.push('/checkout');
     }, 'Please log in to submit an order request.');
   };
 
@@ -898,7 +936,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
           {/* ===== MOBILE ONLY: Right Panel inserted here ===== */}
           <div className="lg:hidden space-y-6">
             {/* Discount Breakdown */}
-            {showDiscountTable && product.order_config?.quantity_discounts && product.order_config.quantity_discounts.length > 0 && (
+            {showDiscountTable && discountTiers.length > 0 && (
               <div className="border border-slate-100 rounded-2xl p-4 bg-white shadow-sm space-y-3 text-left">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                   Discount Breakdown
@@ -940,11 +978,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
                     <Badge variant="primary" className="px-3 py-1 text-[10px] bg-[#E6F0EB] text-[#1B4332] font-bold border-none uppercase tracking-wider">
                       {product.category}
                     </Badge>
-                    <Badge variant="outline" className={cn(
-                      "px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
-                      stockAvailable > 0 ? "border-emerald-205 text-emerald-600 bg-emerald-50/30" : "border-red-200 text-red-600 bg-red-50/30"
-                    )}>
-                      {stockAvailable > 0 ? `In Stock: ${stockAvailable}` : 'Out of Stock'}
+                    <Badge variant="outline" className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider border-emerald-200 text-emerald-600 bg-emerald-50/30">
+                      Stock: Unlimited
                     </Badge>
                   </div>
                   <button
@@ -1484,7 +1519,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
         {/* Right Side: Sticky Purchase & Customization Panel (5 columns) — DESKTOP ONLY */}
         <div className="hidden lg:block lg:col-span-5 lg:sticky lg:top-28 space-y-6">
           {/* Discount Breakdown - Very Top of Right Column */}
-          {showDiscountTable && product.order_config?.quantity_discounts && product.order_config.quantity_discounts.length > 0 && (
+          {showDiscountTable && discountTiers.length > 0 && (
             <div className="border border-slate-100 rounded-2xl p-4 bg-white shadow-sm space-y-3 text-left">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
                 Discount Breakdown
@@ -1526,11 +1561,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
                   <Badge variant="primary" className="px-3 py-1 text-[10px] md:text-xs bg-[#E6F0EB] text-[#1B4332] font-bold border-none uppercase tracking-wider">
                     {product.category}
                   </Badge>
-                  <Badge variant="outline" className={cn(
-                    "px-3 py-1 text-[10px] md:text-xs font-bold uppercase tracking-wider",
-                    stockAvailable > 0 ? "border-emerald-205 text-emerald-600 bg-emerald-50/30" : "border-red-200 text-red-600 bg-red-50/30"
-                  )}>
-                    {stockAvailable > 0 ? `In Stock: ${stockAvailable}` : 'Out of Stock'}
+                  <Badge variant="outline" className="px-3 py-1 text-[10px] md:text-xs font-bold uppercase tracking-wider border-emerald-200 text-emerald-600 bg-emerald-50/30">
+                    Stock: Unlimited
                   </Badge>
                 </div>
                 <button
