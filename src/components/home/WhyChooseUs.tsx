@@ -29,7 +29,7 @@ const features = [
 
 export const WhyChooseUs: React.FC = () => {
   return (
-    <section className="bg-white pt-6 sm:pt-10 pb-6 sm:pb-20 relative overflow-hidden border-t border-b border-border-forest/30">
+    <section className="bg-white pt-6 sm:pt-10 pb-6 sm:pb-12 relative overflow-hidden border-t border-b border-border-forest/30">
       {/* Decorative Radiance - More subtle for white BG */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-accent-primary/5 blur-[100px] rounded-full pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-gold/5 blur-[100px] rounded-full pointer-events-none" />

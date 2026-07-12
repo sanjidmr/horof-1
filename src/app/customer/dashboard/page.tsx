@@ -94,13 +94,23 @@ export default function CustomerDashboardPage() {
 
       // 2. Fetch orders, then eagerly fetch order_items & products separately to join in-memory.
       // (This bypasses the missing foreign key constraint between order_items & products in Postgres).
-      const { data: ordersData, error: ordersErr } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const [ordersRes, requestsRes] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('order_requests')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ['pending', 'rejected'])
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (ordersErr) throw ordersErr;
+      if (ordersRes.error) throw ordersRes.error;
+      const ordersData = ordersRes.data || [];
+      const requestsData = requestsRes.data || [];
 
       let enrichedOrders: any[] = [];
 
@@ -145,28 +155,85 @@ export default function CustomerDashboardPage() {
           enrichedOrders = ordersData.map(o => ({
             ...o,
             amount: Number(o.total ?? o.total_price ?? o.amount ?? 0),
-            order_items: itemsByOrder.get(o.id) || []
+            order_items: itemsByOrder.get(o.id) || [],
+            is_request: false
           }));
         } else {
           enrichedOrders = ordersData.map(o => ({
             ...o,
             amount: Number(o.total ?? o.total_price ?? o.amount ?? 0),
-            order_items: []
+            order_items: [],
+            is_request: false
           }));
         }
       }
 
-      setOrders(enrichedOrders);
+      // Merge order requests into enrichedOrders
+      const enrichedRequests = requestsData.map(r => {
+        const items = r.customer_info?.items?.map((item: any, idx: number) => ({
+          id: `req-item-${r.id}-${idx}`,
+          order_id: r.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price || item.unit_price,
+          unit_price: item.price || item.unit_price,
+          products: {
+            id: item.product_id,
+            name: item.name,
+            price: item.price || item.unit_price,
+            compare_price: item.compare_price || null,
+            images: item.images || null
+          }
+        })) || [{
+          id: `req-item-${r.id}-default`,
+          order_id: r.id,
+          product_id: r.product_id,
+          quantity: r.quantity,
+          price: r.final_total_price / r.quantity,
+          unit_price: r.final_total_price / r.quantity,
+          products: {
+            id: r.product_id,
+            name: r.product_name,
+            price: r.final_total_price / r.quantity,
+            compare_price: null,
+            images: null
+          }
+        }];
+
+        return {
+          id: r.id,
+          created_at: r.created_at,
+          user_id: r.user_id,
+          amount: Number(r.final_total_price),
+          status: r.status === 'pending' ? 'pending_approval' : r.status,
+          customer_name: r.customer_info?.name || '',
+          customer_email: r.customer_info?.email || '',
+          customer_phone: r.customer_info?.phone || '',
+          customer_address: r.customer_info?.address || '',
+          delivery_charge: r.customer_info?.delivery_charge || 0,
+          delivery_type: r.customer_info?.delivery_type || '',
+          payment_status: 'pending',
+          payment_method: 'cod',
+          order_items: items,
+          is_request: true
+        };
+      });
+
+      const combinedOrders = [...enrichedOrders, ...enrichedRequests];
+      // Sort combined by created_at desc
+      combinedOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setOrders(combinedOrders);
 
       // Calculate Stats
-      const totalOrders = enrichedOrders.length;
-      const totalSpent = enrichedOrders
+      const totalOrders = combinedOrders.length;
+      const totalSpent = combinedOrders
         .filter(o => o.status === 'delivered')
         .reduce((sum, o) => sum + o.amount, 0);
-      const pendingOrders = enrichedOrders.filter(o => 
-        ['pending', 'processing', 'shipped'].includes(o.status)
+      const pendingOrders = combinedOrders.filter(o => 
+        ['pending', 'pending_approval', 'processing', 'shipped'].includes(o.status)
       ).length;
-      const deliveredOrders = enrichedOrders.filter(o => o.status === 'delivered').length;
+      const deliveredOrders = combinedOrders.filter(o => o.status === 'delivered').length;
 
       setStats({
         totalOrders,
@@ -243,6 +310,18 @@ export default function CustomerDashboardPage() {
             fetchData();
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'order_requests',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchData();
+          }
+        )
         .subscribe();
     };
 
@@ -258,13 +337,13 @@ export default function CustomerDashboardPage() {
   // Filter orders by active status tab
   const getFilteredOrders = () => {
     if (activeTab === 'confirmed') {
-      return orders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+      return orders.filter(o => ['pending', 'pending_approval', 'processing', 'shipped'].includes(o.status));
     }
     if (activeTab === 'received') {
       return orders.filter(o => o.status === 'delivered');
     }
     if (activeTab === 'cancelled') {
-      return orders.filter(o => ['cancelled', 'returned'].includes(o.status));
+      return orders.filter(o => ['cancelled', 'rejected', 'returned'].includes(o.status));
     }
     return [];
   };
@@ -272,16 +351,20 @@ export default function CustomerDashboardPage() {
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       pending: 'bg-amber-50 text-amber-800 border-amber-200/50',
+      pending_approval: 'bg-amber-50 text-amber-800 border-amber-200/50',
       processing: 'bg-blue-50 text-blue-800 border-blue-200/50',
       shipped: 'bg-indigo-50 text-indigo-800 border-indigo-200/50',
       delivered: 'bg-emerald-50 text-emerald-800 border-emerald-200/50',
       cancelled: 'bg-rose-50 text-rose-800 border-rose-200/50',
+      rejected: 'bg-rose-50 text-rose-800 border-rose-200/50',
       returned: 'bg-slate-100 text-slate-800 border-slate-300/50'
     };
 
+    const displayText = status === 'pending_approval' ? 'pending approval' : status;
+
     return (
       <span className={`px-2.5 py-1 text-[11px] font-bold rounded-full border tracking-wide uppercase ${styles[status] || 'bg-slate-50 text-slate-700'}`}>
-        {status}
+        {displayText}
       </span>
     );
   };

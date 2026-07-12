@@ -23,24 +23,74 @@ export default function CustomerOrdersPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data } = await supabase
+    // 1. Fetch from orders table
+    const { data: ordersData } = await supabase
       .from('orders')
       .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .eq('user_id', user.id);
 
-    if (data) {
-      setOrders(data.map(o => ({
+    // 2. Fetch from order_requests table
+    const { data: requestsData } = await supabase
+      .from('order_requests')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['pending', 'rejected']);
+
+    let combined: any[] = [];
+
+    if (ordersData) {
+      combined = [...combined, ...ordersData.map(o => ({
         ...o,
-        amount: Number(o.total ?? o.total_price ?? 0)
-      })));
+        amount: Number(o.total ?? o.total_price ?? 0),
+        is_request: false
+      }))];
     }
+
+    if (requestsData) {
+      combined = [...combined, ...requestsData.map(r => ({
+        ...r,
+        amount: Number(r.final_total_price),
+        status: r.status === 'pending' ? 'pending_approval' : r.status,
+        is_request: true,
+        items: r.customer_info?.items?.map((item: any, idx: number) => ({
+          id: idx,
+          quantity: item.quantity,
+          price: item.price || item.unit_price,
+          unit_price: item.price || item.unit_price,
+          products: {
+            name: item.name,
+            slug: ''
+          }
+        })) || [{
+          id: 0,
+          quantity: r.quantity,
+          price: r.final_total_price / r.quantity,
+          unit_price: r.final_total_price / r.quantity,
+          products: {
+            name: r.product_name,
+            slug: ''
+          }
+        }]
+      }))];
+    }
+
+    // Sort by created_at descending
+    combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    setOrders(combined);
     setLoading(false);
   };
 
   const fetchOrderItems = async (orderId: any) => {
     const stringId = String(orderId);
     if (orderItems[stringId]) return; // Already fetched
+
+    // Check if this is a request in our local state
+    const requestOrder = orders.find(o => String(o.id) === stringId);
+    if (requestOrder && requestOrder.is_request) {
+      setOrderItems(prev => ({ ...prev, [stringId]: requestOrder.items }));
+      return;
+    }
 
     const { data } = await supabase
       .from('order_items')
@@ -74,6 +124,7 @@ export default function CustomerOrdersPage() {
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       pending: 'bg-amber-50 text-amber-700 border-amber-200/50',
+      pending_approval: 'bg-amber-50 text-amber-700 border-amber-200/50',
       processing: 'bg-blue-50 text-blue-700 border-blue-200/50',
       shipped: 'bg-indigo-50 text-indigo-700 border-indigo-200/50',
       delivered: 'bg-emerald-50 text-emerald-700 border-emerald-200/50',
@@ -83,7 +134,7 @@ export default function CustomerOrdersPage() {
 
     return (
       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full border ${styles[status] || 'bg-slate-50 text-slate-700'}`}>
-        {status.toUpperCase()}
+        {status === 'pending_approval' ? 'PENDING APPROVAL' : status.toUpperCase()}
       </span>
     );
   };

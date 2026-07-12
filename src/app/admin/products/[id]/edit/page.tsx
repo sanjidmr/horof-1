@@ -18,23 +18,25 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     supabase.from('brands').select('id, name').eq('is_active', true).order('name', { ascending: true }),
   ]);
 
+  const oc = (product as any).order_config ?? {};
+
   const initial: ProductFormInitial = {
     id: product.id,
     name: product.name,
     slug: product.slug,
-    sku: '',
+    sku: (product as any).sku ?? '',
     price: Number(product.price),
     offer_price: product.compare_price != null ? Number(product.compare_price) : null,
     stock: product.stock,
     description: product.description,
     specification: product.specification,
     perfect_for: typeof product.perfect_for === 'string' ? product.perfect_for.split(',').map((s: string) => s.trim()) : null,
-    section: product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling',
-    flash_sale_ends_at: null,
-    meta_title: '',
-    meta_description: '',
+    section: (product as any).section ?? (product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling'),
+    flash_sale_ends_at: (product as any).flash_sale_ends_at ?? null,
+    meta_title: (product as any).meta_title ?? '',
+    meta_description: (product as any).meta_description ?? '',
     category_id: product.category_id,
-    brand_id: null,
+    brand_id: (product as any).brand_id ?? null,
     images: images ?? [],
     variants: (variants ?? []).map((v) => ({
       size: v.size,
@@ -43,29 +45,29 @@ export default async function AdminProductEditPage({ params }: { params: Promise
       price_modifier: Number(v.price_modifier),
     })),
     order_config: {
-      quantity_discounts: product.quantity_discounts || [],
-      specification_steps: product.specification_steps || [],
+      quantity_discounts: oc.quantity_discounts ?? [],
+      specification_steps: oc.specification_steps ?? [],
       design_charge: {
-        enabled: !!product.design_charge_enabled,
-        amount: Number(product.design_charge_amount || 0),
-        description: product.design_charge_notes || '',
+        enabled: oc.design_charge?.enabled ?? false,
+        amount: Number(oc.design_charge?.amount ?? 0),
+        description: oc.design_charge?.description ?? '',
       },
       customer_notes_settings: {
-        enabled: !!product.custom_placeholder,
-        title: 'Specification Need Details',
-        placeholder: product.custom_placeholder || '',
+        enabled: oc.customer_notes_settings?.enabled ?? false,
+        title: oc.customer_notes_settings?.title ?? 'Specification Need Details',
+        placeholder: oc.customer_notes_settings?.placeholder ?? '',
       },
       pricing_config: {
-        min_order_qty: 1,
-        max_order_qty: null,
+        min_order_qty: oc.pricing_config?.min_order_qty ?? 1,
+        max_order_qty: oc.pricing_config?.max_order_qty ?? null,
       },
-      order_request_settings: {
+      order_request_settings: oc.order_request_settings ?? {
         enable_order_requests: true,
         enable_add_to_cart: true,
         enable_direct_order: false,
         auto_approval: false,
       },
-      display_controls: {
+      display_controls: oc.display_controls ?? {
         show_discount_table: true,
         show_specifications: true,
         show_customer_notes: true,

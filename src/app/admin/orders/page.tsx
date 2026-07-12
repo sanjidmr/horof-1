@@ -34,16 +34,87 @@ export default function AdminOrdersPage() {
     setLoading(false);
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+  const updateStatus = async (id: string, newStatus: string) => {
+    // Find the current order to get previous status
+    const currentOrder = orders.find(o => String(o.id) === String(id)) || selectedOrder;
+    const prevStatus = currentOrder?.status;
+
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
     if (error) {
       toast.error('Failed to update status');
-    } else {
-      toast.success('Order status updated');
-      fetchOrders();
-      if (selectedOrder && selectedOrder.id === id) {
-        setSelectedOrder({ ...selectedOrder, status });
+      return;
+    }
+
+    // Handle stock replenishment when order is returned
+    if (newStatus === 'returned' && prevStatus !== 'returned') {
+      // Fetch order items and add stock back
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', id);
+
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single();
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: Number(product.stock || 0) + Number(item.quantity || 0) })
+              .eq('id', item.product_id);
+          }
+        }
+        toast.success('Stock replenished for returned items!');
+      } else {
+        // Try to get items from product_details if no order_items rows
+        const order = orders.find(o => String(o.id) === String(id)) || selectedOrder;
+        const pdItems = Array.isArray(order?.product_details) ? order.product_details : [];
+        for (const item of pdItems) {
+          if (!item.product_id) continue;
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single();
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: Number(product.stock || 0) + Number(item.quantity || 0) })
+              .eq('id', item.product_id);
+          }
+        }
       }
+    } else if (prevStatus === 'returned' && newStatus !== 'returned') {
+      // Deduct stock again if reverting from returned
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', id);
+
+      if (items) {
+        for (const item of items) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single();
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: Math.max(0, Number(product.stock || 0) - Number(item.quantity || 0)) })
+              .eq('id', item.product_id);
+          }
+        }
+      }
+    }
+
+    toast.success('Order status updated');
+    fetchOrders();
+    if (selectedOrder && selectedOrder.id === id) {
+      setSelectedOrder({ ...selectedOrder, status: newStatus });
     }
   };
 
@@ -68,6 +139,7 @@ export default function AdminOrdersPage() {
       case 'shipped': return <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-100 text-purple-700 text-xs font-bold"><Truck className="h-3 w-3" /> Shipped</span>;
       case 'delivered': return <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#E6F0EB] text-[#1B4332] text-xs font-bold"><CheckCircle className="h-3 w-3" /> Delivered</span>;
       case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-bold"><XCircle className="h-3 w-3" /> Cancelled</span>;
+      case 'returned': return <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-600 text-xs font-bold"><XCircle className="h-3 w-3" /> Returned</span>;
       default: return <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-bold">{status}</span>;
     }
   };
@@ -176,6 +248,7 @@ export default function AdminOrdersPage() {
                     <option value="shipped">Shipped</option>
                     <option value="delivered">Delivered</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="returned">Returned (Restores Stock)</option>
                   </select>
                 </div>
               </div>

@@ -51,6 +51,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const syncDBCart = async () => {
       if (!user) return;
+
+      // Guard: ensure user.id is a valid UUID before querying.
+      // If user.id is undefined or not a valid UUID string, Supabase will
+      // throw a postgres error that logs as an empty object {}.
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!user.id || !UUID_REGEX.test(user.id)) {
+        console.warn('[CartContext] Skipping DB cart sync: user.id is not a valid UUID:', user.id);
+        return;
+      }
+
       try {
         // Fetch cart items from Supabase
         const { data, error } = await supabase
@@ -78,7 +88,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Error fetching cart from DB:', error);
+          console.error('Error fetching cart from DB:', error.message ?? error);
           return;
         }
 

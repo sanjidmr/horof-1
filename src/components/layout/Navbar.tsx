@@ -144,7 +144,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                 key={link.name}
                 href={link.path}
                 className={cn(
-                  "text-[13px] font-bold uppercase tracking-[0.2em] transition-all duration-300 hover:text-accent-light",
+                  "text-[15px] font-bold uppercase tracking-[0.2em] transition-all duration-300 hover:text-accent-light",
                   (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white drop-shadow-sm"
                 )}
               >
@@ -170,11 +170,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
               <Link
                 href={authHref}
                 className={cn(
-                  "text-[11px] font-bold uppercase tracking-widest transition-all p-2",
+                  "p-2 flex items-center justify-center transition-all hover:scale-110",
                   (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white"
                 )}
+                title="Login"
               >
-                Login
+                <User size={20} />
               </Link>
             )}
           </div>

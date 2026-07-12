@@ -69,7 +69,7 @@ export const FlashSale: React.FC = () => {
   if (!flashSale) return null;
 
   return (
-    <section className="relative w-full overflow-hidden bg-white py-12 sm:py-20">
+    <section className="relative w-full overflow-hidden bg-white py-8 sm:py-12">
       {/* Background */}
       <div className="absolute top-0 right-0 w-1/2 h-full bg-bg-secondary opacity-40 -skew-x-12 translate-x-1/4 pointer-events-none" />
 

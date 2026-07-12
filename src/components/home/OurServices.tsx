@@ -26,18 +26,18 @@ export const OurServices: React.FC<OurServicesProps> = ({ services }) => {
   if (!services || services.length === 0) return null;
 
   return (
-    <div className="relative py-12 border-t border-slate-100/60">
+    <div className="relative py-8 border-t border-slate-100/60">
       {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-10 gap-6 px-0">
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-4">
+      <div className="flex flex-col items-center text-center mb-10 gap-4 relative">
+        <div className="flex flex-col items-center space-y-4">
           <span className="text-accent-primary text-sm font-bold uppercase tracking-[0.3em]">Specialties</span>
           <h2 className="text-5xl md:text-6xl font-display font-bold text-accent-primary">Our Services</h2>
           <div className="h-1.5 w-24 bg-accent-primary rounded-full"></div>
         </div>
 
-        {/* Custom Navigation Buttons for Desktop */}
+        {/* Custom Navigation Buttons for Desktop — absolute right */}
         {services.length > 1 && (
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4 absolute right-0 top-1/2 -translate-y-1/2">
             <button className="services-prev-btn h-12 w-12 rounded-full border border-border-forest flex items-center justify-center text-accent-primary hover:bg-accent-primary hover:text-white transition-all cursor-pointer group shadow-sm hover:shadow-md">
               <ChevronLeft className="h-6 w-6 group-active:scale-95" />
             </button>

@@ -22,7 +22,7 @@ export const SpecialOffer: React.FC = () => {
   if (!offer) return null;
 
   return (
-    <section className="max-w-7xl mx-auto px-6 py-4 sm:py-16">
+    <section className="max-w-7xl mx-auto px-6 py-4 sm:py-10">
       <div className="relative overflow-hidden rounded-2xl bg-accent-primary group min-h-0 md:min-h-[500px] flex items-center shadow-2xl">
         {/* Background Image Layer */}
         <div className="absolute inset-0 z-0">

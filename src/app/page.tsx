@@ -131,11 +131,11 @@ export default async function HomePage() {
 
       <DecorShowcase initialImages={initialDecorImages} />
 
-      <div id="categories" className="max-w-7xl mx-auto px-6">
+      <div id="categories" className="max-w-[1400px] mx-auto px-6">
         <CategorySection categories={categories} />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-[1400px] mx-auto px-6">
         <FeaturedProducts
           title="Best Selling Products"
           subtitle="Top Favorites"
@@ -144,7 +144,7 @@ export default async function HomePage() {
         />
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-6 mt-16">
+      <div className="max-w-[1400px] mx-auto px-6">
         <OurServices services={servicesData || []} />
       </div>
 
@@ -169,7 +169,7 @@ export default async function HomePage() {
         <FAQSection />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-6 mt-8 sm:mt-10">
         <Newsletter />
       </div>
     </HomeMotionWrapper>

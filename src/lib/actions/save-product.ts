@@ -32,13 +32,6 @@ function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls:
     is_new_arrival: d.is_new_arrival,
     is_product_of_the_day: d.is_product_of_the_day,
     category_id: d.category_id ?? null,
-    quantity_discounts: d.order_config?.quantity_discounts ?? [],
-    specification_steps: d.order_config?.specification_steps ?? [],
-    design_charge_enabled: d.order_config?.design_charge?.enabled ?? false,
-    design_charge_amount: d.order_config?.design_charge?.amount ?? 0,
-    design_charge_notes: d.order_config?.design_charge?.description ?? '',
-    custom_placeholder: d.order_config?.customer_notes_settings?.placeholder ?? '',
-    // Missing fields added:
     sku: d.sku ?? '',
     section: d.section,
     flash_sale_ends_at: d.section === 'flash_sale' && d.flash_sale_ends_at
@@ -47,12 +40,40 @@ function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls:
     meta_title: d.meta_title ?? '',
     meta_description: d.meta_description ?? '',
     brand_id: d.brand_id ?? null,
-    customer_notes_enabled: d.order_config?.customer_notes_settings?.enabled ?? false,
-    customer_notes_title: d.order_config?.customer_notes_settings?.title ?? '',
-    min_order_qty: d.order_config?.pricing_config?.min_order_qty ?? 1,
-    max_order_qty: d.order_config?.pricing_config?.max_order_qty ?? null,
-    order_request_settings: d.order_config?.order_request_settings ?? null,
-    display_controls: d.order_config?.display_controls ?? null,
+    order_config: {
+      quantity_discounts: d.order_config?.quantity_discounts ?? [],
+      specification_steps: d.order_config?.specification_steps ?? [],
+      design_charge: {
+        enabled: d.order_config?.design_charge?.enabled ?? false,
+        amount: d.order_config?.design_charge?.amount ?? 0,
+        description: d.order_config?.design_charge?.description ?? '',
+      },
+      customer_notes_settings: {
+        enabled: d.order_config?.customer_notes_settings?.enabled ?? false,
+        title: d.order_config?.customer_notes_settings?.title ?? 'Specification Need Details',
+        placeholder: d.order_config?.customer_notes_settings?.placeholder ?? '',
+      },
+      pricing_config: {
+        min_order_qty: d.order_config?.pricing_config?.min_order_qty ?? 1,
+        max_order_qty: d.order_config?.pricing_config?.max_order_qty ?? null,
+      },
+      order_request_settings: d.order_config?.order_request_settings ?? {
+        enable_order_requests: true,
+        enable_add_to_cart: true,
+        enable_direct_order: false,
+        auto_approval: false,
+      },
+      display_controls: d.order_config?.display_controls ?? {
+        show_discount_table: true,
+        show_specifications: true,
+        show_customer_notes: true,
+        show_quantity_selector: true,
+        show_design_charge: true,
+        show_total_price: true,
+        show_send_request: true,
+        show_add_to_cart: true,
+      },
+    },
   };
 }
 

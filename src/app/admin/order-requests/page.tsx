@@ -42,6 +42,9 @@ type OrderRequest = {
     email?: string;
     phone?: string;
     address?: string;
+    items?: any[];
+    delivery_charge?: number;
+    delivery_type?: string;
   };
   selected_specifications: Record<string, string>;
   quantity: number;
@@ -185,33 +188,94 @@ export default function AdminOrderRequestsPage() {
   const handleApprove = async (req: OrderRequest) => {
     setActionLoading(req.id + '_approve');
     try {
+      const isCheckoutRequest = Array.isArray((req.customer_info as any)?.items) && (req.customer_info as any).items.length > 0;
+
       // 1. Create order in orders table
-      const { error: orderError } = await supabase.from('orders').insert({
-        customer_name: req.customer_info?.name ?? 'Unknown',
-        customer_email: req.customer_info?.email ?? null,
-        customer_phone: req.customer_info?.phone ?? null,
-        customer_address: req.customer_info?.address ?? null,
-        total_price: req.final_total_price,
-        amount: req.final_total_price,
-        status: 'pending',
-        payment_status: 'unpaid',
-        payment_method: 'manual',
-        product_details: {
-          product_id: req.product_id,
-          product_name: req.product_name,
-          quantity: req.quantity,
-          specifications: req.selected_specifications,
-          discount_percent: req.discount_percent,
-          discount_amount: req.discount_amount,
-          design_charge: req.design_charge,
-          order_request_id: req.id,
-        },
-        user_id: req.user_id,
-      });
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          customer_name: req.customer_info?.name ?? 'Unknown',
+          customer_email: req.customer_info?.email ?? null,
+          customer_phone: req.customer_info?.phone ?? null,
+          customer_address: req.customer_info?.address ?? null,
+          total_price: req.final_total_price,
+          amount: req.final_total_price,
+          status: 'pending',
+          payment_status: 'unpaid',
+          payment_method: 'manual',
+          product_details: isCheckoutRequest 
+            ? (req.customer_info as any).items 
+            : {
+                product_id: req.product_id,
+                product_name: req.product_name,
+                quantity: req.quantity,
+                specifications: req.selected_specifications,
+                discount_percent: req.discount_percent,
+                discount_amount: req.discount_amount,
+                design_charge: req.design_charge,
+                order_request_id: req.id,
+              },
+          user_id: req.user_id,
+        })
+        .select('id')
+        .single();
 
-      if (orderError) throw orderError;
+      if (orderError || !order) throw orderError || new Error('Failed to create order');
 
-      // 2. Mark order request as approved
+      // 2. Create order items & update stock
+      if (isCheckoutRequest) {
+        const orderItems = (req.customer_info as any).items.map((item: any) => ({
+          order_id: order.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.price || item.unit_price,
+          user_id: req.user_id,
+        }));
+        
+        const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+        if (itemsError) throw itemsError;
+
+        for (const item of (req.customer_info as any).items) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single();
+
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: Math.max(0, Number(product.stock || 0) - Number(item.quantity || 0)) })
+              .eq('id', item.product_id);
+          }
+        }
+      } else {
+        if (req.product_id) {
+          const { error: itemsError } = await supabase.from('order_items').insert({
+            order_id: order.id,
+            product_id: req.product_id,
+            quantity: req.quantity,
+            unit_price: req.final_total_price / req.quantity,
+            user_id: req.user_id,
+          });
+          if (itemsError) throw itemsError;
+
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', req.product_id)
+            .single();
+
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ stock: Math.max(0, Number(product.stock || 0) - Number(req.quantity || 0)) })
+              .eq('id', req.product_id);
+          }
+        }
+      }
+
+      // 3. Mark order request as approved
       const { error: updateError } = await supabase
         .from('order_requests')
         .update({ status: 'approved' })
@@ -542,61 +606,116 @@ export default function AdminOrderRequestsPage() {
               </section>
 
               {/* Product & Specs */}
-              <section className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <Layers className="h-3.5 w-3.5" /> Product & Specifications
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-sm text-slate-500 font-medium">Product</span>
-                    <span className="text-sm font-bold text-slate-900">{selected.product_name}</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-sm text-slate-500 font-medium">Quantity</span>
-                    <span className="text-sm font-bold text-slate-900">{selected.quantity}</span>
-                  </div>
-                  {Object.entries(selected.selected_specifications || {}).map(([key, val]) => (
-                    <div key={key} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-                      <span className="text-sm text-slate-500 font-medium capitalize">{key}</span>
-                      <span className="text-sm font-semibold text-slate-800">{String(val)}</span>
+              {/* Checkout Cart Items OR Single Product Specs */}
+              {Array.isArray(selected.customer_info?.items) && selected.customer_info.items.length > 0 ? (
+                <section className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <Layers className="h-3.5 w-3.5" /> Ordered Items
+                  </h3>
+                  <div className="space-y-3">
+                    {selected.customer_info.items.map((item: any, idx: number) => (
+                      <div key={idx} className="bg-white rounded-xl border border-slate-100 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{item.name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Qty: {item.quantity}</p>
+                            {item.selectedSpecs && Object.keys(item.selectedSpecs).length > 0 && (
+                              <div className="mt-1.5 space-y-0.5">
+                                {Object.entries(item.selectedSpecs).map(([k, v]) => (
+                                  <p key={k} className="text-xs text-slate-500">
+                                    <span className="font-semibold capitalize">{k}:</span> {String(v)}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            {item.customerNotes && (
+                              <p className="text-xs text-amber-700 mt-1">
+                                <span className="font-semibold">Note:</span> {item.customerNotes}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-sm font-bold text-slate-900 shrink-0">
+                            {formatPrice(Number((item.price || item.unit_price || 0) * item.quantity))}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Delivery info */}
+                    {selected.customer_info.delivery_charge !== undefined && (
+                      <div className="flex items-center justify-between py-2 border-t border-slate-100">
+                        <span className="text-sm text-slate-500 font-medium">Delivery Charge</span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {selected.customer_info.delivery_charge === 0 ? 'Free' : formatPrice(Number(selected.customer_info.delivery_charge))}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-200">
+                      <span className="font-bold text-slate-900">Grand Total</span>
+                      <span className="text-xl font-display font-extrabold text-[#1B4332]">
+                        {formatPrice(Number(selected.final_total_price))}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Pricing */}
-              <section className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <DollarSign className="h-3.5 w-3.5" /> Pricing Breakdown
-                </h3>
-                <div className="space-y-2">
-                  {selected.design_charge > 0 && (
-                    <PriceRow label="Design Charge" value={selected.design_charge} />
-                  )}
-                  {selected.discount_percent > 0 && (
-                    <PriceRow
-                      label={`Discount (${selected.discount_percent}%)`}
-                      value={-selected.discount_amount}
-                      highlight="green"
-                      icon={BadgePercent}
-                    />
-                  )}
-                  {selected.discount_amount > 0 && selected.discount_percent === 0 && (
-                    <PriceRow
-                      label="Discount Amount"
-                      value={-selected.discount_amount}
-                      highlight="green"
-                      icon={BadgePercent}
-                    />
-                  )}
-                  <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-200">
-                    <span className="font-bold text-slate-900">Final Total</span>
-                    <span className="text-xl font-display font-extrabold text-[#1B4332]">
-                      {formatPrice(Number(selected.final_total_price))}
-                    </span>
                   </div>
-                </div>
-              </section>
+                </section>
+              ) : (
+                <>
+                  <section className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <Layers className="h-3.5 w-3.5" /> Product & Specifications
+                    </h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                        <span className="text-sm text-slate-500 font-medium">Product</span>
+                        <span className="text-sm font-bold text-slate-900">{selected.product_name}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                        <span className="text-sm text-slate-500 font-medium">Quantity</span>
+                        <span className="text-sm font-bold text-slate-900">{selected.quantity}</span>
+                      </div>
+                      {Object.entries(selected.selected_specifications || {}).map(([key, val]) => (
+                        <div key={key} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                          <span className="text-sm text-slate-500 font-medium capitalize">{key}</span>
+                          <span className="text-sm font-semibold text-slate-800">{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  {/* Pricing */}
+                  <section className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <DollarSign className="h-3.5 w-3.5" /> Pricing Breakdown
+                    </h3>
+                    <div className="space-y-2">
+                      {selected.design_charge > 0 && (
+                        <PriceRow label="Design Charge" value={selected.design_charge} />
+                      )}
+                      {selected.discount_percent > 0 && (
+                        <PriceRow
+                          label={`Discount (${selected.discount_percent}%)`}
+                          value={-selected.discount_amount}
+                          highlight="green"
+                          icon={BadgePercent}
+                        />
+                      )}
+                      {selected.discount_amount > 0 && selected.discount_percent === 0 && (
+                        <PriceRow
+                          label="Discount Amount"
+                          value={-selected.discount_amount}
+                          highlight="green"
+                          icon={BadgePercent}
+                        />
+                      )}
+                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-slate-200">
+                        <span className="font-bold text-slate-900">Final Total</span>
+                        <span className="text-xl font-display font-extrabold text-[#1B4332]">
+                          {formatPrice(Number(selected.final_total_price))}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
 
               {/* Notes */}
               {selected.customer_notes && (

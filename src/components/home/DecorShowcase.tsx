@@ -104,7 +104,7 @@ export const DecorShowcase: React.FC<DecorShowcaseProps> = ({ initialImages }) =
 
 
   return (
-    <section className="max-w-6xl mx-auto px-6 py-10 sm:py-16">
+    <section className="max-w-6xl mx-auto px-6 pt-10 sm:pt-16 pb-4 sm:pb-6">
       <div className="flex flex-col md:flex-row items-start md:items-end justify-between mb-10 sm:mb-16 gap-6 md:gap-8 text-left">
         <div className="space-y-4 sm:space-y-5 max-w-xl">
           <span className="text-accent-hover text-[10px] md:text-sm font-bold md:ml-5 uppercase tracking-[0.5em] block">

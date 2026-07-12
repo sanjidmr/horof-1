@@ -7,8 +7,16 @@ import { createSupabaseBrowserClient } from '../lib/supabase/client';
 interface AuthContextType {
   user: SupabaseUser | null;
   session: Session | null;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean } | void>;
+  login: (
+    emailOrParams: string | { email?: string; phone?: string; password?: string },
+    password?: string
+  ) => Promise<void>;
+  signup: (
+    emailOrParams: string | { email?: string; phone?: string; password?: string; firstName?: string; lastName?: string },
+    password?: string
+  ) => Promise<{ needsConfirmation: boolean; user: SupabaseUser | null }>;
+  verifyOtp: (params: { email?: string; phone?: string; token: string; type: 'signup' | 'sms' }) => Promise<void>;
+  resendOtp: (params: { email?: string; phone?: string; type: 'signup' | 'sms' }) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -94,38 +102,120 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user, supabase]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (
+    emailOrParams: string | { email?: string; phone?: string; password?: string },
+    password?: string
+  ) => {
     if (!supabase) {
       throw new Error('Supabase is not configured.');
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+
+    let signInParams: { email?: string; phone?: string; password?: string } = {};
+
+    if (typeof emailOrParams === 'string') {
+      signInParams = { email: emailOrParams, password };
+    } else {
+      signInParams = emailOrParams;
+    }
+
+    const { email, phone, password: pw } = signInParams;
+
+    if (email) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pw! });
+      if (error) throw error;
+    } else if (phone) {
+      const { error } = await supabase.auth.signInWithPassword({ phone, password: pw! });
+      if (error) throw error;
+    } else {
+      throw new Error('Please provide an email or phone number.');
+    }
   };
 
-  const signup = async (email: string, password: string) => {
+  const signup = async (
+    emailOrParams: string | { email?: string; phone?: string; password?: string; firstName?: string; lastName?: string },
+    password?: string
+  ) => {
     if (!supabase) {
       throw new Error('Supabase is not configured.');
     }
 
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
+    let signUpParams: { email?: string; phone?: string; password?: string; firstName?: string; lastName?: string } = {};
 
-    const resultData = await res.json();
-
-    if (!res.ok) {
-      throw new Error(resultData.error || 'Signup failed');
+    if (typeof emailOrParams === 'string') {
+      signUpParams = { email: emailOrParams, password };
+    } else {
+      signUpParams = emailOrParams;
     }
 
-    // Auto login immediately since email confirmation is bypassed
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-    if (loginError) throw loginError;
+    const { email, phone, password: pw, firstName, lastName } = signUpParams;
+
+    let res;
+    if (email) {
+      res = await supabase.auth.signUp({
+        email,
+        password: pw!,
+        options: {
+          data: {
+            first_name: firstName || '',
+            last_name: lastName || '',
+            full_name: `${firstName || ''} ${lastName || ''}`.trim(),
+          }
+        }
+      });
+    } else if (phone) {
+      res = await supabase.auth.signUp({
+        phone,
+        password: pw!,
+        options: {
+          data: {
+            first_name: firstName || '',
+            last_name: lastName || '',
+            full_name: `${firstName || ''} ${lastName || ''}`.trim(),
+          }
+        }
+      });
+    } else {
+      throw new Error('Please provide an email or phone number.');
+    }
+
+    if (res.error) throw res.error;
+
+    return {
+      needsConfirmation: true,
+      user: res.data.user
+    };
+  };
+
+  const verifyOtp = async (params: { email?: string; phone?: string; token: string; type: 'signup' | 'sms' }) => {
+    if (!supabase) throw new Error('Supabase is not configured.');
+    const { email, phone, token, type } = params;
     
-    return { needsEmailConfirmation: false };
+    let res;
+    if (email) {
+      res = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
+    } else if (phone) {
+      res = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+    } else {
+      throw new Error('Please provide an email or phone number.');
+    }
+
+    if (res.error) throw res.error;
+  };
+
+  const resendOtp = async (params: { email?: string; phone?: string; type: 'signup' | 'sms' }) => {
+    if (!supabase) throw new Error('Supabase is not configured.');
+    const { email, phone, type } = params;
+
+    let res;
+    if (email) {
+      res = await supabase.auth.resend({ email, type: 'signup' });
+    } else if (phone) {
+      res = await supabase.auth.resend({ phone, type: 'sms' });
+    } else {
+      throw new Error('Please provide an email or phone number.');
+    }
+
+    if (res.error) throw res.error;
   };
 
   const logout = async () => {
@@ -138,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = userRole === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, isAuthenticated, isAdmin, userRole, isLoading }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, isAuthenticated, isAdmin, userRole, isLoading, verifyOtp, resendOtp }}>
       {children}
     </AuthContext.Provider>
   );

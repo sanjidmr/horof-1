@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { 
   ShieldCheck, Loader2, ShoppingCart, Home, 
   MapPin, Phone, User, Map, FileText,
-  Banknote, CheckCircle2, Navigation, Truck, Sparkles
+  Banknote, CheckCircle2, Navigation, Truck, Sparkles,
+  Store, Clock
 } from 'lucide-react';
 import Link from 'next/link';
 import { getCheckoutItems, CheckoutItem, clearCheckoutItems } from '@/lib/checkoutStorage';
@@ -128,6 +129,9 @@ export default function CheckoutPage() {
   const [items, setItems] = useState<CheckoutItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Delivery Method state: 'online' (Home/Online Delivery) or 'office' (Office Pickup)
+  const [deliveryMethod, setDeliveryMethod] = useState<'online' | 'office'>('online');
+
   // Customer Information State
   const [formData, setFormData] = useState({
     name: '',
@@ -159,7 +163,7 @@ export default function CheckoutPage() {
   }, [user, authLoading, router]);
 
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const deliveryCharge = deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0;
+  const deliveryCharge = deliveryMethod === 'office' ? 0 : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
   const total = subtotal + deliveryCharge;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -200,7 +204,7 @@ export default function CheckoutPage() {
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!deliveryType) {
+    if (deliveryMethod === 'online' && !deliveryType) {
       toast.error("Please select a delivery option");
       return;
     }
@@ -214,7 +218,14 @@ export default function CheckoutPage() {
     setLoading(true);
 
     const finalArea = formData.area === 'custom' || !AREAS_BY_THANA[formData.thana] ? customArea : formData.area;
-    const fullAddress = `${formData.address}, ${finalArea}, ${formData.thana}, ${formData.district}. Note: ${formData.note}`;
+    
+    // Address override for Office Pickup
+    const fullAddress = deliveryMethod === 'office'
+      ? `Office Pickup - Customer will collect from Studio/Office (Dhopakhola More, Mymensingh). Note: ${formData.note}`
+      : `${formData.address}, ${finalArea}, ${formData.thana}, ${formData.district}. Note: ${formData.note}`;
+
+    const charge = deliveryMethod === 'office' ? 0 : deliveryCharge;
+    const finalDeliveryType = deliveryMethod === 'office' ? 'office_pickup' : (deliveryType || 'inside_mymensingh');
 
     // Cash on Delivery flow
     try {
@@ -223,9 +234,9 @@ export default function CheckoutPage() {
         customer_email: user?.email || '',
         customer_phone: formData.phone,
         customer_address: fullAddress,
-        delivery_charge: deliveryCharge,
-        delivery_type: deliveryType || 'inside_mymensingh',
-        total: total,
+        delivery_charge: charge,
+        delivery_type: finalDeliveryType,
+        total: subtotal + charge,
         items: items.map(i => ({
           product_id: i.id,
           quantity: i.quantity,
@@ -299,15 +310,116 @@ export default function CheckoutPage() {
           <div className="w-full lg:w-7/12 space-y-8">
             <form id="checkout-form" onSubmit={handleCheckout} className="space-y-8">
               
-              {/* Customer Info Form */}
+              {/* Step 1: Delivery Method Selection */}
               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8 relative overflow-hidden group hover:shadow-md transition-all duration-300">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a4731]" />
                 <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800">
                   <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">1</span>
-                  Customer Information
+                  Delivery Method
+                </h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Option 1: Online Delivery */}
+                  <div 
+                    onClick={() => setDeliveryMethod('online')}
+                    className={`rounded-2xl border-2 p-5 cursor-pointer transition-all duration-300 relative flex flex-col justify-between ${
+                      deliveryMethod === 'online' 
+                        ? 'border-[#1a4731] bg-[#f0fdf4]/20 shadow-sm shadow-[#1a4731]/10' 
+                        : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`mt-1 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        deliveryMethod === 'online' ? 'bg-[#1a4731]/10 text-[#1a4731]' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        <Truck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800">Online Delivery</h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Standard home delivery to your doorstep via courier.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-500">Charge: ৳60 / ৳120</span>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        deliveryMethod === 'online' ? 'border-[#1a4731]' : 'border-slate-300'
+                      }`}>
+                        {deliveryMethod === 'online' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Office Pickup */}
+                  <div 
+                    onClick={() => setDeliveryMethod('office')}
+                    className={`rounded-2xl border-2 p-5 cursor-pointer transition-all duration-300 relative flex flex-col justify-between ${
+                      deliveryMethod === 'office' 
+                        ? 'border-[#1a4731] bg-[#f0fdf4]/20 shadow-sm shadow-[#1a4731]/10' 
+                        : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`mt-1 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        deliveryMethod === 'office' ? 'bg-[#1a4731]/10 text-[#1a4731]' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        <Store className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-slate-800">Office Pickup (On Office)</h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Collect your order directly from our Mymensingh studio.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-xs font-semibold text-emerald-600">Charge: Free (৳0)</span>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        deliveryMethod === 'office' ? 'border-[#1a4731]' : 'border-slate-300'
+                      }`}>
+                        {deliveryMethod === 'office' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Step 2: Customer / Shipping Info */}
+              <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a4731]" />
+                <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800">
+                  <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">2</span>
+                  {deliveryMethod === 'online' ? 'Shipping Information' : 'Pickup Contact Information'}
                 </h2>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {deliveryMethod === 'office' && (
+                    <div className="md:col-span-2 p-5 bg-[#f0fdf4]/40 border border-[#1a4731]/10 rounded-2xl space-y-4 animate-in fade-in duration-300 mb-2">
+                      <div className="flex items-center gap-2 text-[#1a4731]">
+                        <Store className="w-4 h-4 shrink-0" />
+                        <h4 className="font-bold text-sm">Collection Studio Details</h4>
+                      </div>
+                      <div className="space-y-2 text-xs text-slate-700 leading-relaxed font-medium">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                          <span><strong>Address:</strong> Dhopakhola More, Mymensingh</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                          <span><strong>Hours:</strong> Sat – Fri: 9am – 6pm (Thur: 10am – 4pm)</span>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Phone className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                          <span><strong>Studio Contact:</strong> +880 1723 8900, +880 1938 4948</span>
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 italic">
+                        * Please verify your contact details below. We will contact you when your order is ready for collection.
+                      </div>
+                    </div>
+                  )}
+
                   <div className="md:col-span-2 space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <User className="w-3.5 h-3.5 text-slate-400" /> Full Name <span className="text-red-500">*</span>
@@ -319,7 +431,7 @@ export default function CheckoutPage() {
                     />
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="md:col-span-2 space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-slate-400" /> Phone Number <span className="text-red-500">*</span>
                     </label>
@@ -330,94 +442,98 @@ export default function CheckoutPage() {
                     />
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                      <Map className="w-3.5 h-3.5 text-slate-400" /> District <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="district" required value={formData.district} onChange={handleDistrictChange}
-                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none"
-                    >
-                      <option value="">Select District</option>
-                      {Object.entries(BANGLADESH_DISTRICTS).map(([division, districts]) => (
-                        <optgroup key={division} label={division}>
-                          {districts.map(dist => (
-                            <option key={dist} value={dist}>{dist}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Thana/Upazila <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="thana" required disabled={!formData.district} value={formData.thana} onChange={handleThanaChange}
-                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none disabled:opacity-50"
-                    >
-                      <option value="">Select Thana/Upazila</option>
-                      {formData.district && THANAS_BY_DISTRICT[formData.district] && 
-                        THANAS_BY_DISTRICT[formData.district].map(thana => (
-                          <option key={thana} value={thana}>{thana}</option>
-                        ))
-                      }
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                      <Navigation className="w-3.5 h-3.5 text-slate-400" /> Area <span className="text-red-500">*</span>
-                    </label>
-                    {formData.thana && AREAS_BY_THANA[formData.thana] ? (
-                      <div className="space-y-2">
+                  {deliveryMethod === 'online' && (
+                    <>
+                      <div className="space-y-1.5 animate-in fade-in duration-300">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                          <Map className="w-3.5 h-3.5 text-slate-400" /> District <span className="text-red-500">*</span>
+                        </label>
                         <select
-                          name="area" required value={formData.area} onChange={(e) => {
-                            const val = e.target.value;
-                            setFormData(prev => ({ ...prev, area: val }));
-                            if (val !== 'custom') setCustomArea('');
-                          }}
+                          name="district" required={deliveryMethod === 'online'} value={formData.district} onChange={handleDistrictChange}
                           className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none"
                         >
-                          <option value="">Select Area</option>
-                          {AREAS_BY_THANA[formData.thana].map(area => (
-                            <option key={area} value={area}>{area}</option>
+                          <option value="">Select District</option>
+                          {Object.entries(BANGLADESH_DISTRICTS).map(([division, districts]) => (
+                            <optgroup key={division} label={division}>
+                              {districts.map(dist => (
+                                <option key={dist} value={dist}>{dist}</option>
+                              ))}
+                            </optgroup>
                           ))}
-                          <option value="custom">Other / Type Custom Area...</option>
                         </select>
-                        {formData.area === 'custom' && (
+                      </div>
+
+                      <div className="space-y-1.5 animate-in fade-in duration-300">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400" /> Thana/Upazila <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="thana" required={deliveryMethod === 'online'} disabled={!formData.district} value={formData.thana} onChange={handleThanaChange}
+                          className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none disabled:opacity-50"
+                        >
+                          <option value="">Select Thana/Upazila</option>
+                          {formData.district && THANAS_BY_DISTRICT[formData.district] && 
+                            THANAS_BY_DISTRICT[formData.district].map(thana => (
+                              <option key={thana} value={thana}>{thana}</option>
+                            ))
+                          }
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5 animate-in fade-in duration-300">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                          <Navigation className="w-3.5 h-3.5 text-slate-400" /> Area <span className="text-red-500">*</span>
+                        </label>
+                        {formData.thana && AREAS_BY_THANA[formData.thana] ? (
+                          <div className="space-y-2">
+                            <select
+                              name="area" required={deliveryMethod === 'online'} value={formData.area} onChange={(e) => {
+                                const val = e.target.value;
+                                setFormData(prev => ({ ...prev, area: val }));
+                                if (val !== 'custom') setCustomArea('');
+                              }}
+                              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none"
+                            >
+                              <option value="">Select Area</option>
+                              {AREAS_BY_THANA[formData.thana].map(area => (
+                                <option key={area} value={area}>{area}</option>
+                              ))}
+                              <option value="custom">Other / Type Custom Area...</option>
+                            </select>
+                            {formData.area === 'custom' && (
+                              <input
+                                type="text" required={deliveryMethod === 'online' && formData.area === 'custom'} value={customArea} onChange={(e) => setCustomArea(e.target.value)}
+                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none animate-in fade-in duration-300"
+                                placeholder="Enter your custom area name"
+                              />
+                            )}
+                          </div>
+                        ) : (
                           <input
-                            type="text" required value={customArea} onChange={(e) => setCustomArea(e.target.value)}
-                            className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none animate-in fade-in duration-300"
-                            placeholder="Enter your custom area name"
+                            type="text" name="area" required={deliveryMethod === 'online'} disabled={!formData.thana} value={formData.thana ? (formData.area === 'custom' ? customArea : formData.area) : ''} 
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormData(prev => ({ ...prev, area: 'custom' }));
+                              setCustomArea(val);
+                            }}
+                            className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none disabled:opacity-50"
+                            placeholder={formData.thana ? "Type your Village/Area/Neighborhood" : "Select Thana first"}
                           />
                         )}
                       </div>
-                    ) : (
-                      <input
-                        type="text" name="area" required disabled={!formData.thana} value={formData.thana ? (formData.area === 'custom' ? customArea : formData.area) : ''} 
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFormData(prev => ({ ...prev, area: 'custom' }));
-                          setCustomArea(val);
-                        }}
-                        className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none disabled:opacity-50"
-                        placeholder={formData.thana ? "Type your Village/Area/Neighborhood" : "Select Thana first"}
-                      />
-                    )}
-                  </div>
 
-                  <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                      <Home className="w-3.5 h-3.5 text-slate-400" /> Exact Address / House No <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      name="address" required rows={2} value={formData.address} onChange={handleInputChange}
-                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none resize-none"
-                      placeholder="e.g. House 42, Road 11, Flat 4B"
-                    />
-                  </div>
+                      <div className="md:col-span-2 space-y-1.5 animate-in fade-in duration-300">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                          <Home className="w-3.5 h-3.5 text-slate-400" /> Exact Address / House No <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          name="address" required={deliveryMethod === 'online'} rows={2} value={formData.address} onChange={handleInputChange}
+                          className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none resize-none"
+                          placeholder="e.g. House 42, Road 11, Flat 4B"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="md:col-span-2 space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
@@ -426,69 +542,73 @@ export default function CheckoutPage() {
                     <textarea
                       name="note" rows={2} value={formData.note} onChange={handleInputChange}
                       className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1a4731] focus:border-transparent transition-all outline-none resize-none"
-                      placeholder="Any landmark or specific instructions for delivery man"
+                      placeholder={deliveryMethod === 'online' ? "Any landmark or specific instructions for delivery man" : "Preferred collection day or other notes"}
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Delivery Option */}
-              <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8 relative overflow-hidden group hover:shadow-md transition-all duration-300">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a4731]" />
-                <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800">
-                  <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">2</span>
-                  Delivery System
-                </h2>
-                {!formData.district ? (
-                  <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
-                    <Truck className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-slate-600">Please select your district first</p>
-                    <p className="text-xs text-slate-400 mt-1">Delivery charge will be calculated automatically based on your district.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-300">
-                    <div 
-                      className={`rounded-2xl border-2 p-5 transition-all duration-300 ${deliveryType === 'inside_mymensingh' ? 'border-[#1a4731] bg-[#f0fdf4]/30 shadow-sm shadow-[#1a4731]/10' : 'border-slate-100 bg-slate-50/50 opacity-40 pointer-events-none'}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryType === 'inside_mymensingh' ? 'border-[#1a4731]' : 'border-slate-300'}`}>
-                          {deliveryType === 'inside_mymensingh' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 justify-between">
-                            <h4 className={`font-bold transition-colors ${deliveryType === 'inside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Inside Mymensingh</h4>
-                            <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Local</span>
+              {/* Step 3: Delivery Option (Only for Online Delivery) */}
+              {deliveryMethod === 'online' && (
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a4731]" />
+                  <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800">
+                    <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">3</span>
+                    Delivery System
+                  </h2>
+                  {!formData.district ? (
+                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
+                      <Truck className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-slate-600">Please select your district first</p>
+                      <p className="text-xs text-slate-400 mt-1">Delivery charge will be calculated automatically based on your district.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in duration-300">
+                      <div 
+                        className={`rounded-2xl border-2 p-5 transition-all duration-300 ${deliveryType === 'inside_mymensingh' ? 'border-[#1a4731] bg-[#f0fdf4]/30 shadow-sm shadow-[#1a4731]/10' : 'border-slate-100 bg-slate-50/50 opacity-40 pointer-events-none'}`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryType === 'inside_mymensingh' ? 'border-[#1a4731]' : 'border-slate-300'}`}>
+                            {deliveryType === 'inside_mymensingh' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
                           </div>
-                          <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳60</span></p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <h4 className={`font-bold transition-colors ${deliveryType === 'inside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Inside Mymensingh</h4>
+                              <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Local</span>
+                            </div>
+                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳60</span></p>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div 
-                      className={`rounded-2xl border-2 p-5 transition-all duration-300 ${deliveryType === 'outside_mymensingh' ? 'border-[#1a4731] bg-[#f0fdf4]/30 shadow-sm shadow-[#1a4731]/10' : 'border-slate-100 bg-slate-50/50 opacity-40 pointer-events-none'}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryType === 'outside_mymensingh' ? 'border-[#1a4731]' : 'border-slate-300'}`}>
-                          {deliveryType === 'outside_mymensingh' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 justify-between">
-                            <h4 className={`font-bold transition-colors ${deliveryType === 'outside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Outside Mymensingh</h4>
-                            <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Courier</span>
+                      <div 
+                        className={`rounded-2xl border-2 p-5 transition-all duration-300 ${deliveryType === 'outside_mymensingh' ? 'border-[#1a4731] bg-[#f0fdf4]/30 shadow-sm shadow-[#1a4731]/10' : 'border-slate-100 bg-slate-50/50 opacity-40 pointer-events-none'}`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${deliveryType === 'outside_mymensingh' ? 'border-[#1a4731]' : 'border-slate-300'}`}>
+                            {deliveryType === 'outside_mymensingh' && <div className="w-2.5 h-2.5 rounded-full bg-[#1a4731]" />}
                           </div>
-                          <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳120</span></p>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <h4 className={`font-bold transition-colors ${deliveryType === 'outside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Outside Mymensingh</h4>
+                              <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Courier</span>
+                            </div>
+                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳120</span></p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Payment Section (Cash on Delivery Redesign) */}
               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 md:p-8 relative overflow-hidden group hover:shadow-md transition-all duration-300">
                 <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1a4731]" />
                 <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800">
-                  <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">3</span>
+                  <span className="w-8 h-8 rounded-full bg-[#f0fdf4] text-[#1a4731] flex items-center justify-center mr-3 text-sm font-bold">
+                    {deliveryMethod === 'online' ? '4' : '3'}
+                  </span>
                   Payment Method
                 </h2>
 
@@ -501,7 +621,7 @@ export default function CheckoutPage() {
                         <Banknote className="w-6 h-6 text-[#1a4731] animate-pulse" />
                       </div>
                       <div>
-                        <h4 className="text-lg font-bold text-slate-800">Cash on Delivery (COD)</h4>
+                        <h4 className="text-lg font-bold text-slate-800">{deliveryMethod === 'online' ? 'Cash on Delivery (COD)' : 'Pay on Pickup'}</h4>
                         <p className="text-xs text-[#1a4731] font-semibold flex items-center gap-1.5 mt-0.5">
                           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                           Fully Enabled & Zero Risk
@@ -514,7 +634,7 @@ export default function CheckoutPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <h5 className="text-xs font-bold text-slate-600 uppercase tracking-wider">How COD Works:</h5>
+                    <h5 className="text-xs font-bold text-slate-650 uppercase tracking-wider">How it works:</h5>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="p-4 bg-white/70 rounded-xl border border-slate-100/80 flex flex-col gap-2">
@@ -528,16 +648,24 @@ export default function CheckoutPage() {
                       <div className="p-4 bg-white/70 rounded-xl border border-slate-100/80 flex flex-col gap-2">
                         <span className="w-6 h-6 rounded-full bg-[#1a4731]/10 text-[#1a4731] flex items-center justify-center text-xs font-bold">2</span>
                         <div>
-                          <p className="text-xs font-bold text-slate-700">Home Delivery</p>
-                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Our courier partner delivers the items directly to your address.</p>
+                          <p className="text-xs font-bold text-slate-700">{deliveryMethod === 'online' ? 'Home Delivery' : 'Order Processing'}</p>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                            {deliveryMethod === 'online' 
+                              ? 'Our courier partner delivers the items directly to your address.' 
+                              : 'We will prepare and package your items ready for collection at our studio.'}
+                          </p>
                         </div>
                       </div>
                       
                       <div className="p-4 bg-white/70 rounded-xl border border-slate-100/80 flex flex-col gap-2">
                         <span className="w-6 h-6 rounded-full bg-[#1a4731]/10 text-[#1a4731] flex items-center justify-center text-xs font-bold">3</span>
                         <div>
-                          <p className="text-xs font-bold text-slate-700">Verify & Pay</p>
-                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">Inspect your package and hand over the cash to the rider.</p>
+                          <p className="text-xs font-bold text-slate-700">{deliveryMethod === 'online' ? 'Verify & Pay' : 'Collect & Pay'}</p>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                            {deliveryMethod === 'online' 
+                              ? 'Inspect your package and hand over the cash to the rider.' 
+                              : 'Visit our studio, verify your products, and make the payment.'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -595,7 +723,7 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-sm font-medium text-slate-600">
                   <span>Delivery Charge</span>
-                  <span className="font-bold text-slate-800">{deliveryType ? `৳ ${deliveryCharge}` : '—'}</span>
+                  <span className="font-bold text-slate-800">{deliveryMethod === 'office' ? '৳ 0 (Office Pickup)' : deliveryType ? `৳ ${deliveryCharge}` : '—'}</span>
                 </div>
                 <div className="flex justify-between text-xl font-display font-black text-[#1a4731] pt-4 border-t border-slate-100 mt-2">
                   <span>Total</span>
@@ -607,7 +735,7 @@ export default function CheckoutPage() {
                 <button
                   type="submit"
                   form="checkout-form"
-                  disabled={loading || !deliveryType}
+                  disabled={loading || (deliveryMethod === 'online' && !deliveryType)}
                   className="w-full bg-[#1a4731] hover:bg-[#14402a] text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-[#1a4731]/20 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
                 >
                   {loading ? (
@@ -617,7 +745,7 @@ export default function CheckoutPage() {
                     </>
                   ) : (
                     <>
-                      Confirm Order (Cash on Delivery)
+                      Confirm Order {deliveryMethod === 'office' ? '(Pay on Pickup)' : '(Cash on Delivery)'}
                     </>
                   )}
                 </button>

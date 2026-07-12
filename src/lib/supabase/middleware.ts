@@ -57,13 +57,13 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Public routes that don't need auth check redirects
-  if (pathname.startsWith('/auth/callback')) return supabaseResponse
+  if (pathname.startsWith('/auth/')) return supabaseResponse
 
   // Check if user has verified their email
   const isVerified = user ? !!user.email_confirmed_at : false;
 
   // If already logged in and hitting login/signup, redirect to dashboard based on role
-  if (user && isVerified && (pathname === '/login' || pathname === '/signup')) {
+  if (user && isVerified && (pathname === '/login' || pathname === '/signup' || pathname === '/register')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -76,7 +76,13 @@ export async function updateSession(request: NextRequest) {
 
   // Admin protection
   if (pathname.startsWith('/admin')) {
-    if (!user || !isVerified) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    if (!isVerified) {
+      if (user.email) {
+        return NextResponse.redirect(new URL(`/verify-otp?email=${encodeURIComponent(user.email)}`, request.url))
+      }
       return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
     }
 
@@ -93,7 +99,13 @@ export async function updateSession(request: NextRequest) {
 
   // Customer protection
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/customer')) {
-    if (!user || !isVerified) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    if (!isVerified) {
+      if (user.email) {
+        return NextResponse.redirect(new URL(`/verify-otp?email=${encodeURIComponent(user.email)}`, request.url))
+      }
       return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
     }
   }

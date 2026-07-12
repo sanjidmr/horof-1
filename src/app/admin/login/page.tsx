@@ -19,8 +19,9 @@ export default function AdminLoginPage() {
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
-    if (!email || !password) {
-      toast.error('Please enter both email and password');
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || !password) {
+      toast.error('Please enter a valid email address and password');
       return;
     }
 

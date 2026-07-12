@@ -25,7 +25,7 @@ export const FAQSection: React.FC = () => {
   if (faqs.length === 0) return null;
 
   return (
-    <section className="py-8 md:py-20 bg-bg-secondary/30 rounded-2xl md:rounded-[3rem] border border-border-forest/50">
+    <section className="py-6 md:py-12 bg-bg-secondary/30 rounded-2xl md:rounded-[3rem] border border-border-forest/50">
       <div className="max-w-3xl mx-auto px-3 md:px-6">
 
         {/* Header */}

@@ -35,43 +35,42 @@ export async function placeOrder(orderData: {
     return { ok: false, message: 'Unauthorized. Please login first to place an order.' };
   }
 
-  // 1. Create the order
-  const { data: order, error: orderErr } = await supabase
-    .from('orders')
+  // 1. Create the order request
+  const summaryName = orderData.items.length === 1 
+    ? orderData.items[0].name 
+    : `${orderData.items[0].name} & ${orderData.items.length - 1} other${orderData.items.length > 2 ? 's' : ''}`;
+
+  const totalQty = orderData.items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const { data: orderRequest, error: requestErr } = await supabase
+    .from('order_requests')
     .insert({
-      total: orderData.total,
-      status: 'confirmed',
-      payment_method: 'cod',
-      payment_status: 'pending',
-      customer_name: orderData.customer_name,
-      customer_email: orderData.customer_email,
-      customer_phone: orderData.customer_phone,
-      customer_address: orderData.customer_address,
-      delivery_charge: orderData.delivery_charge,
-      delivery_type: orderData.delivery_type,
+      product_id: orderData.items.length === 1 ? orderData.items[0].product_id : null,
+      product_name: summaryName,
       user_id: user.id,
-      customer_id: user.id,
-      product_details: orderData.items, // Save the detailed configurations in product_details column
+      customer_info: {
+        name: orderData.customer_name,
+        email: orderData.customer_email,
+        phone: orderData.customer_phone,
+        address: orderData.customer_address,
+        items: orderData.items,
+        delivery_charge: orderData.delivery_charge,
+        delivery_type: orderData.delivery_type,
+      },
+      selected_specifications: {},
+      quantity: totalQty,
+      discount_percent: 0,
+      discount_amount: 0,
+      design_charge: 0,
+      customer_notes: null,
+      final_total_price: orderData.total,
+      status: 'pending'
     })
     .select('id')
     .single();
 
-  if (orderErr || !order) {
-    return { ok: false, message: orderErr?.message || 'Failed to create order' };
-  }
-
-  // 2. Create order items
-  const orderItems = orderData.items.map(item => ({
-    order_id: order.id,
-    product_id: item.product_id,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    user_id: user.id,
-  }));
-
-  const { error: itemsErr } = await supabase.from('order_items').insert(orderItems);
-  if (itemsErr) {
-    return { ok: false, message: itemsErr.message };
+  if (requestErr || !orderRequest) {
+    return { ok: false, message: requestErr?.message || 'Failed to submit order request' };
   }
 
   // Clear database cart items
@@ -85,34 +84,15 @@ export async function placeOrder(orderData: {
     console.error('Failed to clear database cart items:', clearCartErr);
   }
 
-  // 3. Update stock
-  for (const item of orderData.items) {
-    const { data: product } = await supabase
-      .from('products')
-      .select('stock')
-      .eq('id', item.product_id)
-      .single();
-
-    if (product) {
-      await supabase
-        .from('products')
-        .update({ stock: Math.max(0, product.stock - item.quantity) })
-        .eq('id', item.product_id);
-    }
-  }
-
-  // 4. Create Notification
+  // 2. Create Notification for Order Request
   await createNotification(
-    'New Order Placed',
-    `A new order (#${String(order.id).slice(0, 8)}) for ৳${orderData.total.toLocaleString()} has been placed by ${orderData.customer_name}.`,
+    'New Order Request',
+    `A new order request (#${String(orderRequest.id).slice(0, 8)}) for ৳${orderData.total.toLocaleString()} has been placed by ${orderData.customer_name}.`,
     'order'
   );
 
-  // 5. Check for low stock
-  await checkLowStock();
-
   revalidatePath('/admin/dashboard');
-  revalidatePath('/admin/orders');
+  revalidatePath('/admin/order-requests');
 
-  return { ok: true, orderId: order.id };
+  return { ok: true, orderId: orderRequest.id };
 }

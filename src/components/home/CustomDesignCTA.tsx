@@ -14,7 +14,7 @@ export const CustomDesignCTA: React.FC = () => {
   const router = useRouter();
 
   return (
-    <section className="relative py-6 md:py-24 px-6 overflow-hidden bg-white">
+    <section className="relative py-6 md:py-12 px-6 overflow-hidden bg-white">
       {/* Decorative Elements */}
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-gold/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-accent-primary/5 rounded-full blur-[100px] pointer-events-none" />

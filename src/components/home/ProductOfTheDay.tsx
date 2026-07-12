@@ -8,7 +8,7 @@ export const ProductOfTheDay: React.FC<{ products: Product[] }> = ({ products })
   const dailyProducts = products.slice(0, 4);
 
   return (
-    <section className="pt-16 pb-2 md:pt-24 md:pb-4">
+    <section className="pt-8 pb-2 md:pt-12 md:pb-4">
       <div className="flex flex-col items-center text-center space-y-6 mb-16">
         <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-gold/10 rounded-full border border-gold/20">
           <Sparkles className="h-3.5 w-3.5 text-gold animate-pulse" />
@@ -23,20 +23,25 @@ export const ProductOfTheDay: React.FC<{ products: Product[] }> = ({ products })
 
       </div>
 
-      <div className={cn(
-        "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 max-w-6xl mx-auto",
-        dailyProducts.length === 1 && "grid-cols-1 flex justify-center"
-      )}>
+      <div className="flex flex-wrap justify-center gap-6 sm:gap-8 max-w-7xl mx-auto px-4 md:px-8">
         {dailyProducts.map((product) => (
           <div
             key={product.id}
             className={cn(
-              "relative group w-full max-w-[260px] mx-auto", // কার্ডের সাইজ ছোট রাখার জন্য max-w-[260px] দেওয়া হয়েছে
-              dailyProducts.length === 1 && "max-w-[280px]" // ১টা প্রোডাক্ট থাকলে সামান্য বড় দেখাবে
+              "relative group w-[calc(50%-12px)] sm:w-full sm:max-w-[320px] transition-all duration-500",
+              dailyProducts.length === 1 && "w-full max-w-[360px]"
             )}
           >
-            {/* Spotlight Glow Effect - কার্ড ছোট হওয়ায় গ্লো ইফেক্টও একটু কমিয়ে আনা হয়েছে */}
-            <div className="absolute -inset-1.5 bg-gradient-to-b from-gold/20 to-transparent rounded-[2rem] opacity-0 group-hover:opacity-100 transition-all duration-500 blur-lg"></div>
+            {/* Gold Badge for Deal of the Day */}
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20 bg-gradient-to-r from-gold via-amber-500 to-gold text-white font-bold text-[9px] md:text-[10px] tracking-[0.2em] uppercase px-4 py-1.5 rounded-full shadow-lg border border-white/20 group-hover:-translate-y-2.5 transition-all duration-500 whitespace-nowrap">
+              Deal of the Day
+            </div>
+
+            {/* Spotlight Glow Effect - permanently visible highlighting the card */}
+            <div className="absolute -inset-2 bg-gradient-to-r from-gold/30 to-amber-500/20 rounded-[2.2rem] opacity-60 blur-md group-hover:opacity-100 group-hover:blur-lg group-hover:-translate-y-2 transition-all duration-500"></div>
+
+            {/* Glowing border outline */}
+            <div className="absolute inset-0 rounded-3xl border-2 border-gold/40 shadow-[0_0_15px_rgba(212,175,55,0.15)] group-hover:border-gold/80 group-hover:-translate-y-2 transition-all duration-500 pointer-events-none z-10"></div>
 
             <div className="relative">
               <ProductCard product={product} />

@@ -1,38 +1,62 @@
 import React, { Suspense } from 'react';
-import { AuthCard } from '../../components/auth/AuthCard';
 import { LoginForm } from '../../components/auth/LoginForm';
-import { GoogleButton } from '../../components/auth/GoogleButton';
 import Link from 'next/link';
 
 export default function LoginPage() {
   return (
-    <AuthCard 
-      title="Welcome Back" 
-      subtitle="Sign in to manage your account"
-    >
-      <Suspense fallback={<div className="text-center py-4 text-slate-500 text-sm">Loading login portal...</div>}>
-        <LoginForm />
-      </Suspense>
-      
-      <div className="relative py-4">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-100"></div>
-        </div>
-        <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-bold">
-          <span className="bg-white px-4 text-slate-400">OR</span>
-        </div>
-      </div>
-
-      <GoogleButton />
-
-      <div className="text-center pt-4">
-        <p className="text-sm text-slate-500">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-indigo-600 font-bold hover:underline">
-            Sign up
-          </Link>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4 py-12">
+      {/* Page Heading */}
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-1">Account</h1>
+        <div className="mx-auto w-16 h-0.5 bg-green-800 mb-3" />
+        <p className="text-sm text-gray-500">
+          Login if you already our customer. Otherwise please{' '}
+          <Link href="/signup" className="text-green-800 hover:underline">register</Link> yourself.
         </p>
       </div>
-    </AuthCard>
+
+      {/* Form Card */}
+      <div className="w-full max-w-md">
+        <div className="w-full bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200">
+            <div className="flex-1 text-center py-3 text-sm font-semibold text-gray-900 bg-white border-b-2 border-gray-900 cursor-default">
+              Login
+            </div>
+            <Link
+              href="/signup"
+              className="flex-1 text-center py-3 text-sm font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors border-l border-gray-200"
+            >
+              Registration
+            </Link>
+          </div>
+
+          {/* Form Area */}
+          <div className="p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">Login</h2>
+            <p className="text-xs text-gray-400 mb-5">
+              Sign in to your account to continue shopping.
+            </p>
+
+            <Suspense
+              fallback={
+                <div className="text-center py-4 text-gray-400 text-sm">
+                  Loading...
+                </div>
+              }
+            >
+              <LoginForm />
+            </Suspense>
+
+            <p className="text-center text-xs text-gray-500 mt-4">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="text-green-800 hover:underline font-medium">
+                Register
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

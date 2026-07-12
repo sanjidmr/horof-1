@@ -55,6 +55,7 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
   const supabase = createSupabaseBrowserClient();
 
   const handleUpdateStatus = async (newStatus: string) => {
+    const prevStatus = status;
     setIsUpdating(true);
     try {
       const { error } = await supabase
@@ -70,6 +71,70 @@ export function OrderDetailView({ order, items, timeline }: OrderDetailViewProps
         status: newStatus,
         note: `Status updated to ${newStatus}`
       });
+
+      // Handle stock replenishment when order is returned
+      if (newStatus === 'returned' && prevStatus !== 'returned') {
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .eq('order_id', order.id);
+
+        if (orderItems && orderItems.length > 0) {
+          for (const item of orderItems) {
+            const { data: product } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.product_id)
+              .single();
+            if (product) {
+              await supabase
+                .from('products')
+                .update({ stock: Number(product.stock || 0) + Number(item.quantity || 0) })
+                .eq('id', item.product_id);
+            }
+          }
+          toast.success('Stock replenished for all returned items!');
+        } else {
+          // Fallback to product_details JSONB for requests-based orders
+          const pdItems = Array.isArray(order.product_details) ? order.product_details : [];
+          for (const item of pdItems) {
+            if (!item.product_id) continue;
+            const { data: product } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.product_id)
+              .single();
+            if (product) {
+              await supabase
+                .from('products')
+                .update({ stock: Number(product.stock || 0) + Number(item.quantity || 0) })
+                .eq('id', item.product_id);
+            }
+          }
+        }
+      } else if (prevStatus === 'returned' && newStatus !== 'returned') {
+        // Re-deduct stock if reverting from returned
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .eq('order_id', order.id);
+
+        if (orderItems) {
+          for (const item of orderItems) {
+            const { data: product } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.product_id)
+              .single();
+            if (product) {
+              await supabase
+                .from('products')
+                .update({ stock: Math.max(0, Number(product.stock || 0) - Number(item.quantity || 0)) })
+                .eq('id', item.product_id);
+            }
+          }
+        }
+      }
 
       setStatus(newStatus);
       toast.success(`Order status updated to ${newStatus}`);

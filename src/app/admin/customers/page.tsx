@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Search, Mail, Phone, Calendar, Shield, ExternalLink } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
@@ -36,23 +37,35 @@ export default function AdminCustomersPage() {
       return;
     }
 
-    // Fetch orders in a single batch using user_id instead of customer_id
+    // Fetch orders and order requests in parallel using user_id
     const userIds = profilesList.map(p => p.id);
-    const { data: ordersData, error: ordersError } = await supabase
-      .from('orders')
-      .select('id, user_id, total_price')
-      .in('user_id', userIds);
+    const [ordersRes, requestsRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('id, user_id, total_price')
+        .in('user_id', userIds),
+      supabase
+        .from('order_requests')
+        .select('id, user_id, final_total_price')
+        .in('user_id', userIds)
+        .in('status', ['pending', 'rejected'])
+    ]);
 
-    if (ordersError) {
-      console.error('Failed to load customer orders:', ordersError);
+    if (ordersRes.error) {
+      console.error('Failed to load customer orders:', ordersRes.error);
       setCustomers(profilesList.map(p => ({ ...p, orders: [] })));
     } else {
       // Map orders to their respective profile
       const ordersMap = new Map<string, any[]>();
-      ordersData?.forEach(o => {
+      ordersRes.data?.forEach(o => {
         const list = ordersMap.get(o.user_id) || [];
-        list.push(o);
+        list.push({ ...o, is_request: false });
         ordersMap.set(o.user_id, list);
+      });
+      requestsRes.data?.forEach(r => {
+        const list = ordersMap.get(r.user_id) || [];
+        list.push({ id: r.id, user_id: r.user_id, total_price: r.final_total_price, is_request: true });
+        ordersMap.set(r.user_id, list);
       });
 
       const combined = profilesList.map(p => ({
@@ -118,7 +131,7 @@ export default function AdminCustomersPage() {
                   return (
                     <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                        <Link href={`/admin/customers/${customer.id}`} className="flex items-center gap-3 group hover:opacity-85 transition-opacity">
                           <div className="h-10 w-10 rounded-full bg-[#E6F0EB] text-[#1B4332] flex items-center justify-center font-bold">
                             {customer.avatar_url ? (
                               <img src={customer.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
@@ -127,9 +140,12 @@ export default function AdminCustomersPage() {
                             )}
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-slate-900">{customer.full_name || 'Unnamed User'}</p>
+                            <p className="text-sm font-bold text-slate-900 group-hover:text-[#1B4332] flex items-center gap-1.5 transition-colors">
+                              {customer.full_name || 'Unnamed User'}
+                              <ExternalLink className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-[#2D6A4F]" />
+                            </p>
                           </div>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-6 py-4 space-y-1">
                         <div className="flex items-center gap-2 text-xs text-slate-600">

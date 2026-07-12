@@ -35,37 +35,75 @@ function OrderConfirmedContent() {
   const fetchOrderDetails = async () => {
     try {
       // 1. Fetch order
-      const { data: orderData, error: orderErr } = await supabase
+      let { data: orderData, error: orderErr } = await supabase
         .from('orders')
         .select('*')
         .eq('id', orderId)
         .single();
 
       if (orderErr || !orderData) {
-        console.error('Order fetch error:', orderErr);
-        setLoading(false);
-        return;
+        // Fallback to order_requests
+        const { data: reqData, error: reqErr } = await supabase
+          .from('order_requests')
+          .select('*')
+          .eq('id', orderId)
+          .single();
+
+        if (reqData) {
+          orderData = {
+            id: reqData.id,
+            created_at: reqData.created_at,
+            customer_name: reqData.customer_info?.name || 'Customer',
+            customer_email: reqData.customer_info?.email || '',
+            customer_phone: reqData.customer_info?.phone || '',
+            customer_address: reqData.customer_info?.address || '',
+            delivery_charge: reqData.customer_info?.delivery_charge || 0,
+            delivery_type: reqData.customer_info?.delivery_type || 'standard',
+            payment_method: 'cod',
+            status: 'pending_approval',
+            total: reqData.final_total_price,
+            product_details: reqData.customer_info?.items || [{
+              product_id: reqData.product_id,
+              name: reqData.product_name,
+              quantity: reqData.quantity,
+              unit_price: reqData.final_total_price / reqData.quantity,
+              selectedSpecs: reqData.selected_specifications,
+              designCharge: reqData.design_charge,
+              customerNotes: reqData.customer_notes,
+              finalTotal: reqData.final_total_price
+            }]
+          };
+        } else {
+          console.error('Order fetch error:', orderErr || reqErr);
+          setLoading(false);
+          return;
+        }
       }
 
       setOrder(orderData);
 
       // 2. Fetch order items
-      const { data: itemsData, error: itemsErr } = await supabase
-        .from('order_items')
-        .select(`
-          *,
-          products (
-            name,
-            price,
-            offer_price
-          )
-        `)
-        .eq('order_id', orderId);
+      if (orderData.status !== 'pending_approval') {
+        const { data: itemsData, error: itemsErr } = await supabase
+          .from('order_items')
+          .select(`
+            *,
+            products (
+              name,
+              price,
+              offer_price
+            )
+          `)
+          .eq('order_id', orderId);
 
-      if (!itemsErr && itemsData && itemsData.length > 0) {
-        setItems(itemsData);
-      } else if (orderData.product_details) {
-        // Fallback to product_details json column for online orders
+        if (!itemsErr && itemsData && itemsData.length > 0) {
+          setItems(itemsData);
+          return;
+        }
+      }
+
+      if (orderData.product_details) {
+        // Fallback to product_details json column for online orders/requests
         const jsonItems = Array.isArray(orderData.product_details) 
           ? orderData.product_details 
           : [orderData.product_details];
