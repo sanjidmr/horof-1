@@ -9,6 +9,15 @@ export type SaveProductResult =
   | { ok: true; id: string }
   | { ok: false; message: string; issues?: { path: (string | number)[]; message: string }[] };
 
+function autoSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[^a-z0-9\u0980-\u09FF]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 200);
+}
+
 function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls: string[]) {
   const specObj = rowsToSpecification(d.specification ?? []);
   const perfectForStr = (d.perfect_for_str ?? '')
@@ -19,7 +28,7 @@ function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls:
 
   return {
     name: d.name.trim(),
-    slug: d.slug.trim().toLowerCase(),
+    slug: (d.slug || autoSlug(d.name)).trim().toLowerCase(),
     price: d.price,
     compare_price: d.offer_price ?? null,
     stock: d.stock,
@@ -32,6 +41,7 @@ function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls:
     is_new_arrival: d.is_new_arrival,
     is_product_of_the_day: d.is_product_of_the_day,
     category_id: d.category_id ?? null,
+    subcategory_id: d.subcategory_id ?? null,
     sku: d.sku ?? '',
     section: d.section,
     flash_sale_ends_at: d.section === 'flash_sale' && d.flash_sale_ends_at

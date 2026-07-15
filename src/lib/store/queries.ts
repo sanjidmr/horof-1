@@ -26,31 +26,31 @@ export async function getHomepageData() {
       supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('order', { ascending: true }).limit(12),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
         .eq('is_active', true)
         .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
         .eq('is_active', true)
         .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
         .eq('is_active', true)
         .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
         .eq('is_active', true)
         .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
         .eq('is_active', true)
         .eq('is_product_of_the_day', true)
         .limit(1),
@@ -95,6 +95,7 @@ export async function getSiteSettings() {
 }
 export async function getProducts(params: {
   category?: string;
+  subcategory?: string;
   brand?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -109,6 +110,7 @@ export async function getProducts(params: {
 
   const {
     category,
+    subcategory,
     brand,
     minPrice,
     maxPrice,
@@ -122,12 +124,13 @@ export async function getProducts(params: {
   let query = supabase
     .from('products')
     .select(
-      'id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories!inner(name,slug)',
+      'id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories!inner(name,slug),subcategories!left(name)',
       { count: 'exact' }
     )
     .eq('is_active', true);
 
   if (category) query = query.eq('categories.slug', category);
+  if (subcategory) query = query.eq('subcategories.slug', subcategory);
   if (brand) query = query.eq('brand_id', brand);
   if (section === 'best_selling') query = query.eq('is_best_selling', true);
   else if (section === 'new_arrival') query = query.eq('is_new_arrival', true);
@@ -163,15 +166,17 @@ export async function getProducts(params: {
 
 export async function getFiltersData() {
   const supabase = await createSupabaseServerClient();
-  if (!supabase) return { categories: [] as Category[], brands: [] as any[] };
+  if (!supabase) return { categories: [] as Category[], brands: [] as any[], subcategories: [] as any[] };
 
-  const [{ data: cats }, { data: brands }] = await Promise.all([
+  const [{ data: cats }, { data: brands }, { data: subs }] = await Promise.all([
     supabase.from('categories').select('id,name,slug,parent_id,image_url').eq('is_active', true).order('name'),
     supabase.from('brands').select('id,name,slug').eq('is_active', true).order('name'),
+    supabase.from('subcategories').select('*').eq('is_active', true).order('sort_order', { ascending: true }),
   ]);
 
   return {
     categories: (cats ?? []).map(mapDbCategory),
     brands: brands ?? [],
+    subcategories: subs ?? [],
   };
 }

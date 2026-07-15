@@ -13,7 +13,10 @@ interface FilterSidebarProps {
   setSearchQuery: (query: string) => void;
   selectedCategory: string;
   setSelectedCategory: (cat: string) => void;
+  selectedSubcategory: string;
+  setSelectedSubcategory: (sub: string) => void;
   categories: any[];
+  subcategories: Record<string, any[]>;
   setIsMobileFilterOpen: (open: boolean) => void;
   priceRange: number;
   setPriceRange: (price: number) => void;
@@ -24,7 +27,10 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   setSearchQuery,
   selectedCategory,
   setSelectedCategory,
+  selectedSubcategory,
+  setSelectedSubcategory,
   categories,
+  subcategories,
   setIsMobileFilterOpen,
   priceRange,
   setPriceRange
@@ -51,19 +57,39 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
       </h3>
       <div className="space-y-2 overflow-y-auto pb-4 custom-scrollbar">
         <button
-          onClick={() => { setSelectedCategory('All'); setIsMobileFilterOpen(false); }}
+          onClick={() => { setSelectedCategory('All'); setSelectedSubcategory(''); setIsMobileFilterOpen(false); }}
           className={`w-full text-left px-6 py-3 rounded-xl text-sm transition-all border ${selectedCategory === 'All' ? 'bg-accent-primary text-white border-accent-primary font-bold shadow-lg shadow-accent-primary/20' : 'bg-white text-text-secondary border-transparent hover:border-border-forest'}`}
         >
           All Masterpieces
         </button>
         {categories.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => { setSelectedCategory(cat.name); setIsMobileFilterOpen(false); }}
-            className={`w-full text-left px-6 py-3 rounded-xl text-sm transition-all border ${selectedCategory === cat.name ? 'bg-accent-primary text-white border-accent-primary font-bold shadow-lg shadow-accent-primary/20' : 'bg-white text-text-secondary border-transparent hover:border-border-forest'}`}
-          >
-            {cat.name}
-          </button>
+          <React.Fragment key={cat.id}>
+            <button
+              onClick={() => { setSelectedCategory(cat.name); setSelectedSubcategory(''); setIsMobileFilterOpen(false); }}
+              className={`w-full text-left px-6 py-3 rounded-xl text-sm transition-all border ${selectedCategory === cat.name ? 'bg-accent-primary text-white border-accent-primary font-bold shadow-lg shadow-accent-primary/20' : 'bg-white text-text-secondary border-transparent hover:border-border-forest'}`}
+            >
+              {cat.name}
+            </button>
+            {selectedCategory === cat.name && subcategories[cat.id]?.length > 0 && (
+              <div className="ml-4 space-y-1 border-l-2 border-accent-primary/20 pl-3 mt-1">
+                <button
+                  onClick={() => { setSelectedSubcategory(''); }}
+                  className={`w-full text-left px-4 py-2 rounded-lg text-xs transition-all ${!selectedSubcategory ? 'text-accent-primary font-bold' : 'text-text-secondary hover:text-accent-primary'}`}
+                >
+                  All {cat.name}
+                </button>
+                {subcategories[cat.id].map((sub: any) => (
+                  <button
+                    key={sub.id}
+                    onClick={() => { setSelectedSubcategory(sub.name); setIsMobileFilterOpen(false); }}
+                    className={`w-full text-left px-4 py-2 rounded-lg text-xs transition-all ${selectedSubcategory === sub.name ? 'text-accent-primary font-bold' : 'text-text-secondary hover:text-accent-primary'}`}
+                  >
+                    {sub.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </React.Fragment>
         ))}
       </div>
     </div>
@@ -112,10 +138,12 @@ function ProductsPageContent() {
 
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
+  const [dbSubcategories, setDbSubcategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     const cat = searchParams.get('category');
     return cat ? decodeURIComponent(cat) : 'All';
   });
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [sortBy, setSortBy] = useState('Newest');
   const [priceRange, setPriceRange] = useState(200000);
@@ -123,14 +151,21 @@ function ProductsPageContent() {
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const subcategoriesByCategory: Record<string, any[]> = {};
+  for (const sub of dbSubcategories) {
+    if (!subcategoriesByCategory[sub.category_id]) subcategoriesByCategory[sub.category_id] = [];
+    subcategoriesByCategory[sub.category_id].push(sub);
+  }
+
   useEffect(() => {
     async function fetchData() {
       if (!supabase) return;
       setLoading(true);
 
-      const [prodRes, catRes] = await Promise.all([
+      const [prodRes, catRes, subRes] = await Promise.all([
         supabase.from('products').select('*, categories(name)').eq('is_active', true),
-        supabase.from('categories').select('*').eq('is_active', true)
+        supabase.from('categories').select('*').eq('is_active', true),
+        supabase.from('subcategories').select('*, categories!inner(name)').eq('is_active', true)
       ]);
 
       if (prodRes.data) {
@@ -154,6 +189,10 @@ function ProductsPageContent() {
 
       if (catRes.data) {
         setDbCategories(catRes.data);
+      }
+
+      if (subRes.data) {
+        setDbSubcategories(subRes.data);
       }
       setLoading(false);
     }
@@ -199,7 +238,10 @@ function ProductsPageContent() {
     setSearchQuery,
     selectedCategory,
     setSelectedCategory,
+    selectedSubcategory,
+    setSelectedSubcategory,
     categories: dbCategories,
+    subcategories: subcategoriesByCategory,
     setIsMobileFilterOpen,
     priceRange,
     setPriceRange
@@ -338,7 +380,7 @@ function ProductsPageContent() {
                   <p className="text-text-secondary">Try refining your search or exploring another collection.</p>
                 </div>
                 <button
-                  onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setPriceRange(200000); }}
+                  onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setSelectedSubcategory(''); setPriceRange(200000); }}
                   className="text-xs font-bold text-accent-hover uppercase tracking-[0.2em] underline underline-offset-8"
                 >
                   Clear all filters

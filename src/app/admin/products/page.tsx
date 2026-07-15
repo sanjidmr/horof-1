@@ -24,7 +24,7 @@ export default function AdminProductsPage() {
     const [productsRes, orderItemsRes] = await Promise.all([
       supabase
         .from('products')
-        .select('*, categories(name)')
+        .select('*, categories(name), subcategories(name)')
         .order('created_at', { ascending: false }),
       supabase
         .from('order_items')
@@ -113,6 +113,7 @@ export default function AdminProductsPage() {
               <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100">
                 <th className="px-6 py-4">Product Details</th>
                 <th className="px-6 py-4">Category</th>
+                <th className="px-6 py-4">Subcategory</th>
                 <th className="px-6 py-4">Price</th>
                 <th className="px-6 py-4">Stock</th>
                 <th className="px-6 py-4">Sales</th>
@@ -122,9 +123,9 @@ export default function AdminProductsPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">Loading catalog...</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">Loading catalog...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500">No products found.</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">No products found.</td></tr>
               ) : (
                 products.map((p) => {
                   const cat = p.categories?.name ?? 'Uncategorized';
@@ -146,6 +147,7 @@ export default function AdminProductsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">{cat}</td>
+                      <td className="px-6 py-4 text-sm text-slate-500">{p.subcategories?.name || <span className="text-slate-300">—</span>}</td>
                       <td className="px-6 py-4">
                         <p className="font-bold text-slate-900">{formatPrice(Number(p.price))}</p>
                       </td>

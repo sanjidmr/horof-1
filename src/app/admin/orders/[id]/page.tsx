@@ -12,7 +12,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
 
   const { data: items } = await supabase
     .from('order_items')
-    .select('*, product:products(name, image_url), variant:product_variants(size, color)')
+    .select('*, products(name, image_url), product_variants(size, color)')
     .eq('order_id', id);
 
   const { data: timeline } = await supabase

@@ -13,6 +13,7 @@ type DbProduct = {
   is_best_selling?: boolean;
   product_images?: { url: string; sort_order: number | null }[] | null;
   categories?: { name: string } | null;
+  subcategories?: { name: string } | null;
 };
 
 export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string): Product {
@@ -34,6 +35,7 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
     discountPrice: offer && offer < price ? offer : undefined,
     images: images.length ? images : ['/images/about.jpg'],
     category: categoryName ?? row.categories?.name ?? 'General',
+    subcategory: row.subcategories?.name ?? undefined,
     rating: 0,
     reviewCount: 0,
     stock: row.stock,

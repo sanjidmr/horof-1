@@ -1,4 +1,6 @@
 import React from 'react';
+import { buildMeta } from '@/lib/seo';
+import type { Metadata } from 'next';
 import { HeroSection } from '../components/home/HeroSection';
 import { DecorShowcase } from '../components/home/DecorShowcase';
 import { CategorySection } from '../components/home/CategorySection';
@@ -16,10 +18,15 @@ import { Product } from '../lib/types';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
 import { OurServices } from '../components/home/OurServices';
 
+export const metadata: Metadata = buildMeta({
+  title: 'Horof - Premium Wood Crafts',
+  description: 'Discover premium handcrafted wood crafts, DIY supplies, and home decor from Bangladesh. Shop unique wooden masterpieces at Horof.',
+  path: '/',
+});
+
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
 
-  // Fetch all home page data server-side in parallel
   const [
     { data: catData },
     { data: bestSellingData },
@@ -79,7 +86,6 @@ export default async function HomePage() {
       .order('created_at', { ascending: true })
   ]);
 
-  // Format Categories
   const categories = catData
     ? catData.map(c => ({
       id: c.id,
@@ -90,7 +96,6 @@ export default async function HomePage() {
     }))
     : [];
 
-  // Helper to map products
   const mapProduct = (p: any): Product => ({
     id: p.id,
     slug: p.slug,

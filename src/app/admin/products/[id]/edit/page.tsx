@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { ProductForm, type BrandOption, type CategoryOption, type ProductFormInitial } from '@/components/admin/products/ProductForm';
+import { ProductForm, type BrandOption, type CategoryOption, type SubcategoryOption, type ProductFormInitial } from '@/components/admin/products/ProductForm';
 
 export default async function AdminProductEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,11 +11,12 @@ export default async function AdminProductEditPage({ params }: { params: Promise
 
   if (productError || !product) notFound();
 
-  const [{ data: images }, { data: variants }, { data: categories }, { data: brands }] = await Promise.all([
+  const [{ data: images }, { data: variants }, { data: categories }, { data: brands }, { data: subcategories }] = await Promise.all([
     supabase.from('product_images').select('url').eq('product_id', id).order('sort_order', { ascending: true }),
     supabase.from('product_variants').select('size, color, stock, price_modifier').eq('product_id', id).order('created_at', { ascending: true }),
     supabase.from('categories').select('id, name, parent_id').eq('is_active', true).order('order', { ascending: true }),
     supabase.from('brands').select('id, name').eq('is_active', true).order('name', { ascending: true }),
+    supabase.from('subcategories').select('*').order('sort_order', { ascending: true }),
   ]);
 
   const oc = (product as any).order_config ?? {};
@@ -36,6 +37,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     meta_title: (product as any).meta_title ?? '',
     meta_description: (product as any).meta_description ?? '',
     category_id: product.category_id,
+    subcategory_id: (product as any).subcategory_id ?? null,
     brand_id: (product as any).brand_id ?? null,
     images: images ?? [],
     variants: (variants ?? []).map((v) => ({
@@ -84,6 +86,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     <ProductForm
       mode="edit"
       categories={(categories ?? []) as CategoryOption[]}
+      subcategories={(subcategories ?? []) as SubcategoryOption[]}
       brands={(brands ?? []) as BrandOption[]}
       initial={initial}
     />

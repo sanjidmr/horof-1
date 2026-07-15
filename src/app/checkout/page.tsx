@@ -13,6 +13,12 @@ import { getCheckoutItems, CheckoutItem, clearCheckoutItems } from '@/lib/checko
 import { useAuth } from '@/context/AuthContext';
 import { useCart } from '@/context/CartContext';
 import { placeOrder } from '@/lib/actions/place-order';
+import { validateCoupon } from '@/lib/actions/validate-coupon';
+import { findBestBundleDiscount } from '@/lib/actions/bundle-offers';
+import { checkFreeShippingEligibility } from '@/lib/actions/free-shipping';
+type AppliedCoupon = { discount: number; couponId: string; code: string; label: string };
+type BundleInfo = { discount: number; offerName: string; offerId: string; description: string };
+type FreeShippingInfo = { eligible: boolean; offerName: string; offerId: string; description: string | null };
 import { toast } from 'react-hot-toast';
 
 // Bangladesh Districts grouped by Division
@@ -149,6 +155,31 @@ export default function CheckoutPage() {
   const [deliveryType, setDeliveryType] = useState<'inside_mymensingh' | 'outside_mymensingh' | null>(null);
   const [paymentMethod] = useState<'cod'>('cod');
 
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState('');
+
+  // Bundle Offer State
+  const [bundleInfo, setBundleInfo] = useState<BundleInfo | null>(null);
+  const [checkingBundle, setCheckingBundle] = useState(false);
+
+  // Free Shipping State
+  const [freeShippingInfo, setFreeShippingInfo] = useState<FreeShippingInfo | null>(null);
+  const [checkingFreeShipping, setCheckingFreeShipping] = useState(false);
+
+  // Derived values (must be before effects that reference them)
+  const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const deliveryCharge = deliveryMethod === 'office'
+    ? 0
+    : freeShippingInfo?.eligible
+      ? 0
+      : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
+  const couponDiscount = appliedCoupon?.discount || 0;
+  const bundleDiscount = bundleInfo?.discount || 0;
+  const total = subtotal + deliveryCharge - couponDiscount - bundleDiscount;
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -162,9 +193,30 @@ export default function CheckoutPage() {
     setIsLoaded(true);
   }, [user, authLoading, router]);
 
-  const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
-  const deliveryCharge = deliveryMethod === 'office' ? 0 : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
-  const total = subtotal + deliveryCharge;
+  // Check bundle offers on load
+  useEffect(() => {
+    if (items.length === 0) return;
+    setCheckingBundle(true);
+    const productIds = items.map((i) => i.id);
+    findBestBundleDiscount(productIds, subtotal).then((res) => {
+      setBundleInfo(res);
+    }).finally(() => setCheckingBundle(false));
+  }, [items]);
+
+  // Check free shipping when district changes
+  useEffect(() => {
+    if (!formData.district || deliveryMethod === 'office') {
+      setFreeShippingInfo(null);
+      return;
+    }
+    setCheckingFreeShipping(true);
+    const timeout = setTimeout(() => {
+      checkFreeShippingEligibility(subtotal, formData.district, appliedCoupon?.code).then((res) => {
+        setFreeShippingInfo(res);
+      }).finally(() => setCheckingFreeShipping(false));
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [formData.district, subtotal, appliedCoupon?.code, deliveryMethod]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -202,6 +254,33 @@ export default function CheckoutPage() {
     setCustomArea('');
   };
 
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim();
+    if (!code) return;
+    setValidatingCoupon(true);
+    setCouponError('');
+    try {
+      const res = await validateCoupon(code, subtotal);
+      if (res.valid) {
+        setAppliedCoupon({ discount: res.discount, couponId: res.couponId, code: res.code, label: res.label });
+        toast.success(`Coupon applied! You saved ৳${res.discount.toLocaleString()}`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError('message' in res ? res.message : 'Invalid coupon');
+      }
+    } catch {
+      setCouponError('Failed to validate coupon');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (deliveryMethod === 'online' && !deliveryType) {
@@ -226,6 +305,8 @@ export default function CheckoutPage() {
 
     const charge = deliveryMethod === 'office' ? 0 : deliveryCharge;
     const finalDeliveryType = deliveryMethod === 'office' ? 'office_pickup' : (deliveryType || 'inside_mymensingh');
+    const finalDiscount = (appliedCoupon?.discount || 0) + (bundleInfo?.discount || 0);
+    const finalTotal = subtotal + charge - finalDiscount;
 
     // Cash on Delivery flow
     try {
@@ -236,7 +317,15 @@ export default function CheckoutPage() {
         customer_address: fullAddress,
         delivery_charge: charge,
         delivery_type: finalDeliveryType,
-        total: subtotal + charge,
+        total: finalTotal,
+        coupon_id: appliedCoupon?.couponId || null,
+        coupon_code: appliedCoupon?.code || null,
+        coupon_discount: appliedCoupon?.discount || 0,
+        bundle_discount: bundleInfo?.discount || 0,
+        bundle_offer_id: bundleInfo?.offerId || undefined,
+        bundle_offer_name: bundleInfo?.offerName || undefined,
+        free_shipping_offer_id: freeShippingInfo?.offerId || undefined,
+        free_shipping_offer_name: freeShippingInfo?.offerName || undefined,
         items: items.map(i => ({
           product_id: i.id,
           quantity: i.quantity,
@@ -716,18 +805,92 @@ export default function CheckoutPage() {
                 ))}
               </div>
 
-              <div className="pt-6 border-t border-slate-100 space-y-4 relative z-10">
+              {/* Coupon Section */}
+              <div className="pt-4 border-t border-slate-100 relative z-10">
+                {!appliedCoupon ? (
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">Apply Coupon</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }}
+                        placeholder="Enter coupon code"
+                        className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731] transition-all placeholder:text-slate-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        disabled={validatingCoupon || !couponCode.trim()}
+                        className="px-4 py-2.5 bg-[#1a4731] hover:bg-[#14402a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5"
+                      >
+                        {validatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                        Apply
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                        {couponError}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-emerald-800">{appliedCoupon.code}</p>
+                        <p className="text-[11px] text-emerald-600">Discount: ৳{appliedCoupon.discount.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="text-xs text-red-500 hover:text-red-700 font-bold shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 space-y-4 relative z-10">
                 <div className="flex justify-between text-sm font-medium text-slate-600">
                   <span>Subtotal</span>
                   <span className="font-bold text-slate-800">৳ {subtotal.toLocaleString()}</span>
                 </div>
+                {couponDiscount > 0 && (
+                  <div className="flex justify-between text-sm font-medium text-emerald-600">
+                    <span>Coupon Discount</span>
+                    <span className="font-bold">- ৳ {couponDiscount.toLocaleString()}</span>
+                  </div>
+                )}
+                {bundleDiscount > 0 && bundleInfo && (
+                  <div className="flex justify-between text-sm font-medium text-purple-600">
+                    <span title={bundleInfo.description}>Bundle: {bundleInfo.offerName}</span>
+                    <span className="font-bold">- ৳ {bundleDiscount.toLocaleString()}</span>
+                  </div>
+                )}
+                {checkingBundle && (
+                  <div className="flex justify-between text-sm font-medium text-slate-400">
+                    <span>Checking bundle offers...</span>
+                    <span className="animate-pulse">...</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-medium text-slate-600">
                   <span>Delivery Charge</span>
-                  <span className="font-bold text-slate-800">{deliveryMethod === 'office' ? '৳ 0 (Office Pickup)' : deliveryType ? `৳ ${deliveryCharge}` : '—'}</span>
+                  <span className="font-bold text-slate-800">
+                    {deliveryMethod === 'office'
+                      ? '৳ 0 (Pickup)'
+                      : freeShippingInfo?.eligible
+                        ? <span className="text-emerald-600 flex items-center gap-1">FREE <span className="text-[10px] font-normal">({freeShippingInfo.offerName})</span></span>
+                        : deliveryType ? `৳ ${deliveryCharge}` : '—'}
+                  </span>
                 </div>
                 <div className="flex justify-between text-xl font-display font-black text-[#1a4731] pt-4 border-t border-slate-100 mt-2">
                   <span>Total</span>
-                  <span>৳ {total.toLocaleString()}</span>
+                  <span>৳ {Math.max(0, total).toLocaleString()}</span>
                 </div>
               </div>
 

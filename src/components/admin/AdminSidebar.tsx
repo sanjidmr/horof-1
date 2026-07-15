@@ -19,7 +19,11 @@ import {
   Image as ImageIcon,
   Globe,
   MessageSquare,
-  ClipboardList
+  ClipboardList,
+  Warehouse,
+  Building2,
+  ArrowRightLeft,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -44,11 +48,29 @@ const nav: NavItem[] = [
   { title: 'Orders', href: '/admin/orders', icon: ShoppingCart },
   { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList },
   { title: 'Customers', href: '/admin/customers', icon: Users },
+  {
+    title: 'Inventory',
+    icon: Warehouse,
+    children: [
+      { title: 'Dashboard', href: '/admin/inventory' },
+      { title: 'Products', href: '/admin/inventory/products' },
+      { title: 'Warehouses', href: '/admin/inventory/warehouses' },
+      { title: 'Suppliers', href: '/admin/inventory/suppliers' },
+      { title: 'Purchase Orders', href: '/admin/inventory/purchase-orders' },
+      { title: 'Stock Transfers', href: '/admin/inventory/transfers' },
+      { title: 'Stock Movements', href: '/admin/inventory/stock-movements' },
+    ]
+  },
   { title: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { 
     title: 'Marketing', 
     icon: ImageIcon,
     children: [
+      { title: 'Coupons', href: '/admin/marketing/coupons' },
+      { title: 'Bundle Offers', href: '/admin/marketing/bundle-offers' },
+      { title: 'Free Shipping', href: '/admin/marketing/free-shipping' },
+      { title: 'Email Campaigns', href: '/admin/marketing/email-campaigns' },
+      { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns' },
       { title: 'Site Visuals', href: '/admin/marketing/site-images' },
       { title: 'Our Services', href: '/admin/marketing/services' },
       { title: 'Flash Sale', href: '/admin/marketing/flash-sale' },

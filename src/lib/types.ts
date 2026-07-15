@@ -7,6 +7,7 @@ export interface Product {
   discountPrice?: number;
   images: string[];
   category: string;
+  subcategory?: string;
   rating: number;
   reviewCount: number;
   stock: number;
@@ -72,6 +73,15 @@ export interface Category {
   productCount: number;
 }
 
+export interface Subcategory {
+  id: string;
+  category_id: string;
+  name: string;
+  slug: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface CartItem extends Product {
   quantity: number;
   selectedOptions?: {
@@ -115,4 +125,152 @@ export interface User {
   name: string;
   email: string;
   role: 'customer' | 'admin';
+}
+
+export type CouponType = 'percent' | 'fixed';
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: CouponType;
+  value: number;
+  min_order: number;
+  max_discount: number | null;
+  max_uses: number | null;
+  per_user_limit: number;
+  used_count: number;
+  starts_at: string | null;
+  expires_at: string | null;
+  first_order_only: boolean;
+  applicable_products: string[];
+  applicable_categories: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CouponValidationResult {
+  valid: boolean;
+  coupon?: Coupon;
+  discount?: number;
+  message: string;
+}
+
+// -------------------------------------------------------------------
+// Inventory Types
+// -------------------------------------------------------------------
+export interface Warehouse {
+  id: string;
+  name: string;
+  slug: string;
+  location: string | null;
+  manager: string | null;
+  phone: string | null;
+  email: string | null;
+  capacity: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  slug: string;
+  contact_person: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  country: string;
+  payment_terms: string | null;
+  tax_id: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  po_number: string;
+  supplier_id: string;
+  warehouse_id: string | null;
+  status: 'draft' | 'pending' | 'approved' | 'shipped' | 'received' | 'cancelled';
+  order_date: string;
+  expected_date: string | null;
+  received_date: string | null;
+  invoice_number: string | null;
+  notes: string | null;
+  subtotal: number;
+  tax: number;
+  shipping_cost: number;
+  total_cost: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface PurchaseOrderItem {
+  id: string;
+  purchase_order_id: string;
+  product_id: string;
+  variant_id: string | null;
+  quantity: number;
+  received_quantity: number;
+  unit_cost: number;
+  total_cost: number;
+}
+
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  variant_id: string | null;
+  warehouse_id: string | null;
+  movement_type: string;
+  quantity_change: number;
+  stock_before: number;
+  stock_after: number;
+  reference_type: string | null;
+  reference_id: string | null;
+  notes: string | null;
+  performed_by: string | null;
+  created_at: string;
+}
+
+export interface StockTransfer {
+  id: string;
+  transfer_number: string;
+  product_id: string;
+  variant_id: string | null;
+  quantity: number;
+  from_warehouse_id: string;
+  to_warehouse_id: string;
+  status: 'pending' | 'in_transit' | 'completed' | 'cancelled';
+  notes: string | null;
+  requested_by: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface InventoryReservation {
+  id: string;
+  product_id: string;
+  variant_id: string | null;
+  warehouse_id: string | null;
+  quantity: number;
+  order_id: string | null;
+  order_request_id: string | null;
+  reserved_at: string;
+  expires_at: string | null;
+  released_at: string | null;
+  status: 'active' | 'released' | 'consumed';
+}
+
+export interface InventoryStats {
+  total_products: number;
+  active_products: number;
+  total_stock: number;
+  reserved_stock: number;
+  incoming_stock: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  total_inventory_value: number;
 }

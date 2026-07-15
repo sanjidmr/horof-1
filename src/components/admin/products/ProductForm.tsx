@@ -52,6 +52,7 @@ function isoToDatetimeLocal(iso: string | null | undefined): string {
 }
 
 export type CategoryOption = { id: string; name: string; parent_id: string | null };
+export type SubcategoryOption = { id: string; category_id: string; name: string; slug: string; sort_order: number; is_active: boolean };
 export type BrandOption = { id: string; name: string };
 
 export type ProductFormInitial = {
@@ -70,6 +71,7 @@ export type ProductFormInitial = {
   meta_title?: string | null;
   meta_description?: string | null;
   category_id?: string | null;
+  subcategory_id?: string | null;
   brand_id?: string | null;
   is_best_selling?: boolean;
   is_new_arrival?: boolean;
@@ -99,6 +101,7 @@ export type ProductFormInitial = {
 type ProductFormProps = {
   mode: 'create' | 'edit';
   categories: CategoryOption[];
+  subcategories?: SubcategoryOption[];
   brands: BrandOption[];
   initial?: ProductFormInitial | null;
 };
@@ -118,6 +121,7 @@ const defaultValuesBase: Partial<ProductFormValues> = {
   meta_title: '',
   meta_description: '',
   category_id: '',
+  subcategory_id: '',
   brand_id: '',
   images: [],
   is_best_selling: false,
@@ -136,7 +140,7 @@ const defaultValuesBase: Partial<ProductFormValues> = {
 };
 
 
-export function ProductForm({ mode, categories, brands, initial }: ProductFormProps) {
+export function ProductForm({ mode, categories, subcategories = [], brands, initial }: ProductFormProps) {
   const router = useRouter();
   const slugTouched = useRef(false);
   const [dragActive, setDragActive] = useState(false);
@@ -173,6 +177,7 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
       meta_title: initial.meta_title ?? '',
       meta_description: initial.meta_description ?? '',
       category_id: (initial.category_id as '' | (string & {})) ?? '',
+      subcategory_id: (initial.subcategory_id as '' | (string & {})) ?? '',
       brand_id: (initial.brand_id as '' | (string & {})) ?? '',
       is_best_selling: !!initial.is_best_selling,
       is_new_arrival: !!initial.is_new_arrival,
@@ -244,6 +249,22 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
   const section = form.watch('section');
   const name = form.watch('name');
   const images = form.watch('images') ?? [];
+  const watchCategoryId = form.watch('category_id');
+
+  const filteredSubcategories = subcategories.filter(
+    s => s.category_id === watchCategoryId && s.is_active
+  );
+
+  useEffect(() => {
+    const catId = form.getValues('category_id');
+    const subId = form.getValues('subcategory_id');
+    if (subId && catId) {
+      const belongs = subcategories.some(s => s.id === subId && s.category_id === catId);
+      if (!belongs) {
+        form.setValue('subcategory_id', '', { shouldValidate: true });
+      }
+    }
+  }, [watchCategoryId, subcategories, form]);
 
   useEffect(() => {
     if (mode !== 'create') return;
@@ -1021,6 +1042,33 @@ export function ProductForm({ mode, categories, brands, initial }: ProductFormPr
                         {sortedCategories.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {categoryLabel(c)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Subcategory</Label>
+                <Controller
+                  control={form.control}
+                  name="subcategory_id"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || '__none__'}
+                      onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
+                      disabled={!watchCategoryId || filteredSubcategories.length === 0}
+                    >
+                      <SelectTrigger className="h-11 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none">
+                        <SelectValue placeholder={watchCategoryId ? 'Select subcategory' : 'Select a category first'} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-slate-150 bg-white">
+                        <SelectItem value="__none__" className="text-slate-500">None</SelectItem>
+                        {filteredSubcategories.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

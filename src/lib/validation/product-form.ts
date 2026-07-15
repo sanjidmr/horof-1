@@ -119,10 +119,7 @@ export const productFormSchema = z
   .object({
     id: z.union([z.string(), z.number()]).optional(),
     name: z.string().min(1, 'Name is required'),
-    slug: z
-      .string()
-      .min(1, 'Slug is required')
-      .regex(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u, 'Slug: letters, numbers, hyphens only'),
+    slug: z.string().optional().default(''),
     sku: z.string().optional().default(''),
     price: z.coerce.number().nonnegative('Price must be 0 or greater'),
     offer_price: z
@@ -145,8 +142,12 @@ export const productFormSchema = z
     flash_sale_ends_at: z.string().optional().nullable(),
     meta_title: z.string().optional().default(''),
     meta_description: z.string().optional().default(''),
-    // ✅ এটা দিয়ে replace করো:
     category_id: z
+      .union([z.literal(''), z.literal('__none__'), z.string().uuid()])
+      .optional()
+      .nullable()
+      .transform((v) => (!v || v === '__none__' ? null : v)),
+    subcategory_id: z
       .union([z.literal(''), z.literal('__none__'), z.string().uuid()])
       .optional()
       .nullable()

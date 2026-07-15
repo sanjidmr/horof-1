@@ -3,16 +3,17 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatPrice } from '@/lib/utils';
 
-export const revalidate = 60; // Revalidate every minute
+export const revalidate = 60;
 
-export default async function CategoryPage({ params }: { params: { slug: string } }) {
+export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
   const { data: category } = await supabase
     .from('categories')
     .select('*')
-    .eq('slug', params.slug)
+    .eq('slug', slug)
     .eq('is_active', true)
     .single();
 
@@ -20,12 +21,14 @@ export default async function CategoryPage({ params }: { params: { slug: string 
     notFound();
   }
 
-  const { data: products } = await supabase
-    .from('products')
-    .select('*, categories(name)')
-    .eq('category_id', category.id)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false });
+  const [{ data: subcategories }, { data: products }] = await Promise.all([
+    supabase.from('subcategories').select('*').eq('category_id', category.id).eq('is_active', true).order('sort_order', { ascending: true }),
+    supabase.from('products')
+      .select('*, categories(name), subcategories(name)')
+      .eq('category_id', category.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false }),
+  ]);
 
   return (
     <div className="min-h-screen bg-white pt-20">
@@ -48,6 +51,24 @@ export default async function CategoryPage({ params }: { params: { slug: string 
         </div>
       </div>
 
+      {/* Subcategories */}
+      {subcategories && subcategories.length > 0 && (
+        <div className="max-w-7xl mx-auto px-6 py-10">
+          <h2 className="text-lg font-bold text-slate-700 mb-4">Browse by Subcategory</h2>
+          <div className="flex flex-wrap gap-3">
+            {subcategories.map((sub) => (
+              <a
+                key={sub.id}
+                href={`/products?category=${encodeURIComponent(category.name)}&subcategory=${encodeURIComponent(sub.name)}`}
+                className="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-[#1B4332] hover:text-white hover:border-[#1B4332] transition-all"
+              >
+                {sub.name}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Product Grid */}
       <div className="max-w-7xl mx-auto px-6 py-16">
         {!products || products.length === 0 ? (
@@ -65,7 +86,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">No Image</div>
                   )}
-                  
+
                   {/* Hover Quick View */}
                   <div className="absolute inset-x-4 bottom-4 translate-y-[120%] group-hover:translate-y-0 transition-transform duration-300">
                     <div className="w-full py-3 bg-white/90 backdrop-blur text-slate-900 text-sm font-bold text-center rounded-xl shadow-lg">
@@ -84,6 +105,9 @@ export default async function CategoryPage({ params }: { params: { slug: string 
                       <span className="text-xs text-slate-400 line-through">{formatPrice(Number(product.compare_price))}</span>
                     )}
                   </div>
+                  {product.subcategories?.name && (
+                    <p className="text-xs text-slate-400 mt-1">{product.subcategories.name}</p>
+                  )}
                 </div>
               </Link>
             ))}

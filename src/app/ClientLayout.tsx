@@ -10,6 +10,7 @@ import { WishlistProvider } from '../context/WishlistContext';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
 import { CartSidebar } from '../components/layout/CartSidebar';
+import { PopupDisplay } from '../components/campaign/PopupDisplay';
 
 export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -41,6 +42,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
             </main>
 
             {!isAdminPath && !isDashboardPath && <Footer />}
+            {!isAdminPath && !isDashboardPath && <PopupDisplay />}
             <Toaster 
               position="bottom-right"
               toastOptions={{

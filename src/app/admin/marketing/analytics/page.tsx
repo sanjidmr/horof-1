@@ -1,14 +1,18 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card';
+import { getSiteSetting } from '@/lib/actions/site-settings';
+import { AnalyticsSettingsForm } from './AnalyticsSettingsForm';
 
-export default function AdminAnalyticsPage() {
+export default async function AdminAnalyticsPage() {
+  const measurementId = (await getSiteSetting('google_analytics')) as string | null;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Google Analytics</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-slate-600">
-        Store measurement ID under <code className="font-mono text-xs">site_settings.google_analytics</code>.
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Google Analytics (GA4)</h1>
+        <p className="text-sm text-slate-500">
+          Configure Google Analytics 4 measurement. The tracking code will be injected site-wide when enabled.
+        </p>
+      </div>
+      <AnalyticsSettingsForm initialValue={measurementId || ''} />
+    </div>
   );
 }

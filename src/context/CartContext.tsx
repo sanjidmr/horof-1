@@ -216,6 +216,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       productName: product.name,
     };
 
+    // Analytics tracking
+    try {
+      if (typeof window !== 'undefined') {
+        if ((window as any).fbq) {
+          (window as any).fbq('track', 'AddToCart', {
+            content_name: product.name,
+            content_ids: [product.id],
+            content_type: 'product',
+            value: product.discountPrice || product.price,
+            currency: 'BDT',
+          });
+        }
+        if ((window as any).gtag) {
+          (window as any).gtag('event', 'add_to_cart', {
+            currency: 'BDT',
+            value: (product.discountPrice || product.price) * quantity,
+            items: [{ item_id: product.id, item_name: product.name, quantity }],
+          });
+        }
+      }
+    } catch (_) {}
+
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {

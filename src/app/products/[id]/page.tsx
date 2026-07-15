@@ -16,7 +16,6 @@ import {
   Heart,
   ShieldCheck,
   Truck,
-  ChevronRight,
   Minus,
   Plus,
   Zap,
@@ -40,6 +39,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../../../lib/utils';
 import toast from 'react-hot-toast';
 import { saveCheckoutItems } from '../../../lib/checkoutStorage';
+import { Breadcrumbs } from '../../../components/seo/Breadcrumbs';
+import { productJsonLd } from '../../../lib/seo';
 
 import { ProductCard } from '../../../components/product/ProductCard';
 import { appendRecentProductId } from '../../../lib/recentlyViewed';
@@ -112,7 +113,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
       const [productRes, reviewsRes] = await Promise.all([
         supabase
           .from('products')
-          .select('*, categories(name, slug), brands(name, logo_url), product_variants(*)')
+          .select('*, categories(name, slug), subcategories(name), brands(name, logo_url), product_variants(*)')
           .eq('id', id)
           .eq('is_active', true)
           .single(),
@@ -191,7 +192,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
         // Fetch related products
         const { data: relatedData } = await supabase
           .from('products')
-          .select('*, categories(name)')
+          .select('*, categories(name), subcategories(name)')
           .eq('category_id', data.category_id)
           .neq('id', data.id)
           .eq('is_active', true)
@@ -846,21 +847,23 @@ export default function ProductDetailsPage({ params }: PageProps) {
   return (
     <div className="pt-24 md:pt-32 pb-16 md:pb-24 px-4 md:px-8 max-w-7xl mx-auto overflow-x-hidden">
       {/* Breadcrumbs */}
-      <nav className="hidden sm:flex items-center gap-2 text-[10px] md:text-xs font-bold text-slate-505 uppercase tracking-[0.2em] mb-8 md:mb-12">
-        <Link href="/" className="hover:text-[#2D6A4F] transition-colors">Home</Link>
-        <ChevronRight className="h-3 w-3" />
-        <Link href="/products" className="hover:text-[#2D6A4F] transition-colors">Shop</Link>
-        <ChevronRight className="h-3 w-3" />
-        {product.categories?.name && (
-          <>
-            <Link href={`/category/${product.categories.slug}`} className="hover:text-[#2D6A4F] transition-colors">
-              {product.categories.name}
-            </Link>
-            <ChevronRight className="h-3 w-3" />
-          </>
-        )}
-        <span className="text-slate-950 truncate max-w-[200px]">{product.name}</span>
-      </nav>
+      <Breadcrumbs
+        items={[
+          { name: 'Shop', href: '/products' },
+          ...(product.categories?.name ? [{ name: product.categories.name, href: `/category/${product.categories.slug}` }] : []),
+          { name: product.name },
+        ]}
+      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{
+        __html: JSON.stringify(productJsonLd({
+          name: product.name,
+          description: product.description,
+          price: unitPrice,
+          image: product.images?.[0],
+          sku: product.sku,
+          category: product.category,
+        }))
+      }} />
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 items-start">
@@ -1473,6 +1476,14 @@ export default function ProductDetailsPage({ params }: PageProps) {
               {product.description || 'No description has been recorded for this product.'}
             </p>
           </div>
+
+          {/* Subcategory */}
+          {product.subcategories?.name && (
+            <div className="text-left">
+              <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-1">Subcategory</span>
+              <span className="text-sm font-semibold text-[#2D6A4F]">{product.subcategories.name}</span>
+            </div>
+          )}
 
           {/* Brand Partner Info */}
           {product.brandName && (
