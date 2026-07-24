@@ -43,8 +43,26 @@ export const LoginForm: React.FC = () => {
       await login({ email, password });
       toast.success('Logged in successfully!');
       
-      const nextTarget = searchParams?.get('next') || '/';
-      router.push(nextTarget);
+      const explicitNext = searchParams?.get('next');
+      if (explicitNext) {
+        router.push(explicitNext);
+      } else {
+        const { createSupabaseBrowserClient } = await import('../../lib/supabase/client');
+        const supabase = createSupabaseBrowserClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase.from('profiles').select('role, is_warehouse_staff').eq('id', user.id).maybeSingle();
+          if (profile?.is_warehouse_staff || profile?.role === 'warehouse_staff') {
+            router.push('/admin/warehouse/orders');
+          } else if (profile?.role === 'admin') {
+            router.push('/admin/dashboard');
+          } else {
+            router.push('/');
+          }
+        } else {
+          router.push('/');
+        }
+      }
       router.refresh();
     } catch (err: any) {
       console.error('Login error:', err);
@@ -52,7 +70,8 @@ export const LoginForm: React.FC = () => {
       
       if (errMsg.toLowerCase().includes('email not confirmed')) {
         toast.error('Email verification is required.');
-        router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+        const nextParam = searchParams?.get('next');
+        router.push(`/verify-otp?email=${encodeURIComponent(email)}${nextParam ? `&next=${encodeURIComponent(nextParam)}` : ''}`);
       } else if (errMsg.toLowerCase().includes('invalid login credentials') || errMsg.toLowerCase().includes('invalid_grant')) {
         setError('Invalid credentials. Please verify and try again.');
       } else {

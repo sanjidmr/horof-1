@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { CouponManager } from '@/components/admin/marketing/CouponManager';
+import type { CouponRow } from '@/lib/actions/coupons';
 
 export default async function AdminCouponsPage() {
   const supabase = await createSupabaseServerClient();
@@ -13,8 +14,7 @@ export default async function AdminCouponsPage() {
         <p className="text-sm text-slate-500">Create and manage discount codes for your customers.</p>
       </div>
       
-      <CouponManager initialCoupons={data || []} />
+      <CouponManager initialCoupons={(data || []) as CouponRow[]} />
     </div>
   );
 }
-

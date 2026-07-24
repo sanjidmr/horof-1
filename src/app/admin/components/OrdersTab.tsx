@@ -38,7 +38,7 @@ export const OrdersTab = () => {
       // Let's fetch orders directly.
       const { data, error } = await supabase
         .from('orders')
-        .select('*, profiles(full_name, email)')
+        .select('*, profiles!customer_id(full_name, email)')
         .order('created_at', { ascending: false });
         
       if (error) {

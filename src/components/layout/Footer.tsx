@@ -19,98 +19,15 @@ import {
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
-// ─── Inline SVG Payment Icons ─────────────────────────────────────────────────
+// ─── Cash on Delivery Badge ───────────────────────────────────────────────────
 
 const paymentMethods = [
   {
-    name: 'bKash',
+    name: 'Cash on Delivery',
     el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#E2136E" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Arial,sans-serif">bKash</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Nagad',
-    el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#F05A28" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Arial,sans-serif">Nagad</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Rocket',
-    el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#8B008B" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Arial,sans-serif">Rocket</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Visa',
-    el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#1A1F71" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold" fontFamily="Arial,sans-serif" letterSpacing="-0.5">VISA</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Mastercard',
-    el: (
-      <svg viewBox="0 0 44 22" className="h-[18px] w-auto">
-        <rect width="44" height="22" rx="3" fill="#252525" />
-        <circle cx="16" cy="11" r="8" fill="#EB001B" />
-        <circle cx="28" cy="11" r="8" fill="#F79E1B" />
-        <path d="M22 4.5a8 8 0 0 1 0 13A8 8 0 0 1 22 4.5z" fill="#FF5F00" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Amex',
-    el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#007BC1" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="6.5" fontWeight="bold" fontFamily="Arial,sans-serif">AMERICAN EXPRESS</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'DBBL',
-    el: (
-      <svg viewBox="0 0 56 22" className="h-[18px] w-auto">
-        <rect width="56" height="22" rx="3" fill="#006400" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Arial,sans-serif">DBBL</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'BRAC Bank',
-    el: (
-      <svg viewBox="0 0 60 22" className="h-[18px] w-auto">
-        <rect width="60" height="22" rx="3" fill="#C8102E" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="7.5" fontWeight="bold" fontFamily="Arial,sans-serif">BRAC Bank</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Islami Bank',
-    el: (
-      <svg viewBox="0 0 60 22" className="h-[18px] w-auto">
-        <rect width="60" height="22" rx="3" fill="#006341" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="7" fontWeight="bold" fontFamily="Arial,sans-serif">Islami Bank</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'SSLCommerz',
-    el: (
-      <svg viewBox="0 0 64 22" className="h-[18px] w-auto">
-        <rect width="64" height="22" rx="3" fill="#FF6600" />
-        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="7" fontWeight="bold" fontFamily="Arial,sans-serif">SSLCommerz</text>
+      <svg viewBox="0 0 72 22" className="h-[18px] w-auto">
+        <rect width="72" height="22" rx="3" fill="#1a4731" />
+        <text x="50%" y="15" textAnchor="middle" fill="white" fontSize="7.5" fontWeight="bold" fontFamily="Arial,sans-serif">CASH ON DELIVERY</text>
       </svg>
     ),
   },
@@ -127,11 +44,8 @@ const quickLinks = [
 ];
 
 const supportLinks = [
-  { label: 'Help Center', href: '/faq' },
-  { label: 'Shipping Policy', href: '/policy' },
-  { label: 'Return & Refund', href: '/policy' },
-  { label: 'Track Your Order', href: '/dashboard' },
-  { label: 'Privacy Policy', href: '/policy' },
+  { label: 'Terms & Conditions', href: '/terms' },
+  { label: 'Privacy Policy', href: '/privacy-policy' },
 ];
 
 const socialLinks = [
@@ -331,9 +245,8 @@ export const Footer: React.FC = () => {
             </p>
             <div className="flex items-center gap-5">
               {[
-                { label: 'Privacy', href: '/policy' },
-                { label: 'Terms', href: '/policy' },
-                { label: 'Cookies', href: '/policy' },
+                { label: 'Privacy Policy', href: '/privacy-policy' },
+                { label: 'Terms', href: '/terms' },
               ].map((l) => (
                 <Link
                   key={l.label}

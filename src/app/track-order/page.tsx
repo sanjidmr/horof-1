@@ -25,7 +25,7 @@ import { Input } from '@/components/shadcn/input';
 import { Label } from '@/components/shadcn/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { formatPrice, cn } from '@/lib/utils';
-import { cancelOrderAction, requestOrderReturnAction } from '@/lib/actions/orders';
+import { cancelOrderAction, requestOrderReturnAction, getOrderTrackingData } from '@/lib/actions/orders';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -86,6 +86,18 @@ export default function TrackOrderPage() {
     setOrder(null);
 
     try {
+      // Try server action first (works with RLS for logged-in users)
+      try {
+        const result = await getOrderTrackingData(idOrTrx);
+        if (result.order) {
+          setOrder(result.order);
+          setTimelineEvents(result.timeline);
+          setLoading(false);
+          return;
+        }
+      } catch {}
+      
+      // Fallback: direct client-side query
       const isIntegerId = /^\d+$/.test(idOrTrx.trim());
       const query = supabase
         .from('orders')

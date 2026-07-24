@@ -32,7 +32,7 @@ export default function AdminLayoutClient({
   };
 
   return (
-    <div className="flex min-h-svh bg-white text-slate-900">
+    <div className="flex h-svh overflow-hidden bg-white text-slate-900">
       <AdminSidebar />
 
       {/* Mobile Sidebar (Bottom Drawer) */}

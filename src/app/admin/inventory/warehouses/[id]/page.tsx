@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { Package, MapPin, Users, Phone, Mail, Warehouse, ArrowRightLeft, Activity, AlertTriangle, DollarSign, BarChart3, Edit2 } from 'lucide-react';
 import Link from 'next/link';
+import WarehouseStaffManager from '@/components/admin/WarehouseStaffManager';
 
 async function getDetail(id: string) {
   const supabase = await createSupabaseServerClient();
@@ -207,6 +208,9 @@ export default async function WarehouseDetailPage({ params }: { params: Promise<
           </div>
         </div>
       </div>
+
+      {/* Staff Management */}
+      <WarehouseStaffManager warehouseId={id} warehouseName={warehouse.name} />
 
       {/* Transfers + Movements */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -128,36 +128,37 @@ export default function ProductDetailsPage({ params }: PageProps) {
       if (productRes.data && !productRes.error) {
         const data = productRes.data;
         
-        // Reconcile flat DB fields into order_config structure
+        // Use order_config directly from DB (JSONB), with defaults for null/partial data
+        const raw = (data.order_config as any) || {};
         const mappedProduct = {
           ...data,
           category: data.categories?.name || 'Uncategorized',
           brandName: data.brands?.name || null,
           brandLogo: data.brands?.logo_url || null,
           order_config: {
-            quantity_discounts: data.quantity_discounts || [],
-            specification_steps: data.specification_steps || [],
+            quantity_discounts: raw.quantity_discounts || [],
+            specification_steps: raw.specification_steps || [],
             design_charge: {
-              enabled: !!data.design_charge_enabled,
-              amount: Number(data.design_charge_amount || 0),
-              description: data.design_charge_notes || ''
+              enabled: !!raw.design_charge?.enabled,
+              amount: Number(raw.design_charge?.amount || 0),
+              description: raw.design_charge?.description || ''
             },
             customer_notes_settings: {
-              enabled: !!data.customer_notes_enabled,
-              title: data.customer_notes_title || 'Specification Need Details',
-              placeholder: data.custom_placeholder || ''
+              enabled: !!raw.customer_notes_settings?.enabled,
+              title: raw.customer_notes_settings?.title || 'Specification Need Details',
+              placeholder: raw.customer_notes_settings?.placeholder || ''
             },
             pricing_config: {
-              min_order_qty: Number(data.min_order_qty || 1),
-              max_order_qty: data.max_order_qty ? Number(data.max_order_qty) : null
+              min_order_qty: Number(raw.pricing_config?.min_order_qty || 1),
+              max_order_qty: raw.pricing_config?.max_order_qty ? Number(raw.pricing_config?.max_order_qty) : null
             },
-            order_request_settings: data.order_request_settings || {
+            order_request_settings: raw.order_request_settings || {
               enable_order_requests: true,
               enable_add_to_cart: true,
               enable_direct_order: true,
               auto_approval: false
             },
-            display_controls: data.display_controls || {
+            display_controls: raw.display_controls || {
               show_discount_table: true,
               show_specifications: true,
               show_customer_notes: true,
@@ -722,52 +723,51 @@ export default function ProductDetailsPage({ params }: PageProps) {
       return;
     }
 
-    requireAuth(() => {
-      // Gather all choices and custom inputs
-      const choices: Record<string, string> = {};
-      if (selectedSize) choices['Size'] = selectedSize;
-      if (selectedColor) choices['Finish/Color'] = selectedColor;
-      
-      if (product.order_config?.specification_steps) {
-        product.order_config.specification_steps.forEach((step: any) => {
-          const val = selectedSpecs[step.id];
-          if (val) choices[step.name] = val;
-        });
-      }
-
-      // Add other custom specs
-      Object.entries(selectedSpecs).forEach(([key, val]) => {
-        if (val && !choices[key]) {
-          // If it's a step ID, find step name
-          const step = product.order_config?.specification_steps?.find((s: any) => s.id === key);
-          const name = step ? step.name : key;
-          choices[name] = val as string;
-        }
+    // Gather all choices and custom inputs
+    const choices: Record<string, string> = {};
+    if (selectedSize) choices['Size'] = selectedSize;
+    if (selectedColor) choices['Finish/Color'] = selectedColor;
+    
+    if (product.order_config?.specification_steps) {
+      product.order_config.specification_steps.forEach((step: any) => {
+        const val = selectedSpecs[step.id];
+        if (val) choices[step.name] = val;
       });
+    }
 
-      // Prepare the item for checkout
-      const checkoutItem = {
-        id: product.id.toString(),
-        name: product.name,
-        price: finalTotal / quantity, // average unit price including discounts + design charges
-        image: product.image || (product.images && product.images[0]) || '/placeholder.png',
-        quantity: quantity,
-        // Custom fields for order request details:
-        selectedSpecs: choices,
-        designCharge: designChargeAmount,
-        customerNotes: customerNotes,
-        originalPrice: unitPrice,
-        discountPercent: discountPercent,
-        discountAmount: discountAmount,
-        finalTotal: finalTotal
-      };
+    // Add other custom specs
+    Object.entries(selectedSpecs).forEach(([key, val]) => {
+      if (val && !choices[key]) {
+        // If it's a step ID, find step name
+        const step = product.order_config?.specification_steps?.find((s: any) => s.id === key);
+        const name = step ? step.name : key;
+        choices[name] = val as string;
+      }
+    });
 
-      // Save to sessionStorage
-      saveCheckoutItems([checkoutItem]);
+    // Prepare the item for checkout
+    const checkoutItem = {
+      id: product.id.toString(),
+      name: product.name,
+      price: finalTotal / quantity, // average unit price including discounts + design charges
+      image: product.image || (product.images && product.images[0]) || '/placeholder.png',
+      quantity: quantity,
+      // Custom fields for order request details:
+      selectedSpecs: choices,
+      designCharge: designChargeAmount,
+      customerNotes: customerNotes,
+      originalPrice: unitPrice,
+      discountPercent: discountPercent,
+      discountAmount: discountAmount,
+      finalTotal: finalTotal
+    };
 
-      // Redirect to checkout
+    // Save to sessionStorage BEFORE auth check
+    saveCheckoutItems([checkoutItem]);
+
+    requireAuth(() => {
       router.push('/checkout');
-    }, 'Please log in to submit an order request.');
+    }, 'Please log in to submit an order request.', '/checkout');
   };
 
   const handleConfirmOrderRequest = async (e: React.FormEvent) => {
@@ -869,6 +869,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12 items-start">
         {/* Left Side: Product Gallery (7 columns on desktop) */}
         <div className="lg:col-span-7 space-y-6">
+          <div className="lg:sticky lg:top-28 lg:self-start space-y-6">
           <div className="relative">
             {/* Main Interactive Zoom Card */}
             <div 
@@ -935,6 +936,32 @@ export default function ProductDetailsPage({ params }: PageProps) {
               ))}
             </div>
           )}
+
+          {/* Social Share Buttons */}
+          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            <span className="text-[10px]">Share</span>
+            <button
+              onClick={() => {
+                if (typeof navigator !== 'undefined' && navigator.share) {
+                  navigator.share({ title: product.name, url: window.location.href });
+                } else {
+                  navigator.clipboard?.writeText(window.location.href);
+                  toast.success('Link copied to clipboard');
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-slate-200 hover:border-[#2D6A4F] hover:text-[#2D6A4F] transition-all"
+            >
+              <Upload className="w-3 h-3" /> Share
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${product.name} - ${window.location.href}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-slate-200 hover:border-green-500 hover:text-green-600 transition-all"
+            >
+              <MessageSquare className="w-3 h-3" /> WhatsApp
+            </a>
+          </div>
 
           {/* ===== MOBILE ONLY: Right Panel inserted here ===== */}
           <div className="lg:hidden space-y-6">
@@ -1477,6 +1504,36 @@ export default function ProductDetailsPage({ params }: PageProps) {
             </p>
           </div>
 
+          {/* Product Details */}
+          {product.product_details && typeof product.product_details === 'object' && Object.keys(product.product_details).length > 0 && (
+            <div className="space-y-3 pt-4 border-t border-slate-100 text-left">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Product Details</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(product.product_details as Record<string, string>).map(([key, value]) => (
+                  <div key={key} className="bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{key}</span>
+                    <span className="text-sm font-semibold text-slate-800">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Specifications */}
+          {product.specification && typeof product.specification === 'object' && Object.keys(product.specification).length > 0 && (
+            <div className="space-y-3 pt-4 border-t border-slate-100 text-left">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Specifications</h3>
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden">
+                {Object.entries(product.specification as Record<string, string>).map(([key, value]) => (
+                  <div key={key} className="flex justify-between px-4 py-2.5 bg-white text-sm">
+                    <span className="font-semibold text-slate-600">{key}</span>
+                    <span className="text-slate-800 font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Subcategory */}
           {product.subcategories?.name && (
             <div className="text-left">
@@ -1525,6 +1582,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
               </div>
             </div>
           )}
+        </div>
         </div>
 
         {/* Right Side: Sticky Purchase & Customization Panel (5 columns) — DESKTOP ONLY */}

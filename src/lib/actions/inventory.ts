@@ -1,5 +1,6 @@
 'use server';
 
+import { createClient } from '@supabase/supabase-js';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
@@ -657,4 +658,213 @@ export async function updateProductDefaultWarehouse(productId: string, warehouse
   revalidatePath('/admin/inventory/products');
   revalidatePath('/admin/inventory/warehouses');
   return { success: true };
+}
+
+// -----------------------------------------------------------------------
+// Warehouse Staff Management
+// -----------------------------------------------------------------------
+export async function getWarehouseStaff(warehouseId: string) {
+  const { supabase } = await getAdmin();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, phone, avatar_url, created_at')
+    .eq('assigned_warehouse_id', warehouseId)
+    .eq('is_warehouse_staff', true)
+    .order('full_name');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function assignStaffToWarehouse(userId: string, warehouseId: string) {
+  const { supabase } = await getAdmin();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_warehouse_staff: true, assigned_warehouse_id: warehouseId })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/inventory/warehouses/${warehouseId}`);
+  return { success: true };
+}
+
+export async function removeStaffFromWarehouse(userId: string) {
+  const { supabase } = await getAdmin();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ is_warehouse_staff: false, assigned_warehouse_id: null })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/admin/inventory/warehouses');
+  return { success: true };
+}
+
+export async function getUnassignedStaff() {
+  const { supabase } = await getAdmin();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, phone')
+    .or('is_warehouse_staff.is.null,assigned_warehouse_id.is.null')
+    .order('full_name');
+  if (error) throw new Error(error.message);
+  return (data || []).filter((u: any) => !u.assigned_warehouse_id);
+}
+
+export async function createWarehouseStaff(params: {
+  email: string;
+  password: string;
+  full_name: string;
+  phone?: string;
+  warehouseId: string;
+}) {
+  await getAdmin();
+
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: params.email,
+    password: params.password,
+    email_confirm: true,
+    user_metadata: { full_name: params.full_name },
+  });
+
+  if (authError) {
+    if (authError.message?.includes('already exists')) {
+      throw new Error('An account with this email already exists');
+    }
+    throw new Error(authError.message || 'Failed to create staff account');
+  }
+  if (!authData.user) throw new Error('Failed to create staff account');
+
+  const { error: profileErr } = await supabaseAdmin.from('profiles').upsert({
+    id: authData.user.id,
+    email: params.email,
+    full_name: params.full_name,
+    phone: params.phone || null,
+    role: 'customer',
+    is_banned: false,
+    is_warehouse_staff: true,
+    assigned_warehouse_id: params.warehouseId,
+  }, { onConflict: 'id' });
+
+  if (profileErr) {
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+    throw new Error(`Profile creation failed: ${profileErr.message}`);
+  }
+
+  revalidatePath(`/admin/inventory/warehouses/${params.warehouseId}`);
+  return { user: authData.user };
+}
+
+// -----------------------------------------------------------------------
+// Warehouse Staff + Admin Product Actions
+// -----------------------------------------------------------------------
+async function requireWarehouseStaffOrAdmin() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error('No Supabase client');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  const { data: profile } = await supabase.from('profiles')
+    .select('role, is_warehouse_staff, assigned_warehouse_id')
+    .eq('id', user.id).single();
+  if (!profile) throw new Error('Forbidden');
+  const isAdmin = profile.role === 'admin';
+  const isWarehouseStaff = profile.is_warehouse_staff === true;
+  if (!isAdmin && !isWarehouseStaff) throw new Error('Forbidden');
+  return { supabase, user, profile, isAdmin, isWarehouseStaff };
+}
+
+export async function getWarehouseProducts(warehouseId: string) {
+  const { supabase, isAdmin, profile } = await requireWarehouseStaffOrAdmin();
+  if (!isAdmin && profile.assigned_warehouse_id !== warehouseId) throw new Error('Access denied to this warehouse');
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, sku, slug, price, stock, reserved_stock, min_stock_level, stock_status, is_active, default_warehouse_id, image, cost_price, categories:categories(name), brands:brands(name)')
+    .or(`default_warehouse_id.eq.${warehouseId},default_warehouse_id.is.null`)
+    .order('name');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function warehouseUpdateStock(productId: string, newStock: number, reason?: string) {
+  const { supabase, isAdmin, profile } = await requireWarehouseStaffOrAdmin();
+  const { data: product, error: pErr } = await supabase
+    .from('products')
+    .select('id, stock, default_warehouse_id')
+    .eq('id', productId).single();
+  if (pErr || !product) throw new Error('Product not found');
+  if (!isAdmin && product.default_warehouse_id !== profile.assigned_warehouse_id) {
+    throw new Error('You can only update stock for products in your warehouse');
+  }
+  const oldStock = product.stock || 0;
+  const diff = newStock - oldStock;
+  const { error: upErr } = await supabase
+    .from('products')
+    .update({ stock: newStock })
+    .eq('id', productId);
+  if (upErr) throw new Error(upErr.message);
+  try {
+    await supabase.from('stock_movements').insert({
+      product_id: productId,
+      warehouse_id: product.default_warehouse_id,
+      type: diff > 0 ? 'adjustment_in' : 'adjustment_out',
+      quantity: Math.abs(diff),
+      reference: reason || 'Manual stock update by warehouse staff',
+      performed_by: (await supabase.auth.getUser()).data.user?.id,
+    });
+  } catch (_) {}
+  revalidatePath('/admin/warehouse/products');
+  revalidatePath('/admin/inventory/products');
+  return { success: true };
+}
+
+export async function warehouseAssignProduct(productId: string, warehouseId: string | null) {
+  const { supabase, isAdmin, profile } = await requireWarehouseStaffOrAdmin();
+  if (!isAdmin && warehouseId !== null && warehouseId !== profile.assigned_warehouse_id) {
+    throw new Error('You can only assign products to your own warehouse');
+  }
+  const { error } = await supabase
+    .from('products')
+    .update({ default_warehouse_id: warehouseId })
+    .eq('id', productId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/admin/warehouse/products');
+  revalidatePath('/admin/inventory/products');
+  return { success: true };
+}
+
+export async function warehouseUpdateProduct(productId: string, updates: { price?: number; name?: string; description?: string; is_active?: boolean }) {
+  const { supabase, isAdmin, profile } = await requireWarehouseStaffOrAdmin();
+  const { data: product, error: pErr } = await supabase
+    .from('products')
+    .select('id, default_warehouse_id')
+    .eq('id', productId).single();
+  if (pErr || !product) throw new Error('Product not found');
+  if (!isAdmin && product.default_warehouse_id !== profile.assigned_warehouse_id) {
+    throw new Error('You can only update products in your warehouse');
+  }
+  const payload: Record<string, any> = {};
+  if (updates.price !== undefined) payload.price = updates.price;
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.is_active !== undefined) payload.is_active = updates.is_active;
+  if (Object.keys(payload).length === 0) return { success: true };
+  const { error } = await supabase.from('products').update(payload).eq('id', productId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/admin/warehouse/products');
+  revalidatePath('/admin/inventory/products');
+  return { success: true };
+}
+
+export async function getAllActiveWarehouses() {
+  const { supabase } = await requireWarehouseStaffOrAdmin();
+  const { data, error } = await supabase
+    .from('warehouses')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name');
+  if (error) throw new Error(error.message);
+  return data || [];
 }

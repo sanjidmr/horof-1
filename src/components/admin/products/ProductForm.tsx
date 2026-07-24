@@ -5,13 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Plus, Trash2, Upload, X, Image as ImageIcon, Settings, Tag, DollarSign, Layers, Sparkles, FileText, Globe, CheckCircle, Package, Percent, ChevronDown, ChevronUp, ToggleLeft, Eye, MessageSquare, SlidersHorizontal, ClipboardList } from 'lucide-react';
+import { Plus, Trash2, Upload, X, Image as ImageIcon, Tag, DollarSign, Layers, FileText, Globe, CheckCircle, Package, Percent, ChevronDown, ChevronUp, ToggleLeft, Eye, MessageSquare, SlidersHorizontal, ClipboardList } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { saveProduct, type SaveProductResult } from '@/lib/actions/save-product';
 import {
   productFormSchema,
-  PRODUCT_SECTIONS,
-  specificationToRows,
   type ProductFormValues,
 } from '@/lib/validation/product-form';
 import { Button } from '@/components/shadcn/button';
@@ -53,8 +51,6 @@ function isoToDatetimeLocal(iso: string | null | undefined): string {
 
 export type CategoryOption = { id: string; name: string; parent_id: string | null };
 export type SubcategoryOption = { id: string; category_id: string; name: string; slug: string; sort_order: number; is_active: boolean };
-export type BrandOption = { id: string; name: string };
-
 export type ProductFormInitial = {
   id?: string;
   name?: string;
@@ -65,7 +61,8 @@ export type ProductFormInitial = {
   stock?: number;
   description?: string | null;
   specification?: unknown;
-  perfect_for?: string[] | null;
+  product_details?: { key: string; value: string }[] | null;
+  perfect_for?: string[] | string | null;
   section?: ProductFormValues['section'];
   flash_sale_ends_at?: string | null;
   meta_title?: string | null;
@@ -102,7 +99,6 @@ type ProductFormProps = {
   mode: 'create' | 'edit';
   categories: CategoryOption[];
   subcategories?: SubcategoryOption[];
-  brands: BrandOption[];
   initial?: ProductFormInitial | null;
 };
 
@@ -114,20 +110,22 @@ const defaultValuesBase: Partial<ProductFormValues> = {
   offer_price: undefined,
   stock: 0,
   description: '',
-  specification: [{ key: '', value: '' }],
+  specification: [],
+  product_details: [],
   perfect_for_str: '',
+  perfect_for_tags: [],
   section: 'best_selling',
   flash_sale_ends_at: '',
   meta_title: '',
   meta_description: '',
   category_id: '',
   subcategory_id: '',
-  brand_id: '',
+  brand_id: undefined,
   images: [],
+  variants: [],
   is_best_selling: false,
   is_new_arrival: false,
   is_product_of_the_day: false,
-  variants: [{ size: '', color: '', stock: 0, price_modifier: 0 }],
   order_config: {
     quantity_discounts: [],
     specification_steps: [],
@@ -140,7 +138,7 @@ const defaultValuesBase: Partial<ProductFormValues> = {
 };
 
 
-export function ProductForm({ mode, categories, subcategories = [], brands, initial }: ProductFormProps) {
+export function ProductForm({ mode, categories, subcategories = [], initial }: ProductFormProps) {
   const router = useRouter();
   const slugTouched = useRef(false);
   const [dragActive, setDragActive] = useState(false);
@@ -156,6 +154,23 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
         return { path, url };
       }) ?? [];
 
+    const specRows = (() => {
+      if (!initial.specification) return [];
+      if (Array.isArray(initial.specification)) return initial.specification as { key: string; value: string }[];
+      if (typeof initial.specification === 'object') {
+        return Object.entries(initial.specification as Record<string, string>).map(([k, v]) => ({ key: k, value: v }));
+      }
+      return [];
+    })();
+
+    const detailRows = initial.product_details ?? [];
+
+    const perfectForTags = Array.isArray(initial.perfect_for)
+      ? initial.perfect_for
+      : typeof initial.perfect_for === 'string'
+        ? initial.perfect_for.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
     return {
       ...defaultValuesBase,
       id: initial.id,
@@ -166,32 +181,20 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
       offer_price: initial.offer_price != null ? Number(initial.offer_price) : undefined,
       stock: Number(initial.stock ?? 0),
       description: initial.description ?? '',
-      specification: specificationToRows(initial.specification),
-      perfect_for_str: Array.isArray(initial.perfect_for)
-        ? initial.perfect_for.join(', ')
-        : typeof initial.perfect_for === 'string'
-          ? initial.perfect_for
-          : '',
+      specification: specRows.length > 0 ? specRows : (defaultValuesBase.specification ?? []),
+      product_details: detailRows.length > 0 ? detailRows : (defaultValuesBase.product_details ?? []),
+      perfect_for_str: perfectForTags.join(', '),
+      perfect_for_tags: perfectForTags,
       section: (initial.section as ProductFormValues['section']) ?? 'best_selling',
       flash_sale_ends_at: isoToDatetimeLocal(initial.flash_sale_ends_at ?? undefined),
       meta_title: initial.meta_title ?? '',
       meta_description: initial.meta_description ?? '',
       category_id: (initial.category_id as '' | (string & {})) ?? '',
       subcategory_id: (initial.subcategory_id as '' | (string & {})) ?? '',
-      brand_id: (initial.brand_id as '' | (string & {})) ?? '',
       is_best_selling: !!initial.is_best_selling,
       is_new_arrival: !!initial.is_new_arrival,
       is_product_of_the_day: !!initial.is_product_of_the_day,
       images: imgs,
-      variants:
-        initial.variants && initial.variants.length > 0
-          ? initial.variants.map((v) => ({
-            size: v.size ?? '',
-            color: v.color ?? '',
-            stock: Number(v.stock),
-            price_modifier: Number(v.price_modifier),
-          }))
-          : [{ size: '', color: '', stock: 0, price_modifier: 0 }],
       order_config: {
         quantity_discounts: initial.order_config?.quantity_discounts ?? [],
         specification_steps: (initial.order_config?.specification_steps ?? []).map(s => ({
@@ -220,16 +223,6 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
     values: defaultValues,
   });
 
-  const { fields: specFields, append: appendSpec, remove: removeSpec } = useFieldArray({
-    control: form.control,
-    name: 'specification',
-  });
-
-  const { fields: variantFields, append: appendVariant, remove: removeVariant } = useFieldArray({
-    control: form.control,
-    name: 'variants',
-  });
-
   const { fields: discountFields, append: appendDiscount, remove: removeDiscount, move: moveDiscount } = useFieldArray({
     control: form.control,
     name: 'order_config.quantity_discounts',
@@ -240,10 +233,46 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
     name: 'order_config.specification_steps',
   });
 
+  const { fields: specFields, append: appendSpec, remove: removeSpec, move: moveSpec } = useFieldArray({
+    control: form.control,
+    name: 'specification',
+  });
+
+  const { fields: detailFields, append: appendDetail, remove: removeDetail, move: moveDetail } = useFieldArray({
+    control: form.control,
+    name: 'product_details',
+  });
+
   const [draggedDiscountIdx, setDraggedDiscountIdx] = useState<number | null>(null);
   const [draggedStepIdx, setDraggedStepIdx] = useState<number | null>(null);
+  const [draggedSpecIdx, setDraggedSpecIdx] = useState<number | null>(null);
+  const [draggedDetailIdx, setDraggedDetailIdx] = useState<number | null>(null);
 
   const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({});
+
+  // Perfect for tag input state
+  const [tagInput, setTagInput] = useState('');
+
+  const addTag = (tag: string) => {
+    const t = tag.trim().replace(/,$/, '');
+    if (!t) return;
+    const current = form.getValues('perfect_for_tags') ?? [];
+    if (!current.includes(t)) {
+      const next = [...current, t];
+      form.setValue('perfect_for_tags', next);
+      form.setValue('perfect_for_str', next.join(', '));
+    }
+  };
+
+  const removeTag = (idx: number) => {
+    const current = form.getValues('perfect_for_tags') ?? [];
+    const next = current.filter((_, i) => i !== idx);
+    form.setValue('perfect_for_tags', next);
+    form.setValue('perfect_for_str', next.join(', '));
+  };
+
+  // Submission lock to prevent race conditions
+  const submittingRef = useRef(false);
   const toggleStep = (id: string) => setOpenSteps(p => ({ ...p, [id]: !p[id] }));
 
   const section = form.watch('section');
@@ -333,12 +362,18 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
     form.setValue('images', current, { shouldValidate: true, shouldDirty: true });
   };
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const onSubmit = form.handleSubmit(
     async (values) => {
-      // Check if we exceed the 4 Product of the Day limit
-      if (values.is_product_of_the_day) {
-        const sb = createSupabaseBrowserClient();
-        if (sb) {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
+      setSaveError(null);
+      try {
+      const sb = createSupabaseBrowserClient();
+
+      if (values.is_product_of_the_day && sb) {
+        try {
           let query = sb
             .from('products')
             .select('id', { count: 'exact', head: true })
@@ -353,6 +388,8 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
             toast.error('You can select a maximum of 4 Products of the Day. Please deselect another product first.');
             return;
           }
+        } catch (e) {
+          console.warn('Product of the day count check failed, proceeding with save:', e);
         }
       }
 
@@ -365,13 +402,14 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
             : null,
       };
 
-      const res = (await saveProduct(payload)) as SaveProductResult;
+      const res = await saveProduct(payload) as SaveProductResult;
       if (res.ok) {
-        toast.success(mode === 'create' ? 'Product created' : 'Product updated');
-        router.refresh();
-        router.push('/admin/products');
+        toast.success(mode === 'create' ? 'Product saved successfully' : 'Product updated successfully');
+        try { router.refresh(); } catch (_) {}
+        setTimeout(() => { router.push('/admin/products'); }, 150);
       } else {
         const err = res as Extract<SaveProductResult, { ok: false }>;
+        setSaveError(err.message);
         toast.error(err.message);
         if (err.issues?.length) {
           for (const i of err.issues.slice(0, 5)) {
@@ -380,8 +418,15 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
           }
         }
       }
+      } catch (e: any) {
+        const msg = e?.message || 'An unexpected error occurred while saving';
+        setSaveError(msg);
+        toast.error(msg);
+        console.error('Save error:', e);
+      } finally {
+        submittingRef.current = false;
+      }
     },
-    // ✅ এটা দিয়ে replace করো:
     (errors) => {
       const extractErrors = (obj: any, prefix = ''): string[] => {
         const msgs: string[] = [];
@@ -402,7 +447,7 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
       if (allErrors.length > 0) {
         allErrors.slice(0, 3).forEach(msg => toast.error(msg));
       } else {
-        toast.error('Form validation failed. Check console.');
+        toast.error('Please fix the highlighted form fields before saving');
       }
     }
   );
@@ -427,22 +472,18 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
             Cancel
           </Button>
 
-          {Object.keys(form.formState.errors).length > 0 && (
-            <pre className="text-xs text-red-600 bg-red-50 p-3 rounded-xl overflow-auto max-h-40">
-              {JSON.stringify(
-                Object.fromEntries(
-                  Object.entries(form.formState.errors).map(([k, v]) => [k, (v as any)?.message || 'error'])
-                ),
-                null, 2
-              )}
-            </pre>
+          {saveError && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl max-w-sm">
+              <p className="font-bold mb-1">Failed to save product:</p>
+              <p>{saveError}</p>
+            </div>
           )}
           <Button
             type="submit"
-            disabled={form.formState.isSubmitting}
-            className="bg-[#1a4731] hover:bg-[#256044] text-white font-bold px-6 py-2.5 rounded-full shadow-lg shadow-forest-900/10 hover:shadow-forest-900/20 hover:-translate-y-0.5 transition-all duration-200 h-11"
+            disabled={form.formState.isSubmitting || submittingRef.current}
+            className="bg-[#1a4731] hover:bg-[#256044] text-white font-bold px-6 py-2.5 rounded-full shadow-lg shadow-forest-900/10 hover:shadow-forest-900/20 hover:-translate-y-0.5 transition-all duration-200 h-11 min-w-[160px]"
           >
-            {form.formState.isSubmitting ? 'Saving…' : 'Save product'}
+            {form.formState.isSubmitting || submittingRef.current ? 'Saving Product…' : 'Save Product'}
           </Button>
         </div>
       </div>
@@ -478,6 +519,108 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                   {...form.register('description')}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Product Details section */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-[#1a4731]" />
+                <CardTitle className="text-base font-bold text-slate-900">Product Details</CardTitle>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white" onClick={() => appendDetail({ key: '', value: '' })}>
+                <Plus className="mr-1 h-4 w-4" /> Add Detail
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3 bg-white">
+              {detailFields.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No details yet. Add key-value pairs to showcase product highlights.</p>}
+              {detailFields.map((field, index) => (
+                <div
+                  key={field.id}
+                  draggable
+                  onDragStart={() => setDraggedDetailIdx(index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (draggedDetailIdx !== null && draggedDetailIdx !== index) {
+                      moveDetail(draggedDetailIdx, index);
+                    }
+                    setDraggedDetailIdx(null);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 transition-all",
+                    draggedDetailIdx === index ? "opacity-40 border-dashed border-[#1a4731]" : ""
+                  )}
+                >
+                  <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1 shrink-0">☰</div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Label</Label>
+                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. Material" {...form.register(`product_details.${index}.key`)} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Value</Label>
+                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. Oak Wood" {...form.register(`product_details.${index}.value`)} />
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 mt-5">
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === 0} onClick={() => moveDetail(index, index - 1)}>▲</Button>
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === detailFields.length - 1} onClick={() => moveDetail(index, index + 1)}>▼</Button>
+                    <Button type="button" size="icon" variant="ghost" className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-9 w-9 shrink-0" onClick={() => removeDetail(index)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Specifications section */}
+          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-[#1a4731]" />
+                <CardTitle className="text-base font-bold text-slate-900">Specifications</CardTitle>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white" onClick={() => appendSpec({ key: '', value: '' })}>
+                <Plus className="mr-1 h-4 w-4" /> Add Spec
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 space-y-3 bg-white">
+              {specFields.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No specifications yet. Add technical specs, dimensions, or attributes.</p>}
+              {specFields.map((field, index) => (
+                <div
+                  key={field.id}
+                  draggable
+                  onDragStart={() => setDraggedSpecIdx(index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (draggedSpecIdx !== null && draggedSpecIdx !== index) {
+                      moveSpec(draggedSpecIdx, index);
+                    }
+                    setDraggedSpecIdx(null);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 transition-all",
+                    draggedSpecIdx === index ? "opacity-40 border-dashed border-[#1a4731]" : ""
+                  )}
+                >
+                  <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1 shrink-0">☰</div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Attribute</Label>
+                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. Weight" {...form.register(`specification.${index}.key`)} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Value</Label>
+                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. 2.5 kg" {...form.register(`specification.${index}.value`)} />
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 mt-5">
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === 0} onClick={() => moveSpec(index, index - 1)}>▲</Button>
+                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === specFields.length - 1} onClick={() => moveSpec(index, index + 1)}>▼</Button>
+                    <Button type="button" size="icon" variant="ghost" className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-9 w-9 shrink-0" onClick={() => removeSpec(index)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
@@ -553,120 +696,6 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
             </CardContent>
           </Card>
 
-          {/* Card 3: Specifications */}
-          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
-            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
-              <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-[#1a4731]" />
-                <CardTitle className="text-base font-bold text-slate-900">Specifications</CardTitle>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white"
-                variant="outline"
-                onClick={() => appendSpec({ key: '', value: '' })}
-              >
-                <Plus className="mr-1 h-4 w-4" /> Add Row
-              </Button>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4 bg-white">
-              {specFields.map((field, index) => (
-                <div key={field.id} className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-slate-250 shadow-sm">
-                  <Input
-                    placeholder="Specification Name (e.g., Weight)"
-                    className="flex-1 min-w-[120px] h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                    {...form.register(`specification.${index}.key` as const)}
-                  />
-                  <Input
-                    placeholder="Value (e.g., 2.5 kg)"
-                    className="flex-1 min-w-[120px] h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                    {...form.register(`specification.${index}.value` as const)}
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-10 w-10 shrink-0"
-                    disabled={specFields.length <= 1}
-                    onClick={() => removeSpec(index)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Card 4: Variants */}
-          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
-            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[#1a4731]" />
-                <CardTitle className="text-base font-bold text-slate-900">Variants</CardTitle>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white"
-                variant="outline"
-                onClick={() => appendVariant({ size: '', color: '', stock: 0, price_modifier: 0 })}
-              >
-                <Plus className="mr-1 h-4 w-4" /> Add Variant
-              </Button>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4 bg-white">
-              {variantFields.map((field, index) => (
-                <div key={field.id} className="grid gap-4 rounded-2xl border border-slate-250 p-4 sm:grid-cols-12 bg-white shadow-sm">
-                  <div className="sm:col-span-3">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Size</Label>
-                    <Input
-                      className="h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                      {...form.register(`variants.${index}.size` as const)}
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Color</Label>
-                    <Input
-                      className="h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                      {...form.register(`variants.${index}.color` as const)}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Stock</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                      {...form.register(`variants.${index}.stock`, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block">Price Modifier (BDT)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      className="h-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-lg text-sm font-medium"
-                      {...form.register(`variants.${index}.price_modifier`, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="flex items-end sm:col-span-1 justify-end">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-10 w-10 shrink-0"
-                      disabled={variantFields.length <= 1}
-                      onClick={() => removeVariant(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
           {/* ───── ORDER CONFIGURATION ───── */}
 
           {/* Quantity Discount Settings */}
@@ -702,11 +731,11 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                   <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1">☰</div>
                   <div className="flex-1 space-y-1">
                     <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quantity (PCS)</Label>
-                    <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.quantity`, { valueAsNumber: true })} />
+                    <Input type="text" inputMode="numeric" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.quantity`)} />
                   </div>
                   <div className="flex-1 space-y-1">
                     <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Discount %</Label>
-                    <Input type="number" min={0} max={100} step="0.1" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.discount_percent`, { valueAsNumber: true })} />
+                    <Input type="text" inputMode="decimal" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register(`order_config.quantity_discounts.${index}.discount_percent`)} />
                   </div>
                   <div className="flex items-center gap-1 mt-5 shrink-0">
                     <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === 0} onClick={() => moveDiscount(index, index - 1)}>
@@ -812,7 +841,7 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                         <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Add. Price (BDT)</Label>
-                            <Input type="number" min={0} step="0.01" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" {...form.register(`order_config.specification_steps.${stepIdx}.additional_price`, { valueAsNumber: true })} />
+                            <Input type="text" inputMode="decimal" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm" {...form.register(`order_config.specification_steps.${stepIdx}.additional_price`)} />
                           </div>
                           <div className="flex flex-col gap-2 pt-1">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Required</Label>
@@ -856,7 +885,7 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
               </label>
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Design Fee (BDT)</Label>
-                <Input type="number" min={0} step="0.01" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="0.00" {...form.register('order_config.design_charge.amount', { valueAsNumber: true })} />
+                <Input type="text" inputMode="decimal" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="0.00" {...form.register('order_config.design_charge.amount')} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</Label>
@@ -900,11 +929,11 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Min Order Qty *</Label>
-                  <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register('order_config.pricing_config.min_order_qty', { valueAsNumber: true })} />
+                  <Input type="text" inputMode="numeric" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" {...form.register('order_config.pricing_config.min_order_qty')} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Order Qty</Label>
-                  <Input type="number" min={1} className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="Unlimited" {...form.register('order_config.pricing_config.max_order_qty', { valueAsNumber: true })} />
+                  <Input type="text" inputMode="numeric" className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="Unlimited" {...form.register('order_config.pricing_config.max_order_qty')} />
                 </div>
               </div>
             </CardContent>
@@ -977,12 +1006,11 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">৳</span>
                   <Input
                     id="price"
-                    type="number"
-                    step="0.01"
-                    min={0}
+                    type="text"
+                    inputMode="decimal"
                     className="h-11 pl-8 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-semibold"
                     placeholder="0.00"
-                    {...form.register('price', { valueAsNumber: true })}
+                    {...form.register('price')}
                   />
                 </div>
                 {form.formState.errors.price && <p className="text-xs text-red-600 font-medium">{form.formState.errors.price.message}</p>}
@@ -994,12 +1022,11 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">৳</span>
                   <Input
                     id="offer_price"
-                    type="number"
-                    step="0.01"
-                    min={0}
+                    type="text"
+                    inputMode="decimal"
                     className="h-11 pl-8 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-semibold"
                     placeholder="Optional"
-                    {...form.register('offer_price', { valueAsNumber: true })}
+                    {...form.register('offer_price')}
                   />
                 </div>
                 {form.formState.errors.offer_price && <p className="text-xs text-red-600 font-medium">{String(form.formState.errors.offer_price.message)}</p>}
@@ -1009,11 +1036,11 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                 <Label htmlFor="stock" className="text-xs font-bold text-slate-500 uppercase tracking-widest">Base Stock *</Label>
                 <Input
                   id="stock"
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="numeric"
                   className="h-11 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-semibold"
                   placeholder="0"
-                  {...form.register('stock', { valueAsNumber: true })}
+                  {...form.register('stock')}
                 />
                 {form.formState.errors.stock && <p className="text-xs text-red-600 font-medium">{form.formState.errors.stock.message}</p>}
               </div>
@@ -1069,29 +1096,6 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                         {filteredSubcategories.map((s) => (
                           <SelectItem key={s.id} value={s.id}>
                             {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Brand</Label>
-                <Controller
-                  control={form.control}
-                  name="brand_id"
-                  render={({ field }) => (
-                    <Select value={field.value || '__none__'} onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}>
-                      <SelectTrigger className="h-11 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none">
-                        <SelectValue placeholder="Select brand" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl border-slate-150 bg-white">
-                        <SelectItem value="__none__" className="text-slate-500">None</SelectItem>
-                        {brands.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>
-                            {b.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1171,22 +1175,7 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
                 </label>
               </div>
 
-              <div className="pt-4 border-t border-slate-100">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Special Segment</Label>
-                <div className="grid gap-2">
-                  {PRODUCT_SECTIONS.filter(s => !['best_selling', 'new_arrival', 'product_of_the_day'].includes(s)).map((sec) => (
-                    <label key={sec} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 p-2.5 bg-white hover:border-[#1a4731]/30 transition-all select-none shadow-sm">
-                      <input
-                        type="radio"
-                        className="h-4 w-4 text-[#1a4731] focus:ring-[#1a4731]/20 transition-all"
-                        value={sec}
-                        {...form.register('section')}
-                      />
-                      <span className="text-xs font-semibold capitalize text-slate-700">{sec.replace(/_/g, ' ')}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+
 
               {section === 'flash_sale' && (
                 <div className="space-y-2 mt-4 p-4 bg-white rounded-xl border border-red-200 transition-all duration-300 shadow-sm">
@@ -1213,16 +1202,34 @@ export function ProductForm({ mode, categories, subcategories = [], brands, init
             </CardHeader>
             <CardContent className="p-6 space-y-5 bg-white">
               <div className="space-y-2">
-                <Label htmlFor="perfect_for_str" className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Perfect for (tags)</Label>
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Perfect for (tags)</Label>
                 <div className="relative">
-                  <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                   <Input
-                    id="perfect_for_str"
-                    placeholder="e.g. Men, Gifting, Summer"
+                    placeholder="Type a tag and press Enter"
                     className="h-11 pl-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-medium"
-                    {...form.register('perfect_for_str')}
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addTag(tagInput);
+                        setTagInput('');
+                      }
+                    }}
                   />
                 </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {form.watch('perfect_for_tags')?.map((tag, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-[#1a4731]/10 px-2.5 py-1 text-xs font-semibold text-[#1a4731]">
+                      {tag}
+                      <button type="button" onClick={() => removeTag(idx)} className="hover:text-red-600 transition-colors">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <input type="hidden" {...form.register('perfect_for_str')} />
               </div>
 
               <div className="space-y-2">
@@ -1294,11 +1301,11 @@ function StepOptionsEditor({ form, stepIdx }: StepOptionsEditorProps) {
             <div className="relative w-28 shrink-0">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">৳</span>
               <Input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 placeholder="Modifier"
                 className="h-8 pl-5 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-xs"
-                {...form.register(`order_config.specification_steps.${stepIdx}.options.${optionIdx}.price_modifier`, { valueAsNumber: true })}
+                {...form.register(`order_config.specification_steps.${stepIdx}.options.${optionIdx}.price_modifier`)}
               />
             </div>
             <Button

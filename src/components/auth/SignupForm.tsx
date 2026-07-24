@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,8 @@ export const SignupForm: React.FC = () => {
 
   const { signup } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams?.get('next') || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +51,9 @@ export const SignupForm: React.FC = () => {
       });
 
       toast.success('Registration initiated. Please confirm your email.');
-      router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+      const verifyParams = new URLSearchParams({ email });
+      if (redirectTo) verifyParams.set('next', redirectTo);
+      router.push(`/verify-otp?${verifyParams.toString()}`);
     } catch (err: any) {
       console.error('Signup error:', err);
       let errMsg = err?.message || 'Something went wrong. Please try again.';

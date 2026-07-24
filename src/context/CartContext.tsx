@@ -62,120 +62,103 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        // Fetch cart items from Supabase
-        const { data, error } = await supabase
+        // Fetch cart items IDs and quantities from Supabase (separate queries to avoid FK join issues)
+        const { data: cartRows, error: cartError } = await supabase
           .from('cart_items')
-          .select(`
-            quantity,
-            product_id,
-            products (
-              id,
-              name,
-              description,
-              price,
-              compare_price,
-              stock,
-              perfect_for,
-              product_images (
-                url,
-                sort_order
-              ),
-              categories (
-                name
-              )
-            )
-          `)
+          .select('product_id, quantity')
           .eq('user_id', user.id);
 
-        if (error) {
-          console.error('Error fetching cart from DB:', error.message ?? error);
+        if (cartError) {
+          const msg = cartError?.message || cartError?.error_description || cartError?.code || 'cart_items table may not exist';
+          console.warn('[CartContext] Could not fetch cart from DB:', msg);
           return;
         }
 
-        if (data && data.length > 0) {
-          const dbCart: CartItem[] = data.map((item: any) => {
-            const prod = item.products;
+        if (cartRows && cartRows.length > 0) {
+          // Aggregate quantities for duplicate product_ids
+          const qtyMap = new Map<string, number>();
+          cartRows.forEach(r => {
+            const pid = String(r.product_id);
+            qtyMap.set(pid, (qtyMap.get(pid) || 0) + r.quantity);
+          });
+
+          const uniqueIds = [...qtyMap.keys()].filter(id => id != null && !isNaN(Number(id)));
+
+          const { data: products, error: prodError } = await supabase
+            .from('products')
+            .select('id, name, description, price, compare_price, stock, perfect_for')
+            .in('id', uniqueIds) as unknown as { data: any[] | null; error: any };
+
+          if (prodError) {
+            console.warn('[CartContext] Could not fetch product details:', prodError?.message || prodError);
+            return;
+          }
+
+          const productMap = new Map((products || []).map(p => [String(p.id), p]));
+
+          const dbCart: CartItem[] = [...qtyMap.entries()].map(([productId, qty]) => {
+            const prod = productMap.get(productId);
             if (!prod) return null;
 
-            const images = (prod.product_images ?? [])
-              .slice()
-              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-              .map((i: any) => i.url)
-              .filter(Boolean);
-
-            const categoryName = Array.isArray(prod.categories)
-              ? prod.categories[0]?.name
-              : prod.categories?.name;
-
             return {
-              id: String(item.product_id),
-              name: prod.name,
+              id: String(productId),
+              name: prod.name || 'Unknown Product',
               description: prod.description || '',
               price: Number(prod.price),
               discountPrice: prod.compare_price ? Number(prod.compare_price) : undefined,
-              images: images.length ? images : ['/images/about.jpg'],
-              category: categoryName || 'General',
+              images: ['/images/about.jpg'],
+              category: 'General',
               rating: 0,
               reviewCount: 0,
               stock: prod.stock || 0,
               tags: prod.perfect_for || [],
-              quantity: item.quantity
+              quantity: qty
             };
           }).filter(Boolean) as CartItem[];
 
           // Merge local cart with database cart
           setCart((prevCart) => {
             const merged = [...dbCart];
-
             prevCart.forEach((localItem) => {
               const exists = merged.find((item) => item.id === localItem.id);
               if (!exists) {
                 merged.push(localItem);
-                // Add to Supabase
-                supabase
-                  .from('cart_items')
-                  .insert({
-                    user_id: user.id,
-                    product_id: parseInt(localItem.id),
-                    quantity: localItem.quantity
-                  })
-                  .then(({ error: err }) => {
-                    if (err) console.error('Error syncing local item to DB:', err);
-                  });
+                supabase.from('cart_items').insert({
+                  user_id: user.id,
+                  product_id: Number(localItem.id),
+                  quantity: localItem.quantity
+                }).then(({ error: err }) => {
+                  if (err) console.warn('[CartContext] Error syncing local item to DB:', err?.message || err);
+                });
               } else if (exists.quantity < localItem.quantity) {
-                // If local quantity is higher, use it and update DB
                 exists.quantity = localItem.quantity;
-                supabase
-                  .from('cart_items')
-                  .update({ quantity: localItem.quantity })
+                supabase.from('cart_items').update({ quantity: localItem.quantity })
                   .eq('user_id', user.id)
-                  .eq('product_id', parseInt(localItem.id))
+                  .eq('product_id', Number(localItem.id))
                   .then(({ error: err }) => {
-                    if (err) console.error('Error updating DB quantity:', err);
+                    if (err) console.warn('[CartContext] Error updating DB quantity:', err?.message || err);
                   });
               }
             });
-
             return merged;
           });
         } else {
-          // If DB is empty, but local has items, sync local to DB
           setCart((prevCart) => {
             if (prevCart.length > 0) {
               const itemsToSync = prevCart.map(item => ({
                 user_id: user.id,
-                product_id: parseInt(item.id),
+                product_id: Number(item.id),
                 quantity: item.quantity
               }));
               supabase.from('cart_items').insert(itemsToSync).then(({ error: err }) => {
-                if (err) console.error('Error syncing local cart to DB:', err);
+                if (err) console.warn('[CartContext] Error syncing local cart to DB:', err?.message || err);
               });
             }
             return prevCart;
           });
         }
-      } catch (err) {
-        console.error('Failed to sync DB cart:', err);
+      } catch (err: any) {
+        console.warn('[CartContext] Failed to sync DB cart:', err?.message || err);
       }
     };
 

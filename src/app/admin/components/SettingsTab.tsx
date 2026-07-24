@@ -33,8 +33,8 @@ export const SettingsTab = () => {
           <div className="h-12 w-12 bg-[#071A12] rounded-xl flex items-center justify-center border border-[#22C55E]/20 mb-6 group-hover:scale-110 transition-transform">
             <CreditCard className="h-6 w-6 text-[#22C55E]" />
           </div>
-          <h3 className="text-xl font-bold text-[#ECFDF5] mb-2">Payment Providers</h3>
-          <p className="text-[#A7F3D0] text-sm mb-6">Configure Stripe, PayPal, SSLCommerz, and local payment gateways.</p>
+          <h3 className="text-xl font-bold text-[#ECFDF5] mb-2">Cash on Delivery</h3>
+          <p className="text-[#A7F3D0] text-sm mb-6">All orders are processed with Cash on Delivery. No online payment gateways needed.</p>
           <button className="px-5 py-2.5 bg-[#14532D] text-[#ECFDF5] rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#22C55E] hover:text-[#071A12] transition-colors">
             Configure
           </button>

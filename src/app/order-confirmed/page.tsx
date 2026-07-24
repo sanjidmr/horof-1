@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   CheckCircle2, ShoppingBag, ArrowRight, MapPin, 
   Phone, User, Calendar, CreditCard, Loader2, Home,
-  Clock, Truck, Heart, Mail, Sparkles
+  Clock, Truck, Heart, Mail, Sparkles, Package, Eye
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useCart } from '@/context/CartContext';
@@ -327,10 +327,16 @@ function OrderConfirmedContent() {
 
         </div>
 
-        {/* Continue Shopping CTA (Centered, track order removed) */}
-        <div className="flex justify-center pt-4">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+          <Link
+            href={`/track-order?order=${order.id}`}
+            className="inline-flex justify-center items-center gap-2 px-10 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase tracking-widest transition-all duration-300 shadow-lg shadow-emerald-900/20 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <Eye className="w-4 h-4" /> Track Order
+          </Link>
           <Link href="/" className="inline-flex justify-center items-center gap-2 px-10 py-4 bg-[#1B4332] hover:bg-[#143224] text-white font-bold rounded-xl text-xs uppercase tracking-widest transition-all duration-300 shadow-lg shadow-[#1B4332]/20 hover:-translate-y-0.5 active:translate-y-0">
-            Continue Shopping
+            <ShoppingBag className="w-4 h-4" /> Continue Shopping
           </Link>
         </div>
 

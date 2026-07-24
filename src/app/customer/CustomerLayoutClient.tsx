@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { User, ShoppingBag, LogOut, Home, ArrowLeft } from 'lucide-react';
+import { User, ShoppingBag, LogOut, Home, ArrowLeft, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
@@ -32,6 +32,7 @@ export default function CustomerLayoutClient({
     { name: 'Dashboard', href: '/customer/dashboard', icon: Home },
     { name: 'My Profile', href: '/customer/profile', icon: User },
     { name: 'My Orders', href: '/customer/orders', icon: ShoppingBag },
+    { name: 'Support', href: '/customer/support', icon: HelpCircle },
   ];
 
   return (

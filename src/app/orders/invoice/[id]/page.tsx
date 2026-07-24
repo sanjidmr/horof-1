@@ -161,7 +161,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="flex flex-col md:flex-row justify-between items-start gap-8 border-t pt-8 mt-8 border-slate-100">
           <div className="text-xs text-slate-500 space-y-2 leading-relaxed">
             <h4 className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">Payment Details</h4>
-            <p><span className="font-bold">Method:</span> <span className="capitalize">{order.payment_method || 'SSLCommerz'}</span></p>
+            <p><span className="font-bold">Method:</span> <span className="capitalize">{order.payment_method || 'Cash on Delivery'}</span></p>
             <p><span className="font-bold">Status:</span> <span className="capitalize font-bold text-slate-900">{order.payment_status || 'Pending'}</span></p>
             {metadata.customer_notes && (
               <div className="p-3 bg-amber-50/50 border border-amber-100 rounded-xl mt-2 max-w-sm">

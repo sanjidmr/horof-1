@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 import { Lock, X, LogIn, UserPlus } from 'lucide-react';
 
 interface AuthModalContextType {
-  requireAuth: (action: () => void, message?: string) => void;
+  requireAuth: (action: () => void, message?: string, redirectTo?: string) => void;
   isOpen: boolean;
   message: string;
   closeModal: () => void;
@@ -19,15 +19,17 @@ export const AuthModalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('Please login first to continue.');
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [pendingRedirect, setPendingRedirect] = useState<string>('/checkout');
   const router = useRouter();
   const pathname = usePathname();
 
-  const requireAuth = (action: () => void, customMessage?: string) => {
+  const requireAuth = (action: () => void, customMessage?: string, redirectTo?: string) => {
     if (isAuthenticated) {
       action();
     } else {
       setMessage(customMessage || 'Please login first to continue.');
       setPendingAction(() => action);
+      setPendingRedirect(redirectTo || pathname || '/');
       setIsOpen(true);
     }
   };
@@ -39,13 +41,13 @@ export const AuthModalProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const handleRedirectToLogin = () => {
     setIsOpen(false);
-    const encodedPath = encodeURIComponent(pathname || '/');
+    const encodedPath = encodeURIComponent(pendingRedirect);
     router.push(`/login?next=${encodedPath}`);
   };
 
   const handleRedirectToSignup = () => {
     setIsOpen(false);
-    const encodedPath = encodeURIComponent(pathname || '/');
+    const encodedPath = encodeURIComponent(pendingRedirect);
     router.push(`/signup?next=${encodedPath}`);
   };
 

@@ -8,7 +8,6 @@ import {
   Package,
   ShoppingCart,
   Users,
-  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeft,
@@ -21,9 +20,13 @@ import {
   MessageSquare,
   ClipboardList,
   Warehouse,
-  Building2,
   ArrowRightLeft,
-  BarChart3
+  BarChart3,
+  Monitor,
+  Headset,
+  Shield,
+  UserCog,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -32,60 +35,118 @@ import { useAdminSidebar } from '@/stores/admin-sidebar-store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { usePermissions } from '@/context/PermissionContext';
+import { useAuth } from '@/context/AuthContext';
 
 type NavItem = {
   title: string;
   href?: string;
   icon: ElementType;
-  children?: { title: string; href: string }[];
+  permission?: string;
+  children?: { title: string; href: string; permission?: string }[];
 };
 
-const nav: NavItem[] = [
-  { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-  { title: 'Categories', href: '/admin/categories', icon: Layers },
-  { title: 'Products', href: '/admin/products', icon: Package },
-  { title: 'Orders', href: '/admin/orders', icon: ShoppingCart },
-  { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList },
-  { title: 'Customers', href: '/admin/customers', icon: Users },
+const allNav: NavItem[] = [
+  { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
+  { title: 'Categories', href: '/admin/categories', icon: Layers, permission: 'categories.view' },
+  {
+    title: 'Products',
+    icon: Package,
+    permission: 'products.view',
+    children: [
+      { title: 'All Products', href: '/admin/products', permission: 'products.view' },
+      { title: 'Add New Product', href: '/admin/products/new', permission: 'products.create' },
+      { title: 'Bulk Upload', href: '/admin/products/bulk-upload', permission: 'products.create' },
+    ],
+  },
+  { title: 'Orders', href: '/admin/orders', icon: ShoppingCart, permission: 'orders.view' },
+  { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList, permission: 'orders.view' },
+  { title: 'Returns', href: '/admin/returns', icon: RotateCcw, permission: 'orders.view' },
+  { title: 'Warehouse', href: '/admin/warehouse/orders', icon: Warehouse, permission: 'inventory.view' },
+  { title: 'Customers', href: '/admin/customers', icon: Users, permission: 'customers.view' },
+  {
+    title: 'Reports',
+    icon: BarChart3,
+    permission: 'reports.view',
+    children: [
+      { title: 'Dashboard', href: '/admin/reports/dashboard', permission: 'reports.view' },
+      { title: 'Sales', href: '/admin/reports/sales', permission: 'reports.sales' },
+      { title: 'Products', href: '/admin/reports/products', permission: 'reports.products' },
+      { title: 'Customers', href: '/admin/reports/customers', permission: 'reports.customers' },
+      { title: 'Profit & Loss', href: '/admin/reports/profit-loss', permission: 'reports.finance' },
+      { title: 'Orders', href: '/admin/reports/orders', permission: 'reports.view' },
+      { title: 'Inventory', href: '/admin/reports/inventory', permission: 'reports.inventory' },
+      { title: 'Finance', href: '/admin/reports/finance', permission: 'reports.finance' },
+      { title: 'Shipping', href: '/admin/reports/shipping', permission: 'reports.view' },
+      { title: 'Marketing', href: '/admin/reports/marketing', permission: 'reports.marketing' },
+      { title: 'Suppliers', href: '/admin/reports/suppliers', permission: 'reports.view' },
+      { title: 'Team Activity', href: '/admin/reports/employees', permission: 'reports.view' },
+      { title: 'Website Analytics', href: '/admin/reports/analytics', permission: 'analytics.view' },
+    ]
+  },
   {
     title: 'Inventory',
     icon: Warehouse,
+    permission: 'inventory.view',
     children: [
-      { title: 'Dashboard', href: '/admin/inventory' },
-      { title: 'Products', href: '/admin/inventory/products' },
-      { title: 'Warehouses', href: '/admin/inventory/warehouses' },
-      { title: 'Suppliers', href: '/admin/inventory/suppliers' },
-      { title: 'Purchase Orders', href: '/admin/inventory/purchase-orders' },
-      { title: 'Stock Transfers', href: '/admin/inventory/transfers' },
-      { title: 'Stock Movements', href: '/admin/inventory/stock-movements' },
+      { title: 'Dashboard', href: '/admin/inventory', permission: 'inventory.view' },
+      { title: 'Products', href: '/admin/inventory/products', permission: 'inventory.view' },
+      { title: 'Warehouses', href: '/admin/inventory/warehouses', permission: 'warehouse.view' },
+      { title: 'Stock Transfers', href: '/admin/inventory/transfers', permission: 'inventory.transfers' },
     ]
   },
-  { title: 'Messages', href: '/admin/messages', icon: MessageSquare },
-  { 
-    title: 'Marketing', 
+  { title: 'Messages', href: '/admin/messages', icon: MessageSquare, permission: 'contact_messages.view' },
+  {
+    title: 'Support',
+    icon: Headset,
+    permission: 'security.view',
+    children: [
+      { title: 'Dashboard', href: '/admin/support', permission: 'security.view' },
+      { title: 'Tickets', href: '/admin/support?tab=tickets', permission: 'security.view' },
+    ]
+  },
+  {
+    title: 'Marketing',
     icon: ImageIcon,
+    permission: 'marketing.coupons',
     children: [
-      { title: 'Coupons', href: '/admin/marketing/coupons' },
-      { title: 'Bundle Offers', href: '/admin/marketing/bundle-offers' },
-      { title: 'Free Shipping', href: '/admin/marketing/free-shipping' },
-      { title: 'Email Campaigns', href: '/admin/marketing/email-campaigns' },
-      { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns' },
-      { title: 'Site Visuals', href: '/admin/marketing/site-images' },
-      { title: 'Our Services', href: '/admin/marketing/services' },
-      { title: 'Flash Sale', href: '/admin/marketing/flash-sale' },
-      { title: 'Special Offer', href: '/admin/marketing/special-offer' },
-      { title: 'FAQ', href: '/admin/marketing/faq' }
+      { title: 'Coupons', href: '/admin/marketing/coupons', permission: 'marketing.coupons' },
+      { title: 'Free Shipping', href: '/admin/marketing/free-shipping', permission: 'marketing.coupons' },
+      { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns', permission: 'marketing.popups' },
+      { title: 'Flash Sale', href: '/admin/marketing/flash-sale', permission: 'marketing.flash_sale' },
+      { title: 'Special Offer', href: '/admin/marketing/special-offer', permission: 'marketing.special_offer' },
     ]
   },
-  { title: 'Settings', href: '/admin/settings', icon: Settings },
+  { title: 'Users', href: '/admin/users', icon: UserCog, permission: 'users.view' },
+  { title: 'Security Center', href: '/admin/security', icon: Shield, permission: 'security.view' },
+  {
+    title: 'Display Pages',
+    icon: Monitor,
+    permission: 'settings.view',
+    children: [
+      { title: 'Site Visuals', href: '/admin/marketing/site-images', permission: 'marketing.site_visuals' },
+      { title: 'Our Services', href: '/admin/marketing/services', permission: 'marketing.services' },
+      { title: 'FAQ', href: '/admin/marketing/faq', permission: 'marketing.faq' },
+      { title: 'About', href: '/admin/settings/about', permission: 'settings.view' },
+    ]
+  },
 ];
 
 export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { collapsed?: boolean; toggle?: () => void; logout: () => void; closeMobile?: () => void }) {
   const pathname = usePathname();
+  const { hasPermission, loading: permLoading } = usePermissions();
+  const { isWarehouseStaff } = useAuth();
+
+  const warehouseOnlyNav: NavItem[] = [
+    { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
+    { title: 'Warehouse Orders', href: '/admin/warehouse/orders', icon: Warehouse, permission: 'inventory.view' },
+    { title: 'My Products', href: '/admin/warehouse/products', icon: Package, permission: 'inventory.view' },
+  ];
+
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
-    nav.forEach((n) => {
+    allNav.forEach((n) => {
       if (n.children) init[n.title] = n.children.some((c) => pathname.startsWith(c.href.split('?')[0]));
     });
     return init;
@@ -117,6 +178,31 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
   }, []);
 
   const toggleGroup = (title: string) => setOpenGroups((g) => ({ ...g, [title]: !g[title] }));
+
+  // Filter nav based on permissions and role
+  const nav = useMemo(() => {
+    if (permLoading) return allNav;
+
+    const source = isWarehouseStaff ? warehouseOnlyNav : allNav;
+
+    return source
+      .map(item => {
+        // Check parent permission
+        if (item.permission && !hasPermission(item.permission)) return null;
+
+        // Filter children by permission
+        if (item.children) {
+          const filteredChildren = item.children.filter(
+            child => !child.permission || hasPermission(child.permission)
+          );
+          if (filteredChildren.length === 0 && item.permission) return null;
+          return { ...item, children: filteredChildren };
+        }
+
+        return item;
+      })
+      .filter(Boolean) as NavItem[];
+  }, [permLoading, hasPermission, isWarehouseStaff]);
 
   return (
     <div className="flex h-full flex-col bg-white text-slate-900 border-r border-slate-100">
@@ -161,6 +247,11 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
                 >
                   <Icon className={cn("h-5 w-5 shrink-0", active ? "text-white" : "text-slate-400 group-hover:text-[#1a4731]")} />
                   {!collapsed && <span className="tracking-wide">{item.title}</span>}
+                  {item.title === 'Order Requests' && pendingCount > 0 && !collapsed && (
+                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {pendingCount}
+                    </span>
+                  )}
                   {active && !collapsed && (
                     <div className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white/40" />
                   )}
@@ -168,6 +259,7 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
               );
             }
             const open = openGroups[item.title] ?? false;
+            const visibleChildren = item.children || [];
             return (
               <div key={item.title} className="space-y-1">
                 <button
@@ -188,9 +280,9 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
                     </>
                   )}
                 </button>
-                {!collapsed && open && item.children && (
+                {!collapsed && open && visibleChildren.length > 0 && (
                   <div className="ml-9 flex flex-col border-l border-slate-100 pl-4 mt-2 space-y-2">
-                    {item.children.map((c) => {
+                    {visibleChildren.map((c) => {
                       const base = c.href.split('?')[0];
                       const active = pathname === base || pathname.startsWith(base + '/');
                       return (

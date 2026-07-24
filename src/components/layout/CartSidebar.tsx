@@ -20,19 +20,26 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
   const { requireAuth } = useRequireAuth();
 
   const handleCheckout = () => {
+    if (cart.length > 0) {
+      saveCheckoutItems(cart.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.discountPrice || item.price,
+        image: Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : '/images/about.jpg',
+        quantity: item.quantity,
+        selectedSpecs: item.selectedOptions ? Object.fromEntries(
+          Object.entries(item.selectedOptions).filter(([_, v]) => v != null && v !== '')
+        ) : undefined,
+        originalPrice: item.discountPrice ? item.price : undefined,
+        discountPercent: item.discountPrice ? Math.round((1 - item.discountPrice / item.price) * 100) : undefined,
+        discountAmount: item.discountPrice ? item.price - item.discountPrice : undefined,
+        finalTotal: (item.discountPrice || item.price) * item.quantity
+      })));
+    }
     requireAuth(() => {
-      if (cart.length > 0) {
-        saveCheckoutItems(cart.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.discountPrice || item.price,
-          image: item.images[0] || '',
-          quantity: item.quantity
-        })));
-      }
       onClose();
       router.push('/checkout');
-    }, "Please login first to proceed to secure checkout.");
+    }, "Please login first to proceed to secure checkout.", '/checkout');
   };
 
   return (
@@ -91,11 +98,11 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex gap-4 p-3 rounded-2xl bg-bg-secondary/50 border-none group transition-all hover:bg-white hover:shadow-lg hover:shadow-black/5">
+                  {cart.map((item, index) => (
+                    <div key={`${item.id}-${index}`} className="flex gap-4 p-3 rounded-2xl bg-bg-secondary/50 border-none group transition-all hover:bg-white hover:shadow-lg hover:shadow-black/5">
                       <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-xl overflow-hidden flex-shrink-0 bg-white border border-border-forest/30 transition-transform group-hover:scale-95 duration-500">
                         <img
-                          src={item.images[0]}
+                          src={Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : '/images/about.jpg'}
                           alt={item.name}
                           className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"
                         />
@@ -150,10 +157,7 @@ export const CartSidebar: React.FC<CartSidebarProps> = ({ isOpen, onClose }) => 
                     <span className="text-[10px] font-bold text-text-muted uppercase tracking-[0.2em]">Estimated Total</span>
                     <p className="text-2xl font-display font-bold text-accent-primary">{formatPrice(subtotal)}</p>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[10px] font-bold text-gold uppercase tracking-widest">Free Shipping</span>
-                    <span className="text-[9px] text-text-muted italic">on your first order</span>
-                  </div>
+                  
                 </div>
                 <div className="space-y-3">
                   <Button variant="gold" className="w-full h-14 rounded-full text-xs uppercase tracking-widest font-bold" onClick={handleCheckout}>

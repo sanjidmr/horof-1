@@ -115,6 +115,11 @@ const orderConfigSchema = z.object({
   display_controls: displayControlsSchema.optional(),
 });
 
+const productDetailRowSchema = z.object({
+  key: z.string(),
+  value: z.string(),
+});
+
 export const productFormSchema = z
   .object({
     id: z.union([z.string(), z.number()]).optional(),
@@ -134,7 +139,9 @@ export const productFormSchema = z
     stock: z.coerce.number().int().nonnegative('Stock must be a whole number ≥ 0'),
     description: z.string().optional().default(''),
     specification: z.array(specRowSchema).optional().default([]),
+    product_details: z.array(productDetailRowSchema).optional().default([]),
     perfect_for_str: z.string().optional().default(''),
+    perfect_for_tags: z.array(z.string()).optional().default([]),
     section: sectionSchema,
     is_best_selling: z.boolean().default(false),
     is_new_arrival: z.boolean().default(false),
@@ -201,4 +208,21 @@ export function rowsToSpecification(rows: { key: string; value: string }[]): Rec
     if (k) out[k] = r.value.trim();
   }
   return out;
+}
+
+export function specToRows(spec: Record<string, string>): { key: string; value: string }[] {
+  return Object.entries(spec ?? {}).map(([key, value]) => ({ key, value }));
+}
+
+export function detailsToObject(rows: { key: string; value: string }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    const k = r.key.trim();
+    if (k) out[k] = r.value.trim();
+  }
+  return out;
+}
+
+export function objectToDetails(obj: Record<string, string>): { key: string; value: string }[] {
+  return Object.entries(obj ?? {}).map(([key, value]) => ({ key, value }));
 }

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { ProductForm, type BrandOption, type CategoryOption, type SubcategoryOption, type ProductFormInitial } from '@/components/admin/products/ProductForm';
+import { objectToDetails } from '@/lib/validation/product-form';
+import { ProductForm, type CategoryOption, type SubcategoryOption, type ProductFormInitial } from '@/components/admin/products/ProductForm';
 
 export default async function AdminProductEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,14 +12,35 @@ export default async function AdminProductEditPage({ params }: { params: Promise
 
   if (productError || !product) notFound();
 
-  const [{ data: images }, { data: variants }, { data: categories }, { data: brands }, { data: subcategories }] = await Promise.all([
-    supabase.from('product_images').select('url').eq('product_id', id).order('sort_order', { ascending: true }),
-    supabase.from('product_variants').select('size, color, stock, price_modifier').eq('product_id', id).order('created_at', { ascending: true }),
-    supabase.from('categories').select('id, name, parent_id').eq('is_active', true).order('order', { ascending: true }),
-    supabase.from('brands').select('id, name').eq('is_active', true).order('name', { ascending: true }),
-    supabase.from('subcategories').select('*').order('sort_order', { ascending: true }),
-  ]);
+  const [
+  { data: images },
+  { data: variants },
+  { data: categories },
+  { data: subcategories }
+] = await Promise.all([
+  supabase
+    .from('product_images')
+    .select('url')
+    .eq('product_id', id)
+    .order('display_order', { ascending: true }),
 
+  supabase
+    .from('product_variants')
+    .select('size, color, stock, price_modifier')
+    .eq('product_id', id)
+    .order('created_at', { ascending: true }),
+
+  supabase
+    .from('categories')
+    .select('id, name, parent_id')
+    .eq('is_active', true)
+    .order('display_order', { ascending: true }),
+
+  supabase
+    .from('subcategories')
+    .select('*')
+    .order('sort_order', { ascending: true }),
+]);
   const oc = (product as any).order_config ?? {};
 
   const initial: ProductFormInitial = {
@@ -31,6 +53,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     stock: product.stock,
     description: product.description,
     specification: product.specification,
+    product_details: (product as any).product_details ? objectToDetails((product as any).product_details) : null,
     perfect_for: typeof product.perfect_for === 'string' ? product.perfect_for.split(',').map((s: string) => s.trim()) : null,
     section: (product as any).section ?? (product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling'),
     flash_sale_ends_at: (product as any).flash_sale_ends_at ?? null,
@@ -39,7 +62,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     category_id: product.category_id,
     subcategory_id: (product as any).subcategory_id ?? null,
     brand_id: (product as any).brand_id ?? null,
-    images: images ?? [],
+    images: (images ?? []).map((img) => ({ url: (img as any).image_url ?? '' })),
     variants: (variants ?? []).map((v) => ({
       size: v.size,
       color: v.color,
@@ -87,7 +110,6 @@ export default async function AdminProductEditPage({ params }: { params: Promise
       mode="edit"
       categories={(categories ?? []) as CategoryOption[]}
       subcategories={(subcategories ?? []) as SubcategoryOption[]}
-      brands={(brands ?? []) as BrandOption[]}
       initial={initial}
     />
   );

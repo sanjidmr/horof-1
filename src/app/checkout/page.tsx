@@ -16,7 +16,7 @@ import { placeOrder } from '@/lib/actions/place-order';
 import { validateCoupon } from '@/lib/actions/validate-coupon';
 import { findBestBundleDiscount } from '@/lib/actions/bundle-offers';
 import { checkFreeShippingEligibility } from '@/lib/actions/free-shipping';
-type AppliedCoupon = { discount: number; couponId: string; code: string; label: string };
+type AppliedCoupon = { discount: number; couponId: string; code: string; label: string; type: string };
 type BundleInfo = { discount: number; offerName: string; offerId: string; description: string };
 type FreeShippingInfo = { eligible: boolean; offerName: string; offerId: string; description: string | null };
 import { toast } from 'react-hot-toast';
@@ -173,9 +173,11 @@ export default function CheckoutPage() {
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const deliveryCharge = deliveryMethod === 'office'
     ? 0
-    : freeShippingInfo?.eligible
+    : appliedCoupon?.type === 'free_shipping'
       ? 0
-      : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
+      : freeShippingInfo?.eligible
+        ? 0
+        : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
   const couponDiscount = appliedCoupon?.discount || 0;
   const bundleDiscount = bundleInfo?.discount || 0;
   const total = subtotal + deliveryCharge - couponDiscount - bundleDiscount;
@@ -260,10 +262,10 @@ export default function CheckoutPage() {
     setValidatingCoupon(true);
     setCouponError('');
     try {
-      const res = await validateCoupon(code, subtotal);
+      const res = await validateCoupon(code, subtotal, user?.id);
       if (res.valid) {
-        setAppliedCoupon({ discount: res.discount, couponId: res.couponId, code: res.code, label: res.label });
-        toast.success(`Coupon applied! You saved ৳${res.discount.toLocaleString()}`);
+        setAppliedCoupon({ discount: res.discount, couponId: res.couponId, code: res.code, label: res.label, type: res.type });
+        toast.success(res.type === 'free_shipping' ? 'Free shipping coupon applied!' : `Coupon applied! You saved ৳${res.discount.toLocaleString()}`);
       } else {
         setAppliedCoupon(null);
         setCouponError('message' in res ? res.message : 'Invalid coupon');
@@ -278,6 +280,11 @@ export default function CheckoutPage() {
   const handleRemoveCoupon = () => {
     setCouponCode('');
     setAppliedCoupon(null);
+    setCouponError('');
+  };
+
+  const handleCouponInputChange = (val: string) => {
+    setCouponCode(val.toUpperCase());
     setCouponError('');
   };
 
@@ -393,7 +400,7 @@ export default function CheckoutPage() {
           <p className="text-slate-500">Provide your delivery info to confirm your order via Cash on Delivery</p>
         </div>
         
-        <div className="flex flex-col lg:flex-row gap-8 xl:gap-12 flex-col-reverse lg:flex-row">
+        <div className="flex flex-col lg:flex-row gap-8 xl:gap-12">
           
           {/* Left Side: Forms */}
           <div className="w-full lg:w-7/12 space-y-8">
@@ -770,157 +777,242 @@ export default function CheckoutPage() {
             </form>
           </div>
 
-          {/* Right Side: Order Summary */}
-          <div className="w-full lg:w-5/12">
-            <div className="bg-white rounded-3xl shadow-xl shadow-[#1a4731]/5 border border-slate-100 p-6 md:p-8 lg:sticky lg:top-8 overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#f0fdf4] rounded-full blur-3xl -mr-16 -mt-16 opacity-50" />
-              
-              <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800 relative z-10">
-                <ShoppingCart className="w-5 h-5 mr-2 text-[#1a4731]" />
-                Order Summary
-              </h2>
-              
-              <div className="space-y-4 mb-6 custom-scrollbar max-h-[40vh] overflow-y-auto pr-2 relative z-10">
-                {items.map((item) => (
-                  <div key={item.id} className="flex gap-4 py-4 border-b border-slate-50 last:border-0 group">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-100">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">
-                          <ShoppingCart className="w-6 h-6" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{item.name}</h3>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Qty: {item.quantity}</p>
-                        <div className="text-sm font-bold text-[#1a4731]">
-                          ৳ {(item.price * item.quantity).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* Mobile: Order Summary + Confirm (below form) */}
+          <div className="block lg:hidden w-full">
+            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} />
+          </div>
 
-              {/* Coupon Section */}
-              <div className="pt-4 border-t border-slate-100 relative z-10">
-                {!appliedCoupon ? (
-                  <div>
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">Apply Coupon</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={couponCode}
-                        onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(''); }}
-                        placeholder="Enter coupon code"
-                        className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731] transition-all placeholder:text-slate-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleApplyCoupon}
-                        disabled={validatingCoupon || !couponCode.trim()}
-                        className="px-4 py-2.5 bg-[#1a4731] hover:bg-[#14402a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5"
-                      >
-                        {validatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        Apply
-                      </button>
-                    </div>
-                    {couponError && (
-                      <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                        {couponError}
-                      </p>
+          {/* Desktop: Order Summary sidebar */}
+          <div className="hidden lg:block w-full lg:w-5/12">
+            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} sticky={true} />
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Order Summary Card Component ────────────────────────────────────────────
+
+interface OrderSummaryCardProps {
+  items: CheckoutItem[];
+  subtotal: number;
+  couponDiscount: number;
+  bundleDiscount: number;
+  bundleInfo: BundleInfo | null;
+  checkingBundle: boolean;
+  deliveryCharge: number;
+  deliveryMethod: 'online' | 'office';
+  freeShippingInfo: FreeShippingInfo | null;
+  total: number;
+  couponCode: string;
+  handleCouponInputChange: (v: string) => void;
+  couponError: string;
+  appliedCoupon: AppliedCoupon | null;
+  validatingCoupon: boolean;
+  handleApplyCoupon: () => void;
+  handleRemoveCoupon: () => void;
+  loading: boolean;
+  deliveryType: 'inside_mymensingh' | 'outside_mymensingh' | null;
+  sticky?: boolean;
+}
+
+function OrderSummaryCard({
+  items, subtotal, couponDiscount, bundleDiscount, bundleInfo, checkingBundle,
+  deliveryCharge, deliveryMethod, freeShippingInfo, total,
+  couponCode, handleCouponInputChange, couponError, appliedCoupon, validatingCoupon,
+  handleApplyCoupon, handleRemoveCoupon, loading, deliveryType, sticky,
+}: OrderSummaryCardProps) {
+  return (
+    <div className={`bg-white rounded-3xl shadow-xl shadow-[#1a4731]/5 border border-slate-100 p-6 md:p-8 overflow-hidden relative ${sticky ? 'lg:sticky lg:top-8' : ''}`}>
+      <div className="absolute top-0 right-0 w-32 h-32 bg-[#f0fdf4] rounded-full blur-3xl -mr-16 -mt-16 opacity-50" />
+
+      <h2 className="text-xl font-display font-bold mb-6 flex items-center text-slate-800 relative z-10">
+        <ShoppingCart className="w-5 h-5 mr-2 text-[#1a4731]" />
+        Order Summary
+      </h2>
+
+      {/* Items */}
+      <div className="space-y-5 mb-6 max-h-[50vh] overflow-y-auto pr-1 relative z-10">
+        {items.map((item, idx) => (
+          <div key={item.id + '-' + idx} className="pb-5 border-b border-slate-100 last:border-0 last:pb-0">
+            <div className="flex gap-4">
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-100">
+                {item.image ? (
+                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-300">
+                    <ShoppingCart className="w-6 h-6" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{item.name}</h3>
+
+                {/* Variants / Selected Specs */}
+                {item.selectedSpecs && Object.keys(item.selectedSpecs).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {Object.entries(item.selectedSpecs).map(([key, val]) => (
+                      <span key={key} className="inline-flex items-center px-2 py-0.5 bg-[#f0fdf4] text-[#1a4731] text-[10px] font-semibold rounded-md border border-[#1a4731]/10">
+                        {key}: {val}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Price row */}
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">Qty: {item.quantity}</p>
+                  <div className="text-right">
+                    {item.originalPrice && item.originalPrice > item.price && (
+                      <span className="text-[10px] text-slate-400 line-through mr-1">৳{item.originalPrice.toLocaleString()}</span>
+                    )}
+                    <span className="text-sm font-bold text-[#1a4731]">৳ {item.price.toLocaleString()}</span>
+                    {item.discountPercent && (
+                      <span className="ml-1 text-[10px] font-bold text-emerald-600">-{item.discountPercent}%</span>
                     )}
                   </div>
-                ) : (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-emerald-800">{appliedCoupon.code}</p>
-                        <p className="text-[11px] text-emerald-600">Discount: ৳{appliedCoupon.discount.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCoupon}
-                      className="text-xs text-red-500 hover:text-red-700 font-bold shrink-0"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </div>
+                </div>
 
-              <div className="pt-4 border-t border-slate-100 space-y-4 relative z-10">
-                <div className="flex justify-between text-sm font-medium text-slate-600">
-                  <span>Subtotal</span>
-                  <span className="font-bold text-slate-800">৳ {subtotal.toLocaleString()}</span>
-                </div>
-                {couponDiscount > 0 && (
-                  <div className="flex justify-between text-sm font-medium text-emerald-600">
-                    <span>Coupon Discount</span>
-                    <span className="font-bold">- ৳ {couponDiscount.toLocaleString()}</span>
-                  </div>
-                )}
-                {bundleDiscount > 0 && bundleInfo && (
-                  <div className="flex justify-between text-sm font-medium text-purple-600">
-                    <span title={bundleInfo.description}>Bundle: {bundleInfo.offerName}</span>
-                    <span className="font-bold">- ৳ {bundleDiscount.toLocaleString()}</span>
-                  </div>
-                )}
-                {checkingBundle && (
-                  <div className="flex justify-between text-sm font-medium text-slate-400">
-                    <span>Checking bundle offers...</span>
-                    <span className="animate-pulse">...</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-medium text-slate-600">
-                  <span>Delivery Charge</span>
-                  <span className="font-bold text-slate-800">
-                    {deliveryMethod === 'office'
-                      ? '৳ 0 (Pickup)'
-                      : freeShippingInfo?.eligible
-                        ? <span className="text-emerald-600 flex items-center gap-1">FREE <span className="text-[10px] font-normal">({freeShippingInfo.offerName})</span></span>
-                        : deliveryType ? `৳ ${deliveryCharge}` : '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xl font-display font-black text-[#1a4731] pt-4 border-t border-slate-100 mt-2">
-                  <span>Total</span>
-                  <span>৳ {Math.max(0, total).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="mt-8 relative z-10">
-                <button
-                  type="submit"
-                  form="checkout-form"
-                  disabled={loading || (deliveryMethod === 'online' && !deliveryType)}
-                  className="w-full bg-[#1a4731] hover:bg-[#14402a] text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-[#1a4731]/20 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Placing Order...
-                    </>
-                  ) : (
-                    <>
-                      Confirm Order {deliveryMethod === 'office' ? '(Pay on Pickup)' : '(Cash on Delivery)'}
-                    </>
-                  )}
-                </button>
-                
-                <div className="mt-5 flex items-center justify-center text-[10px] uppercase tracking-widest font-bold text-slate-400 gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                  <span>Secure Checkout Guaranteed</span>
+                {/* Line total */}
+                <div className="text-right mt-1">
+                  <span className="text-xs font-bold text-slate-600">Line Total: ৳ {(item.price * item.quantity).toLocaleString()}</span>
                 </div>
               </div>
             </div>
+
+            {/* Design Charge */}
+            {item.designCharge && item.designCharge > 0 && (
+              <div className="mt-2 ml-20 flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 px-2.5 py-1.5 rounded-lg">
+                <Sparkles className="w-3 h-3 shrink-0" />
+                <span className="font-semibold">Design Charge: ৳{item.designCharge.toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* Customer Notes */}
+            {item.customerNotes && (
+              <div className="mt-1.5 ml-20 flex items-start gap-1.5 text-[11px] text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-lg">
+                <FileText className="w-3 h-3 shrink-0 mt-0.5" />
+                <span className="line-clamp-2"><span className="font-semibold text-slate-600">Note:</span> {item.customerNotes}</span>
+              </div>
+            )}
           </div>
-          
+        ))}
+      </div>
+
+      {/* Coupon */}
+      <div className="pt-4 border-t border-slate-100 relative z-10">
+        {!appliedCoupon ? (
+          <div>
+            <label className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 block">Apply Coupon</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => { handleCouponInputChange(e.target.value); }}
+                placeholder="Enter coupon code"
+                className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731] transition-all placeholder:text-slate-300"
+              />
+              <button
+                type="button"
+                onClick={handleApplyCoupon}
+                disabled={validatingCoupon || !couponCode.trim()}
+                className="px-4 py-2.5 bg-[#1a4731] hover:bg-[#14402a] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5"
+              >
+                {validatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Apply
+              </button>
+            </div>
+            {couponError && (
+              <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                {couponError}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-emerald-800">{appliedCoupon.code}</p>
+                <p className="text-[11px] text-emerald-600">Discount: ৳{appliedCoupon.discount.toLocaleString()}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveCoupon}
+              className="text-xs text-red-500 hover:text-red-700 font-bold shrink-0"
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Pricing Breakdown */}
+      <div className="pt-4 border-t border-slate-100 space-y-3 relative z-10">
+        <div className="flex justify-between text-sm font-medium text-slate-600">
+          <span>Subtotal</span>
+          <span className="font-bold text-slate-800">৳ {subtotal.toLocaleString()}</span>
+        </div>
+        {couponDiscount > 0 && (
+          <div className="flex justify-between text-sm font-medium text-emerald-600">
+            <span>Coupon Discount</span>
+            <span className="font-bold">- ৳ {couponDiscount.toLocaleString()}</span>
+          </div>
+        )}
+        {bundleDiscount > 0 && bundleInfo && (
+          <div className="flex justify-between text-sm font-medium text-purple-600">
+            <span title={bundleInfo.description}>Bundle: {bundleInfo.offerName}</span>
+            <span className="font-bold">- ৳ {bundleDiscount.toLocaleString()}</span>
+          </div>
+        )}
+        {checkingBundle && (
+          <div className="flex justify-between text-sm font-medium text-slate-400">
+            <span>Checking bundle offers...</span>
+            <span className="animate-pulse">...</span>
+          </div>
+        )}
+        <div className="flex justify-between text-sm font-medium text-slate-600">
+          <span>Delivery Charge</span>
+          <span className="font-bold text-slate-800">
+            {deliveryMethod === 'office'
+              ? '৳ 0 (Pickup)'
+              : freeShippingInfo?.eligible
+                ? <span className="text-emerald-600 flex items-center gap-1">FREE <span className="text-[10px] font-normal">({freeShippingInfo.offerName})</span></span>
+                : deliveryType ? `৳ ${deliveryCharge}` : '—'}
+          </span>
+        </div>
+        <div className="flex justify-between text-xl font-display font-black text-[#1a4731] pt-4 border-t border-slate-100 mt-2">
+          <span>Total</span>
+          <span>৳ {Math.max(0, total).toLocaleString()}</span>
+        </div>
+      </div>
+
+      {/* Confirm Button */}
+      <div className="mt-8 relative z-10">
+        <button
+          type="submit"
+          form="checkout-form"
+          disabled={loading || (deliveryMethod === 'online' && !deliveryType)}
+          className="w-full bg-[#1a4731] hover:bg-[#14402a] text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-[#1a4731]/20 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Placing Order...
+            </>
+          ) : (
+            <>
+              Confirm Order {deliveryMethod === 'office' ? '(Pay on Pickup)' : '(Cash on Delivery)'}
+            </>
+          )}
+        </button>
+        <div className="mt-5 flex items-center justify-center text-[10px] uppercase tracking-widest font-bold text-slate-400 gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>Secure Checkout Guaranteed</span>
         </div>
       </div>
     </div>

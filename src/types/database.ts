@@ -12,7 +12,7 @@ export type ProductSection =
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'returned';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export type RefundStatus = 'pending' | 'approved' | 'rejected';
-export type CouponType = 'percent' | 'fixed';
+export type CouponType = 'percent' | 'fixed' | 'free_shipping';
 export type ShipmentStatus = 'pending' | 'in_transit' | 'delivered' | 'failed';
 export type ReviewRating = 1 | 2 | 3 | 4 | 5;
 export type StockMovementType = 'stock_added' | 'stock_removed' | 'sale' | 'return' | 'adjustment' | 'damage' | 'lost' | 'transfer_out' | 'transfer_in' | 'purchase' | 'manual_update' | 'reservation';
@@ -699,6 +699,7 @@ export interface Database {
           code: string;
           type: CouponType;
           value: number;
+          description: string | null;
           min_order: number;
           max_discount: number | null;
           max_uses: number | null;
@@ -707,8 +708,11 @@ export interface Database {
           starts_at: string | null;
           expires_at: string | null;
           first_order_only: boolean;
+          new_customer_only: boolean;
           applicable_products: string[];
           applicable_categories: string[];
+          excluded_products: string[];
+          excluded_categories: string[];
           is_active: boolean;
           created_at: string;
         };
@@ -717,6 +721,7 @@ export interface Database {
           code: string;
           type: CouponType;
           value: number;
+          description?: string | null;
           min_order?: number;
           max_discount?: number | null;
           max_uses?: number | null;
@@ -725,8 +730,11 @@ export interface Database {
           starts_at?: string | null;
           expires_at?: string | null;
           first_order_only?: boolean;
+          new_customer_only?: boolean;
           applicable_products?: string[];
           applicable_categories?: string[];
+          excluded_products?: string[];
+          excluded_categories?: string[];
           is_active?: boolean;
           created_at?: string;
         };

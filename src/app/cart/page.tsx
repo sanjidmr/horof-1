@@ -122,11 +122,9 @@ export default function CartPage() {
             </div>
 
             <div className="pt-6 border-t border-white/5 flex flex-col items-center gap-4">
-              <span className="text-[10px] font-bold text-text-muted uppercase tracking-[0.3em]">We Accept</span>
-              <div className="flex gap-4 opacity-50">
-                <span className="text-sm font-bold">bKash</span>
-                <span className="text-sm font-bold">Nagad</span>
-                <span className="text-sm font-bold">COD</span>
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-[0.3em]">Payment Method</span>
+              <div className="flex gap-4 opacity-70">
+                <span className="text-sm font-bold">Cash on Delivery</span>
               </div>
             </div>
           </div>

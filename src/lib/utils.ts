@@ -6,11 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatPrice(price: number) {
+  const bengaliDigits = '০১২৩৪৫৬৭৮৯';
   return new Intl.NumberFormat('bn-BD', {
     style: 'currency',
     currency: 'BDT',
     minimumFractionDigits: 0,
-  }).format(price);
+  }).format(price).replace(/[০-৯]/g, d => String(bengaliDigits.indexOf(d)));
 }
 
 export function truncateText(text: string, length: number) {

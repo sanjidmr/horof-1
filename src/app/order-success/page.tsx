@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, ChevronRight, Package, Home } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Package, Home, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { clearCheckoutItems } from '@/lib/checkoutStorage';
@@ -85,6 +85,13 @@ export default function OrderSuccessPage() {
           </div>
 
           <div className="space-y-3">
+            <Link 
+              href={`/track-order?order=${order?.id || ''}`}
+              className="w-full flex items-center justify-center px-6 py-3 border-2 border-emerald-600 text-base font-medium rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+            >
+              <Eye className="w-5 h-5 mr-2" />
+              Track Order
+            </Link>
             <Link 
               href="/orders" 
               className="w-full flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"

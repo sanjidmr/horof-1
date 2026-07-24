@@ -10,7 +10,6 @@ import { SpecialOffer } from '../components/home/SpecialOffer';
 import { ProductOfTheDay } from '../components/home/ProductOfTheDay';
 import { WhyChooseUs } from '../components/home/WhyChooseUs';
 import { NewArrivals } from '../components/home/NewArrivals';
-import { Newsletter } from '../components/home/Newsletter';
 import { FAQSection } from '../components/home/FAQSection';
 import { CustomDesignCTA } from '../components/home/CustomDesignCTA';
 import { createSupabaseServerClient } from '../lib/supabase/server';
@@ -174,9 +173,7 @@ export default async function HomePage() {
         <FAQSection />
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 mt-8 sm:mt-10">
-        <Newsletter />
-      </div>
+      
     </HomeMotionWrapper>
   );
 }

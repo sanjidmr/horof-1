@@ -11,6 +11,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useCart } from '@/context/CartContext';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { cancelOrderAction } from '@/lib/actions/orders';
 
 export default function CustomerDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -374,14 +375,7 @@ export default function CustomerDashboardPage() {
     if (!orderToCancel) return;
     setCancellingOrder(true);
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', orderToCancel.id)
-        .eq('user_id', userAuth.id);
-
-      if (error) throw error;
-
+      await cancelOrderAction(orderToCancel.id, undefined, 'customer');
       toast.success(`Order #${String(orderToCancel.id).slice(0, 8).toUpperCase()} cancelled successfully`);
       setOrderToCancel(null);
       await fetchData();

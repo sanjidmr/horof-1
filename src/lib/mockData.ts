@@ -383,7 +383,7 @@ export const orders: Order[] = [
     ],
     total: 125000,
     status: 'processing',
-    paymentMethod: 'bkash',
+    paymentMethod: 'cod',
     transactionId: 'BK12345678',
     date: '2026-04-15'
   },

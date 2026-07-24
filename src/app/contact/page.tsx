@@ -330,7 +330,10 @@ export default function ContactPage() {
               </Button>
 
               <p className="text-[10px] text-center text-text-muted uppercase tracking-[0.2em] font-medium">
-                By submitting, you agree to our privacy policy and terms.
+                By submitting, you agree to our{' '}
+                <a href="/privacy-policy" className="text-accent-primary hover:text-gold transition-colors">Privacy Policy</a>
+                {' '}and{' '}
+                <a href="/terms" className="text-accent-primary hover:text-gold transition-colors">Terms</a>.
               </p>
             </form>
           )}

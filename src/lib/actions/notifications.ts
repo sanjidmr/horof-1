@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 
-export type NotificationType = 'order' | 'customer' | 'stock' | 'product';
+export type NotificationType = 'order' | 'customer' | 'stock' | 'product' | 'security' | 'backup';
 
 export async function createNotification(
   title: string,

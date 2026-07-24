@@ -16,6 +16,28 @@ interface ProductCardProps {
   product: Product;
 }
 
+const StarRating = ({ rating }: { rating: number }) => {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => {
+        const isFull = rating >= star;
+        const isHalf = rating >= star - 0.5 && !isFull;
+        
+        return (
+          <div key={star} className="relative">
+            <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-slate-200 fill-slate-200" />
+            {(isFull || isHalf) && (
+              <div className={cn("absolute inset-0 overflow-hidden", isHalf ? "w-[50%]" : "w-full")}>
+                <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-gold fill-gold" />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
@@ -83,12 +105,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{product.category}</span>
-            <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
-              <Star className={cn("h-2.5 w-2.5 sm:h-3 w-3", product.rating > 0 ? "text-gold fill-gold" : "text-slate-300 fill-none")} />
-              <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold">
-                {product.rating > 0 ? product.rating.toFixed(1) : '0.0'}
-              </span>
-            </div>
+            {product.rating > 0 && product.reviewCount > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
+                <StarRating rating={product.rating} />
+                <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold ml-0.5">
+                  {product.rating.toFixed(1)} <span className="text-slate-400 font-normal">({product.reviewCount} Reviews)</span>
+                </span>
+              </div>
+            )}
           </div>
 
           <Link href={`/products/${product.id}`} className="block">

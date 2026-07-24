@@ -17,7 +17,7 @@ export async function getRelatedProducts(categoryName: string, currentProductId:
 
   const { data: rows } = await supabase
     .from('products')
-    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(url,sort_order),categories(name)')
+    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,meta_title,meta_description,product_images(url,sort_order),categories(name),product_reviews(rating,is_approved)')
     .eq('category_id', catData.id)
     .neq('id', currentProductId)
     .eq('is_active', true)

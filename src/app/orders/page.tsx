@@ -17,7 +17,7 @@ import {
   AlertCircle,
   Undo2
 } from 'lucide-react';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, cn } from '@/lib/utils';
 import { cancelOrderAction, requestOrderReturnAction } from '@/lib/actions/orders';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
 import toast from 'react-hot-toast';
@@ -328,7 +328,7 @@ export default function OrdersPage() {
                   {/* Courier & Totals Details */}
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                     <div className="text-xs text-slate-500 space-y-1.5">
-                      <p><span className="font-semibold text-slate-700">Payment:</span> {order.payment_method?.toUpperCase() || 'SSLCOMMERZ'} (<span className="capitalize font-medium">{order.payment_status || 'Pending'}</span>)</p>
+                      <p><span className="font-semibold text-slate-700">Payment:</span> {order.payment_method?.toUpperCase() || 'COD'} (<span className="capitalize font-medium">{order.payment_status || 'Pending'}</span>)</p>
                       {metadata.courier_name && (
                         <p><span className="font-semibold text-slate-700">Courier:</span> {metadata.courier_name} {metadata.tracking_number && <span className="font-mono text-[10px] bg-slate-200/60 px-1.5 py-0.5 rounded">#{metadata.tracking_number}</span>}</p>
                       )}
@@ -342,6 +342,64 @@ export default function OrdersPage() {
                       <p className="text-2xl font-display font-black text-[#1a4731]">{formatPrice(Number(order.total_price || order.amount || 0))}</p>
                     </div>
                   </div>
+
+                  {/* Inline Mini Timeline */}
+                  {(() => {
+                    const miniSteps = [
+                      { id: 'pending', label: 'Placed' },
+                      { id: 'confirmed', label: 'Confirmed' },
+                      { id: 'processing', label: 'Processing' },
+                      { id: 'packed', label: 'Packed' },
+                      { id: 'shipped', label: 'Shipped' },
+                      { id: 'delivered', label: 'Delivered' },
+                    ];
+                    const currentIdx = miniSteps.findIndex(s => s.id === order.status);
+                    const isTerminal = ['cancelled', 'returned', 'refunded'].includes(order.status);
+                    return (
+                      <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                        <div className="flex items-center gap-1 overflow-x-auto">
+                          {miniSteps.map((step, idx) => {
+                            const isCompleted = currentIdx >= 0 && idx <= currentIdx;
+                            const isCurrent = currentIdx === idx;
+                            return (
+                              <React.Fragment key={step.id}>
+                                <div className={cn(
+                                  "flex flex-col items-center gap-1 min-w-[52px] px-1",
+                                  isTerminal && "opacity-40"
+                                )}>
+                                  <div className={cn(
+                                    "w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold border-2 transition-all",
+                                    isCurrent ? "bg-[#1a4731] border-[#1a4731] text-white animate-pulse" :
+                                    isCompleted ? "bg-emerald-100 border-emerald-300 text-emerald-700" :
+                                    "bg-slate-50 border-slate-200 text-slate-400"
+                                  )}>
+                                    {isCompleted && !isCurrent ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
+                                  </div>
+                                  <span className={cn(
+                                    "text-[8px] font-bold uppercase tracking-wider text-center leading-tight",
+                                    isCurrent ? "text-[#1a4731]" : isCompleted ? "text-emerald-600" : "text-slate-400"
+                                  )}>
+                                    {step.label}
+                                  </span>
+                                </div>
+                                {idx < miniSteps.length - 1 && (
+                                  <div className={cn(
+                                    "flex-1 h-0.5 min-w-[12px] rounded-full mt-[-14px]",
+                                    isCompleted && idx < currentIdx ? "bg-emerald-300" : "bg-slate-200"
+                                  )} />
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                        {isTerminal && (
+                          <div className="mt-2 text-center text-[10px] font-bold uppercase tracking-wider text-red-500">
+                            Order {order.status}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Action Bar */}
                   <div className="flex flex-wrap gap-3 justify-between items-center pt-2">

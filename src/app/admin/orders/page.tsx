@@ -35,21 +35,42 @@ export default function AdminOrdersPage() {
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [courierFilter, setCourierFilter] = useState('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
+  const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
+    fetchWarehouses();
   }, []);
+
+  const fetchWarehouses = async () => {
+    const { data } = await supabase.from('warehouses').select('id, name').eq('is_active', true).order('name');
+    setWarehouses(data || []);
+  };
+
+  const handleAssignWarehouse = async (orderId: string, warehouseId: string) => {
+    setAssigningOrder(orderId);
+    try {
+      const { assignWarehouseToOrder } = await import('@/lib/actions/admin/order-workflow');
+      await assignWarehouseToOrder(orderId, warehouseId, null);
+      toast.success('Order assigned to warehouse');
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to assign warehouse');
+    } finally {
+      setAssigningOrder(null);
+    }
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('orders')
-      .select('*, profiles(full_name, email, phone)')
+      .select('*, profiles!customer_id(full_name, email, phone)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -86,11 +107,6 @@ export default function AdminOrdersPage() {
     // Status Filter
     if (statusFilter !== 'all') {
       result = result.filter((o) => o.status === statusFilter);
-    }
-
-    // Payment Status Filter
-    if (paymentStatusFilter !== 'all') {
-      result = result.filter((o) => o.payment_status === paymentStatusFilter);
     }
 
     // Courier Filter
@@ -135,7 +151,7 @@ export default function AdminOrdersPage() {
     });
 
     setFilteredOrders(result);
-  }, [searchTerm, statusFilter, paymentStatusFilter, dateFilter, courierFilter, paymentMethodFilter, sortOrder, orders]);
+  }, [searchTerm, statusFilter, dateFilter, courierFilter, paymentMethodFilter, sortOrder, orders]);
 
   // Compute Stats dynamically based on unfiltered orders list to keep metrics store-wide
   const getStats = () => {
@@ -201,25 +217,6 @@ export default function AdminOrdersPage() {
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider border border-rose-300"><Undo2 className="h-3 w-3" /> Refunded</span>;
       default: 
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-50 text-slate-700 text-[10px] font-black uppercase tracking-wider border">{status}</span>;
-    }
-  };
-
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'paid': 
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-green-50 text-green-700 border border-green-150">Paid</span>;
-      case 'failed': 
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-red-50 text-red-700 border border-red-150">Failed</span>;
-      case 'refund pending': 
-      case 'refund_pending':
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-amber-50 text-amber-700 border border-amber-150">Refund Pending</span>;
-      case 'refunded': 
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-700 border border-slate-200">Refunded</span>;
-      case 'partially refunded': 
-      case 'partially_refunded':
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-600 border border-slate-200">Partially Refunded</span>;
-      default: 
-        return <span className="px-2 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-50 text-slate-500 border">Unpaid</span>;
     }
   };
 
@@ -342,12 +339,11 @@ export default function AdminOrdersPage() {
                 <option value="30days">Last 30 Days</option>
               </select>
 
-              {(searchTerm || statusFilter !== 'all' || paymentStatusFilter !== 'all' || dateFilter !== 'all' || courierFilter !== 'all' || paymentMethodFilter !== 'all') && (
+              {(searchTerm || statusFilter !== 'all' || dateFilter !== 'all' || courierFilter !== 'all' || paymentMethodFilter !== 'all') && (
                 <button 
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('all');
-                    setPaymentStatusFilter('all');
                     setDateFilter('all');
                     setCourierFilter('all');
                     setPaymentMethodFilter('all');
@@ -361,7 +357,7 @@ export default function AdminOrdersPage() {
           </div>
 
           {/* Quick Dropdown Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2">
             <div className="space-y-1">
               <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Order Status</span>
               <select 
@@ -382,22 +378,6 @@ export default function AdminOrdersPage() {
                 <option value="cancelled">Cancelled</option>
                 <option value="returned">Returned</option>
                 <option value="refunded">Refunded</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Payment Status</span>
-              <select 
-                value={paymentStatusFilter} 
-                onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                className="w-full h-9 bg-slate-50 border border-slate-100 rounded-lg px-2 text-[11px] outline-none cursor-pointer"
-              >
-                <option value="all">All Payments</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="failed">Failed</option>
-                <option value="refunded">Refunded</option>
-                <option value="refund pending">Refund Pending</option>
               </select>
             </div>
 
@@ -428,10 +408,6 @@ export default function AdminOrdersPage() {
               >
                 <option value="all">All Methods</option>
                 <option value="cod">Cash on Delivery</option>
-                <option value="sslcommerz">SSLCommerz</option>
-                <option value="bkash">bKash</option>
-                <option value="nagad">Nagad</option>
-                <option value="manual">Manual Payment</option>
               </select>
             </div>
           </div>
@@ -447,8 +423,8 @@ export default function AdminOrdersPage() {
                 <th className="px-6 py-4">Customer Details</th>
                 <th className="px-6 py-4">Order Date</th>
                 <th className="px-6 py-4">Fulfillment Status</th>
-                <th className="px-6 py-4">Payment</th>
                 <th className="px-6 py-4 text-right">Total Price</th>
+                <th className="px-6 py-4">Warehouse</th>
                 <th className="px-6 py-4 text-center">Fulfillment</th>
               </tr>
             </thead>
@@ -493,15 +469,28 @@ export default function AdminOrdersPage() {
                         {getStatusBadge(order.status)}
                       </td>
                       
-                      {/* Payment */}
-                      <td className="px-6 py-4 space-y-1">
-                        <div>{getPaymentStatusBadge(order.payment_status)}</div>
-                        <p className="text-[9px] uppercase font-bold text-slate-400">{order.payment_method || 'sslcommerz'}</p>
-                      </td>
-                      
                       {/* Total */}
                       <td className="px-6 py-4 text-right font-black text-slate-950">
                         {formatPrice(Number(order.total_price || order.amount || 0))}
+                      </td>
+                      
+                      {/* Warehouse */}
+                      <td className="px-6 py-4">
+                        {order.warehouse_id ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
+                            {warehouses.find(w => w.id === order.warehouse_id)?.name || 'Assigned'}
+                          </span>
+                        ) : (
+                          <select
+                            value=""
+                            onChange={(e) => { if (e.target.value) handleAssignWarehouse(order.id, e.target.value); }}
+                            disabled={assigningOrder === order.id}
+                            className="h-8 px-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 text-[10px] font-bold text-amber-700 outline-none cursor-pointer"
+                          >
+                            <option value="">Assign Warehouse</option>
+                            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                          </select>
+                        )}
                       </td>
                       
                       {/* Actions */}

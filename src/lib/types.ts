@@ -104,7 +104,7 @@ export interface Order {
   items: CartItem[];
   total: number;
   status: OrderStatus;
-  paymentMethod: 'bkash' | 'nagad' | 'cod';
+  paymentMethod: 'cod';
   transactionId?: string;
   date: string;
 }
@@ -127,13 +127,14 @@ export interface User {
   role: 'customer' | 'admin';
 }
 
-export type CouponType = 'percent' | 'fixed';
+export type CouponType = 'percent' | 'fixed' | 'free_shipping';
 
 export interface Coupon {
   id: string;
   code: string;
   type: CouponType;
   value: number;
+  description: string | null;
   min_order: number;
   max_discount: number | null;
   max_uses: number | null;
@@ -142,8 +143,11 @@ export interface Coupon {
   starts_at: string | null;
   expires_at: string | null;
   first_order_only: boolean;
+  new_customer_only: boolean;
   applicable_products: string[];
   applicable_categories: string[];
+  excluded_products: string[];
+  excluded_categories: string[];
   is_active: boolean;
   created_at: string;
 }

@@ -20,7 +20,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  userRole: 'admin' | 'customer' | null;
+  isWarehouseStaff: boolean;
+  userRole: 'admin' | 'customer' | 'warehouse_staff' | null;
   isLoading: boolean;
 }
 
@@ -30,7 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [userRole, setUserRole] = useState<'admin' | 'customer' | null>(null);
+  const [userRole, setUserRole] = useState<'admin' | 'customer' | 'warehouse_staff' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -78,13 +79,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data, error } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, is_warehouse_staff')
           .eq('id', user.id)
           .maybeSingle();
 
         if (isMounted) {
           if (data) {
-            setUserRole(data.role);
+            if (data.is_warehouse_staff) {
+              setUserRole('warehouse_staff');
+            } else {
+              setUserRole(data.role);
+            }
           } else {
             setUserRole('customer');
           }
@@ -226,9 +231,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAuthenticated = !!user;
   const isAdmin = userRole === 'admin';
+  const isWarehouseStaff = userRole === 'warehouse_staff';
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, isAuthenticated, isAdmin, userRole, isLoading, verifyOtp, resendOtp }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, isAuthenticated, isAdmin, isWarehouseStaff, userRole, isLoading, verifyOtp, resendOtp }}>
       {children}
     </AuthContext.Provider>
   );

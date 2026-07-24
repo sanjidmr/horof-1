@@ -22,7 +22,8 @@ import {
   RefreshCw,
   Mail,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  Warehouse
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -30,13 +31,13 @@ import { toast } from 'react-hot-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { 
   updateOrderStatusAction, 
-  updateOrderPaymentStatusAction, 
   assignCourierAction, 
   updateOrderNotesAction, 
   handleReturnAction, 
   handleRefundAction, 
   cancelOrderAction
 } from '@/lib/actions/orders';
+import { assignWarehouseToOrder } from '@/lib/actions/admin/order-workflow';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
 
 interface OrderDetailViewProps {
@@ -58,15 +59,6 @@ const ORDER_STATUSES = [
   'cancelled',
   'returned',
   'refunded'
-];
-
-const PAYMENT_STATUSES = [
-  'pending',
-  'paid',
-  'failed',
-  'refund pending',
-  'refunded',
-  'partially refunded'
 ];
 
 const COURIERS = [
@@ -91,7 +83,6 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
 
   // Input states
   const [status, setStatus] = useState(order.status);
-  const [paymentStatus, setPaymentStatus] = useState(order.payment_status);
   const [statusNote, setStatusNote] = useState('');
   
   const { items: metaItems, metadata } = parseProductDetails(order.product_details);
@@ -116,6 +107,42 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
   const [sendSms, setSendSms] = useState(false);
 
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Warehouse Assignment states
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(order.warehouse_id || '');
+  const [warehouseNotes, setWarehouseNotes] = useState(order.warehouse_notes || '');
+
+  // Fetch warehouses list
+  useEffect(() => {
+    supabase.from('warehouses').select('id, name').eq('is_active', true).order('name')
+      .then(({ data }) => { if (data) setWarehouses(data); });
+  }, []);
+
+  // Warehouse Assignment handler
+  const handleAssignWarehouse = async () => {
+    if (!selectedWarehouseId) {
+      toast.error('Please select a warehouse.');
+      return;
+    }
+    setIsUpdating(true);
+    try {
+      const res = await assignWarehouseToOrder(order.id, selectedWarehouseId, warehouseNotes, adminName);
+      if (res.success) {
+        toast.success('Warehouse assigned successfully.');
+        setOrder(prev => ({
+          ...prev,
+          warehouse_id: selectedWarehouseId,
+          warehouse_notes: warehouseNotes,
+        }));
+        await refreshTimeline();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to assign warehouse.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   // Fetch current admin profile on load
   useEffect(() => {
@@ -165,24 +192,6 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to update status.');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  // 2. Update Payment Status Action
-  const handleUpdatePaymentStatus = async (newPayStatus: string) => {
-    setIsUpdating(true);
-    try {
-      const res = await updateOrderPaymentStatusAction(order.id, newPayStatus, adminName);
-      if (res.success) {
-        setPaymentStatus(newPayStatus.toLowerCase());
-        setOrder(prev => ({ ...prev, payment_status: newPayStatus.toLowerCase() }));
-        toast.success(`Payment status updated: ${newPayStatus}`);
-        await refreshTimeline();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update payment status.');
     } finally {
       setIsUpdating(false);
     }
@@ -291,7 +300,6 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
             product_details: [...itms, { ...meta, is_metadata: true }]
           };
         });
-        setPaymentStatus(approve ? 'refunded' : paymentStatus);
         setRefundRejectNote('');
         await refreshTimeline();
       }
@@ -526,7 +534,7 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Refund Resolution Note</label>
                       <input 
-                        placeholder="e.g. Refund issued back to original bKash wallet."
+                        placeholder="e.g. Cash refund confirmed."
                         value={refundRejectNote}
                         onChange={(e) => setRefundRejectNote(e.target.value)}
                         className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-red-700"
@@ -595,6 +603,55 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
         {/* Right Sidebar Columns */}
         <div className="space-y-8">
           
+          {/* Warehouse Assignment */}
+          <Card className="border-slate-100 shadow-sm rounded-3xl">
+            <CardHeader className="flex flex-row justify-between items-center">
+              <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-700">Warehouse Assignment</CardTitle>
+              <Warehouse size={16} className="text-[#1a4731]" />
+            </CardHeader>
+            <CardContent className="space-y-4 text-xs">
+              {order.warehouse_id && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-[11px] font-semibold">
+                  Assigned: {warehouses.find(w => w.id === order.warehouse_id)?.name || 'Unknown'}
+                  {order.warehouse_status && (
+                    <span className="ml-2 text-emerald-500 font-normal">| Status: {order.warehouse_status}</span>
+                  )}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Select Warehouse</label>
+                <select
+                  className="w-full h-10 px-3 rounded-xl border bg-white text-xs outline-none focus:border-[#1a4731] cursor-pointer"
+                  value={selectedWarehouseId}
+                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                  disabled={isUpdating}
+                >
+                  <option value="">-- Select Warehouse --</option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Warehouse Notes</label>
+                <textarea
+                  className="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:border-[#1a4731] min-h-[60px] resize-none"
+                  value={warehouseNotes}
+                  onChange={(e) => setWarehouseNotes(e.target.value)}
+                  placeholder="Special instructions for warehouse staff..."
+                  disabled={isUpdating}
+                />
+              </div>
+              <Button
+                onClick={handleAssignWarehouse}
+                disabled={isUpdating || !selectedWarehouseId}
+                className="w-full h-11 bg-[#1a4731] hover:bg-[#2d6a4f] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow shadow-forest-900/10"
+              >
+                <Save size={14} /> {order.warehouse_id ? 'Update Assignment' : 'Assign Warehouse'}
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Order Status Update Controls */}
           <Card className="border-slate-100 shadow-sm rounded-3xl">
             <CardHeader>
@@ -614,23 +671,6 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                   {ORDER_STATUSES.map(opt => (
                     <option key={opt} value={opt} className="capitalize">
                       {opt.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Payment Status */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Status</label>
-                <select 
-                  className="w-full h-10 px-3 rounded-xl border bg-white text-xs outline-none focus:border-[#1a4731] cursor-pointer font-medium"
-                  value={paymentStatus}
-                  onChange={(e) => handleUpdatePaymentStatus(e.target.value)}
-                  disabled={isUpdating}
-                >
-                  {PAYMENT_STATUSES.map(opt => (
-                    <option key={opt} value={opt} className="capitalize">
-                      {opt}
                     </option>
                   ))}
                 </select>
@@ -849,11 +889,8 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                 <div className="flex items-start gap-2.5">
                   <CreditCard size={16} className="text-slate-400 mt-0.5" />
                   <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Billing & Transaction</span>
-                    <p className="text-slate-700 mt-1 capitalize">{order.payment_method || 'Manual'}</p>
-                    {order.transaction_id && (
-                      <p className="font-mono text-[10px] text-[#1a4731] font-semibold mt-1">TXN: {order.transaction_id}</p>
-                    )}
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Payment</span>
+                    <p className="text-slate-700 mt-1 capitalize">Cash on Delivery</p>
                   </div>
                 </div>
 

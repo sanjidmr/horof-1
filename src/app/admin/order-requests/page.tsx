@@ -23,11 +23,13 @@ import {
   BadgePercent,
   Layers,
   DollarSign,
+  MessageSquare,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { formatPrice, cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
+import { approveOrderRequest, rejectOrderRequest, requestOrderChanges } from '@/lib/actions/admin/order-workflow';
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -132,6 +134,10 @@ export default function AdminOrderRequestsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [rejectModal, setRejectModal] = useState<OrderRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [changesModal, setChangesModal] = useState<OrderRequest | null>(null);
+  const [changesMessage, setChangesMessage] = useState('');
 
   const supabase = createSupabaseBrowserClient();
 
@@ -184,108 +190,16 @@ export default function AdminOrderRequestsPage() {
     setFiltered(list);
   }, [requests, search, statusFilter]);
 
-  // ── Approve → create order ──
+  // ── Approve → create order via server action ──
   const handleApprove = async (req: OrderRequest) => {
     setActionLoading(req.id + '_approve');
     try {
-      const isCheckoutRequest = Array.isArray((req.customer_info as any)?.items) && (req.customer_info as any).items.length > 0;
-
-      // 1. Create order in orders table
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          customer_name: req.customer_info?.name ?? 'Unknown',
-          customer_email: req.customer_info?.email ?? null,
-          customer_phone: req.customer_info?.phone ?? null,
-          customer_address: req.customer_info?.address ?? null,
-          total_price: req.final_total_price,
-          amount: req.final_total_price,
-          status: 'pending',
-          payment_status: 'unpaid',
-          payment_method: 'manual',
-          product_details: isCheckoutRequest 
-            ? (req.customer_info as any).items 
-            : {
-                product_id: req.product_id,
-                product_name: req.product_name,
-                quantity: req.quantity,
-                specifications: req.selected_specifications,
-                discount_percent: req.discount_percent,
-                discount_amount: req.discount_amount,
-                design_charge: req.design_charge,
-                order_request_id: req.id,
-              },
-          user_id: req.user_id,
-        })
-        .select('id')
-        .single();
-
-      if (orderError || !order) throw orderError || new Error('Failed to create order');
-
-      // 2. Create order items & update stock
-      if (isCheckoutRequest) {
-        const orderItems = (req.customer_info as any).items.map((item: any) => ({
-          order_id: order.id,
-          product_id: item.product_id,
-          quantity: item.quantity,
-          unit_price: item.price || item.unit_price,
-          user_id: req.user_id,
-        }));
-        
-        const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
-        if (itemsError) throw itemsError;
-
-        for (const item of (req.customer_info as any).items) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', item.product_id)
-            .single();
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: Math.max(0, Number(product.stock || 0) - Number(item.quantity || 0)) })
-              .eq('id', item.product_id);
-          }
-        }
-      } else {
-        if (req.product_id) {
-          const { error: itemsError } = await supabase.from('order_items').insert({
-            order_id: order.id,
-            product_id: req.product_id,
-            quantity: req.quantity,
-            unit_price: req.final_total_price / req.quantity,
-            user_id: req.user_id,
-          });
-          if (itemsError) throw itemsError;
-
-          const { data: product } = await supabase
-            .from('products')
-            .select('stock')
-            .eq('id', req.product_id)
-            .single();
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ stock: Math.max(0, Number(product.stock || 0) - Number(req.quantity || 0)) })
-              .eq('id', req.product_id);
-          }
-        }
+      const result = await approveOrderRequest(req.id);
+      if (result.ok) {
+        toast.success('Order approved & created!');
+        setSelected(null);
+        fetchRequests();
       }
-
-      // 3. Mark order request as approved
-      const { error: updateError } = await supabase
-        .from('order_requests')
-        .update({ status: 'approved' })
-        .eq('id', req.id);
-
-      if (updateError) throw updateError;
-
-      toast.success('Order request approved & moved to Orders!');
-      setSelected(null);
-      fetchRequests();
     } catch (err: any) {
       toast.error(err.message || 'Failed to approve request');
     } finally {
@@ -293,21 +207,35 @@ export default function AdminOrderRequestsPage() {
     }
   };
 
-  // ── Reject ──
+  // ── Reject with reason ──
   const handleReject = async (req: OrderRequest) => {
     setActionLoading(req.id + '_reject');
     try {
-      const { error } = await supabase
-        .from('order_requests')
-        .update({ status: 'rejected' })
-        .eq('id', req.id);
-
-      if (error) throw error;
+      await rejectOrderRequest(req.id, rejectReason);
       toast.success('Order request rejected.');
-      if (selected?.id === req.id) setSelected({ ...req, status: 'rejected' });
+      setRejectModal(null);
+      setRejectReason('');
+      setSelected(null);
       fetchRequests();
     } catch (err: any) {
       toast.error(err.message || 'Failed to reject request');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ── Request Changes ──
+  const handleRequestChanges = async (req: OrderRequest) => {
+    setActionLoading(req.id + '_changes');
+    try {
+      await requestOrderChanges(req.id, changesMessage);
+      toast.success('Change request sent to customer.');
+      setChangesModal(null);
+      setChangesMessage('');
+      setSelected(null);
+      fetchRequests();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send change request');
     } finally {
       setActionLoading(null);
     }
@@ -754,23 +682,29 @@ export default function AdminOrderRequestsPage() {
 
             {/* Modal Footer — Actions */}
             {selected.status === 'pending' && (
-              <div className="p-5 border-t border-slate-100 flex items-center gap-3 bg-slate-50/50">
-                <button
-                  disabled={!!actionLoading}
-                  onClick={() => handleReject(selected)}
-                  className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-sm transition-all disabled:opacity-50"
-                >
-                  {actionLoading === selected.id + '_reject' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
+              <div className="p-5 border-t border-slate-100 space-y-3 bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <button
+                    disabled={!!actionLoading}
+                    onClick={() => setChangesModal(selected)}
+                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-amber-200 bg-white text-amber-700 hover:bg-amber-50 font-bold text-sm transition-all disabled:opacity-50"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Request Changes
+                  </button>
+                  <button
+                    disabled={!!actionLoading}
+                    onClick={() => setRejectModal(selected)}
+                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-red-200 bg-white text-red-600 hover:bg-red-50 font-bold text-sm transition-all disabled:opacity-50"
+                  >
                     <Ban className="h-4 w-4" />
-                  )}
-                  Reject Request
-                </button>
+                    Reject
+                  </button>
+                </div>
                 <button
                   disabled={!!actionLoading}
                   onClick={() => handleApprove(selected)}
-                  className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-[#1a4731] hover:bg-[#22573d] text-white font-bold text-sm transition-all shadow-lg shadow-[#1a4731]/30 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-[#1a4731] hover:bg-[#22573d] text-white font-bold text-sm transition-all shadow-lg shadow-[#1a4731]/30 disabled:opacity-50"
                 >
                   {actionLoading === selected.id + '_approve' ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -791,6 +725,80 @@ export default function AdminOrderRequestsPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject Reason Modal ── */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setRejectModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Ban className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Reject Order Request</h3>
+                <p className="text-xs text-slate-500">Provide a reason for rejection (optional but recommended).</p>
+              </div>
+            </div>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Item out of stock, unable to meet specifications..."
+              rows={3}
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 transition-all resize-none"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setRejectModal(null); setRejectReason(''); }} className="flex-1 h-11 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-semibold text-sm transition-all">
+                Cancel
+              </button>
+              <button
+                disabled={!!actionLoading}
+                onClick={() => handleReject(rejectModal)}
+                className="flex-1 h-11 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === rejectModal.id + '_reject' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                Confirm Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Request Changes Modal ── */}
+      {changesModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setChangesModal(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <MessageSquare className="h-5 w-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Request Changes</h3>
+                <p className="text-xs text-slate-500">Ask the customer to update their order details.</p>
+              </div>
+            </div>
+            <textarea
+              value={changesMessage}
+              onChange={(e) => setChangesMessage(e.target.value)}
+              placeholder="e.g. Please specify preferred color, update delivery address..."
+              rows={3}
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all resize-none"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setChangesModal(null); setChangesMessage(''); }} className="flex-1 h-11 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-semibold text-sm transition-all">
+                Cancel
+              </button>
+              <button
+                disabled={!!actionLoading || !changesMessage.trim()}
+                onClick={() => handleRequestChanges(changesModal)}
+                className="flex-1 h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === changesModal.id + '_changes' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
+                Send Request
+              </button>
+            </div>
           </div>
         </div>
       )}

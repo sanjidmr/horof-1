@@ -55,7 +55,7 @@ export default async function AdminDashboard() {
     supabase.from('products').select('*', { count: 'exact', head: true }),
     supabase.from('orders').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer'),
-    supabase.from('orders').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(5),
+    supabase.from('orders').select('*, profiles!customer_id(full_name)').order('created_at', { ascending: false }).limit(5),
     supabase.from('contact_messages').select('*').order('created_at', { ascending: false }).limit(5),
     supabase.from('products').select('*').order('created_at', { ascending: false }).limit(5),
     supabase.from('orders').select('total_price, status'),

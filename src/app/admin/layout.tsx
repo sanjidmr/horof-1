@@ -14,10 +14,12 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('role,email,avatar_url')
+    .select('role,email,avatar_url,is_warehouse_staff,assigned_warehouse_id')
     .eq('id', user.id)
     .single();
-  if (profileError || !profile || profile.role !== 'admin') redirect('/login?error=forbidden');
+  if (profileError || !profile) redirect('/login?error=forbidden');
+  const isAllowed = profile.role === 'admin' || profile.role === 'warehouse_staff' || profile.is_warehouse_staff;
+  if (!isAllowed) redirect('/login?error=forbidden');
 
   return (
     <AdminLayoutClient user={user} profile={profile}>

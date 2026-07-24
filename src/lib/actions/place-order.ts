@@ -98,7 +98,7 @@ export async function placeOrder(orderData: {
         user_id: user.id,
         order_request_id: orderRequest.id,
       });
-      await supabase.rpc('increment_coupon_used_count', { coupon_id: orderData.coupon_id });
+      await supabase.rpc('increment_coupon_used_count', { p_coupon_id: orderData.coupon_id });
     } catch (err) {
       console.error('Failed to record coupon usage:', err);
     }

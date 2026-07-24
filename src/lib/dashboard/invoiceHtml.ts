@@ -2,6 +2,10 @@ import type { OrderWithItems } from './types';
 import { normalizeOrderStatus } from './types';
 import { orderRowTotal, parseProductImages } from './orderHelpers';
 
+const bd = '০১২৩৪৫৬৭৮৯';
+function toEng(n: number) {
+  return n.toLocaleString('bn-BD').replace(/[০-৯]/g, d => String(bd.indexOf(d)));
+}
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, '&amp;')
@@ -27,7 +31,7 @@ export function buildInvoiceHtml(order: OrderWithItems, brand = 'Horof') {
         </td>
         <td style="padding:10px;border-bottom:1px solid #e5ebe6;font-weight:600;color:#1A3320;">${name}</td>
         <td style="padding:10px;border-bottom:1px solid #e5ebe6;">${qty}</td>
-        <td style="padding:10px;border-bottom:1px solid #e5ebe6;">৳${line.toLocaleString('bn-BD')}</td>
+        <td style="padding:10px;border-bottom:1px solid #e5ebe6;">৳${toEng(line)}</td>
       </tr>`;
     })
     .join('');
@@ -51,7 +55,7 @@ export function buildInvoiceHtml(order: OrderWithItems, brand = 'Horof') {
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <p style="margin-top:24px;font-size:22px;font-weight:800;color:#c9a962;">Total: ৳${total.toLocaleString('bn-BD')}</p>
+    <p style="margin-top:24px;font-size:22px;font-weight:800;color:#c9a962;">Total: ৳${toEng(total)}</p>
     <p style="margin-top:18px;color:#547456;font-size:12px;">Thank you for supporting handcrafted decor.</p>
   </div>
 </body></html>`;

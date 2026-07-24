@@ -74,26 +74,31 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(new URL(role === 'admin' ? '/admin/dashboard' : '/customer/dashboard', request.url))
   }
 
-  // Admin protection
-  if (pathname.startsWith('/admin')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-    if (!isVerified) {
-      if (user.email) {
-        return NextResponse.redirect(new URL(`/verify-otp?email=${encodeURIComponent(user.email)}`, request.url))
-      }
-      return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
-    }
-
+  // Check is_banned for all authenticated routes
+  if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, is_banned')
       .eq('id', user.id)
       .single()
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.redirect(new URL('/customer/dashboard', request.url))
+    if (profile?.is_banned) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/login?error=banned', request.url))
+    }
+
+    // Admin protection
+    if (pathname.startsWith('/admin')) {
+      if (!isVerified) {
+        if (user.email) {
+          return NextResponse.redirect(new URL(`/verify-otp?email=${encodeURIComponent(user.email)}`, request.url))
+        }
+        return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
+      }
+
+      if (profile?.role !== 'admin') {
+        return NextResponse.redirect(new URL('/customer/dashboard', request.url))
+      }
     }
   }
 

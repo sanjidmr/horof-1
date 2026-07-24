@@ -26,31 +26,31 @@ export async function getHomepageData() {
       supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('order', { ascending: true }).limit(12),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name),product_reviews(rating,is_approved)')
         .eq('is_active', true)
         .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name),product_reviews(rating,is_approved)')
         .eq('is_active', true)
         .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name),product_reviews(rating,is_approved)')
         .eq('is_active', true)
         .eq('is_best_selling', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name),product_reviews(rating,is_approved)')
         .eq('is_active', true)
         .eq('is_new_arrival', true)
         .limit(8),
       supabase
         .from('products')
-        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name)')
+        .select('id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories(name),subcategories(name),product_reviews(rating,is_approved)')
         .eq('is_active', true)
         .eq('is_product_of_the_day', true)
         .limit(1),
@@ -124,7 +124,7 @@ export async function getProducts(params: {
   let query = supabase
     .from('products')
     .select(
-      'id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories!inner(name,slug),subcategories!left(name)',
+      'id,name,slug,description,price,compare_price,stock,is_best_selling,is_new_arrival,is_product_of_the_day,perfect_for,product_images(url,sort_order),categories!inner(name,slug),subcategories!left(name),product_reviews(rating,is_approved)',
       { count: 'exact' }
     )
     .eq('is_active', true);

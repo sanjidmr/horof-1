@@ -4,6 +4,24 @@ import { createSupabaseServerClient } from '../supabase/server';
 import { parseProductDetails, buildProductDetails } from '@/lib/utils/order-helpers';
 import { revalidatePath } from 'next/cache';
 
+async function requireAdmin() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error('Supabase client not initialized');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  if (!profile || profile.role !== 'admin') throw new Error('Forbidden');
+  return { supabase, user };
+}
+
+async function requireAuth() {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error('Supabase client not initialized');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  return { supabase, user };
+}
+
 /**
  * 1. Update Order Status (Pending, Confirmed, Processing, Packed, Ready for Pickup, Shipped, In Transit, Out for Delivery, Delivered, Cancelled, Returned, Refunded)
  */
@@ -13,8 +31,7 @@ export async function updateOrderStatusAction(
   note?: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   // Fetch current order state to check status and load product_details
   const { data: order, error: fetchErr } = await supabase
@@ -98,8 +115,7 @@ export async function updateOrderPaymentStatusAction(
   newPaymentStatus: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -139,8 +155,7 @@ export async function assignCourierAction(
   estimatedDelivery?: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -189,8 +204,7 @@ export async function updateOrderNotesAction(
   notesText: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -233,8 +247,7 @@ export async function updateOrderNotesAction(
  * 5. Request Return (Customer)
  */
 export async function requestOrderReturnAction(orderId: number, reason: string) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase, user } = await requireAuth();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -243,6 +256,8 @@ export async function requestOrderReturnAction(orderId: number, reason: string) 
     .single();
 
   if (fetchErr || !order) throw new Error('Order not found');
+
+  if (order.user_id !== user.id) throw new Error('You can only return your own orders');
 
   // Verify eligibility (e.g., status is delivered)
   if (order.status !== 'delivered') {
@@ -283,8 +298,7 @@ export async function handleReturnAction(
   note?: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -325,6 +339,21 @@ export async function handleReturnAction(
     await adjustStock(supabase, orderId, items, 'add');
   }
 
+  // Notify customer
+  if (order.user_id) {
+    const orderNum = orderId.toString().slice(0, 8).toUpperCase();
+    await supabase.from('notifications').insert({
+      title: approve ? 'Return Approved' : 'Return Rejected',
+      message: approve
+        ? `Your return request for order #${orderNum} has been approved. Please follow the return instructions.`
+        : `Your return request for order #${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: '/orders',
+    });
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
@@ -339,8 +368,7 @@ export async function handleRefundAction(
   note?: string,
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase } = await requireAdmin();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -377,6 +405,21 @@ export async function handleRefundAction(
     note: timelineNote
   });
 
+  // Notify customer
+  if (order.user_id) {
+    const orderNum = orderId.toString().slice(0, 8).toUpperCase();
+    await supabase.from('notifications').insert({
+      title: approve ? 'Refund Approved' : 'Refund Rejected',
+      message: approve
+        ? `Your refund for order #${orderNum} has been approved. The amount will be processed shortly.`
+        : `Your refund request for order #${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: '/orders',
+    });
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
   return { success: true };
@@ -385,14 +428,52 @@ export async function handleRefundAction(
 /**
  * 8. Cancel Order (Customer or Admin)
  */
+export async function getOrderTrackingData(orderId: string) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) throw new Error('Supabase client not initialized');
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const query = supabase
+    .from('orders')
+    .select(`
+      *,
+      order_items (
+        *,
+        products (
+          name,
+          images
+        )
+      )
+    `)
+    .eq('id', orderId)
+    .maybeSingle();
+
+  const { data: order, error: fetchErr } = await query;
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!order) throw new Error('Order not found');
+
+  // If user is authenticated, verify ownership
+  if (user && order.user_id !== user.id && order.customer_id !== user.id) {
+    throw new Error('You can only track your own orders');
+  }
+
+  const { data: timelineData } = await supabase
+    .from('order_timeline')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+
+  return { order, timeline: timelineData || [] };
+}
+
 export async function cancelOrderAction(
   orderId: number,
   reason?: string,
   userRole: 'customer' | 'admin' = 'customer',
   adminName?: string
 ) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) throw new Error('Supabase client not initialized');
+  const { supabase, user } = userRole === 'admin' ? await requireAdmin() : await requireAuth();
 
   const { data: order, error: fetchErr } = await supabase
     .from('orders')
@@ -401,6 +482,11 @@ export async function cancelOrderAction(
     .single();
 
   if (fetchErr || !order) throw new Error('Order not found');
+
+  // Verify customer can only cancel their own orders
+  if (userRole === 'customer' && order.user_id !== user.id) {
+    throw new Error('You can only cancel your own orders');
+  }
 
   // Verify eligibility (customer can only cancel pending)
   if (userRole === 'customer' && order.status !== 'pending') {
@@ -470,4 +556,92 @@ async function adjustStock(supabase: any, orderId: number, items: any[], type: '
   } catch (err) {
     console.error('Error adjusting stock for order ' + orderId + ':', err);
   }
+}
+
+/**
+ * 8. Get All Return Requests (Admin)
+ */
+export async function getReturnRequests(statusFilter?: string) {
+  const { supabase } = await requireAdmin();
+
+  let query = supabase
+    .from('orders')
+    .select(`
+      id, order_number, customer_name, customer_email, customer_phone,
+      status, total, created_at, updated_at, product_details,
+      user_id, warehouse_id
+    `)
+    .in('status', ['delivered', 'returned', 'refunded', 'cancelled'])
+    .order('updated_at', { ascending: false })
+    .limit(200);
+
+  const { data: orders, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const returns = (orders || []).map((order: any) => {
+    const { items, metadata } = parseProductDetails(order.product_details);
+    return {
+      id: order.id,
+      order_number: order.order_number,
+      customer_name: order.customer_name,
+      customer_email: order.customer_email,
+      customer_phone: order.customer_phone,
+      status: order.status,
+      total: order.total,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      return_status: metadata.return_status || 'None',
+      return_reason: metadata.return_reason || '',
+      refund_status: metadata.refund_status || 'None',
+      refund_reason: metadata.refund_reason || '',
+      items: items.map((item: any) => ({
+        name: item.name || item.product_name || 'Unknown Product',
+        quantity: item.quantity || 1,
+        price: item.price || 0,
+        image: item.image || null,
+      })),
+    };
+  }).filter((r: any) => {
+    const hasReturn = r.return_status !== 'None' || r.status === 'returned';
+    if (!hasReturn) return false;
+    if (statusFilter && statusFilter !== 'all') {
+      return r.return_status.toLowerCase() === statusFilter.toLowerCase();
+    }
+    return true;
+  });
+
+  return returns;
+}
+
+/**
+ * 9. Get Return Request Detail (Admin)
+ */
+export async function getReturnRequestDetail(orderId: string) {
+  const { supabase } = await requireAdmin();
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select(`
+      *, order_items(*, products(name, image, stock, sku))
+    `)
+    .eq('id', orderId)
+    .single();
+
+  if (error || !order) throw new Error('Order not found');
+
+  const { items, metadata } = parseProductDetails(order.product_details);
+  const timelineData = await supabase
+    .from('order_timeline')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: false });
+
+  return {
+    order: {
+      ...order,
+      items,
+      metadata,
+    },
+    timeline: timelineData.data || [],
+  };
 }
