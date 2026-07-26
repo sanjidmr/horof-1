@@ -93,7 +93,7 @@ export async function getConversations(role: 'admin' | 'customer', userId?: stri
   }
 
   const { data, error } = await query;
-  if (error) { console.error('getConversations error:', error); return []; }
+  if (error) { return []; }
   return data || [];
 }
 
@@ -107,7 +107,7 @@ export async function getConversationMessages(conversationId: string) {
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true });
 
-  if (error) { console.error('getConversationMessages error:', error); return []; }
+  if (error) { return []; }
   return data || [];
 }
 
@@ -121,7 +121,7 @@ export async function markConversationRead(conversationId: string, role: 'admin'
     .update(updateField)
     .eq('id', conversationId);
 
-  if (error) console.error('markConversationRead error:', error);
+  if (error) return;
 }
 
 export async function updateConversationStatus(conversationId: string, status: string) {

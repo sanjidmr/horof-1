@@ -132,6 +132,7 @@ export async function approveOrderRequest(requestId: string) {
             discount_amount: req.discount_amount,
             design_charge: req.design_charge,
           }],
+      original_order_id: req.original_order_id || null,
     })
     .select('id')
     .single();

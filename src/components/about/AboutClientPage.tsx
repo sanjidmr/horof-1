@@ -392,7 +392,7 @@ export default function AboutClientPage() {
               <span className="text-[#c9a84c] text-[11px] font-bold uppercase tracking-[0.4em]">Trusted By</span>
               <h2 className="text-3xl lg:text-4xl font-light text-[#04342c] mt-3 tracking-tight">Our Valued Partners</h2>
             </motion.div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 items-center">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
               {displayClients.map((client: any, i: number) => (
                 <motion.div
                   key={client.id}
@@ -400,21 +400,21 @@ export default function AboutClientPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.06 }}
-                  className="group flex items-center justify-center"
+                  className="group"
                 >
                   {client.website_url ? (
-                    <a href={client.website_url} target="_blank" rel="noopener noreferrer" className="block">
-                      <div className="h-16 md:h-20 w-32 md:w-40 rounded-xl border border-slate-100 bg-slate-50/50 p-4 flex items-center justify-center group-hover:border-[#c9a84c]/30 group-hover:shadow-md transition-all duration-300">
-                        <img src={client.logo_url} alt={client.name} className="max-h-full max-w-full object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0" />
+                    <a href={client.website_url} target="_blank" rel="noopener noreferrer">
+                      <div className="h-24 md:h-28 rounded-xl border border-slate-100 bg-white p-4 md:p-5 flex items-center justify-center group-hover:border-[#c9a84c]/40 group-hover:shadow-lg transition-all duration-300">
+                        <img src={client.logo_url} alt={client.name} className="max-h-full max-w-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-center text-slate-400 mt-2 font-medium group-hover:text-[#04342c] transition-colors">{client.name}</p>
+                      <p className="text-xs text-center text-slate-500 mt-2.5 font-medium group-hover:text-[#04342c] transition-colors">{client.name}</p>
                     </a>
                   ) : (
                     <div>
-                      <div className="h-16 md:h-20 w-32 md:w-40 rounded-xl border border-slate-100 bg-slate-50/50 p-4 flex items-center justify-center group-hover:border-[#c9a84c]/30 group-hover:shadow-md transition-all duration-300">
-                        <img src={client.logo_url} alt={client.name} className="max-h-full max-w-full object-contain opacity-60 group-hover:opacity-100 transition-opacity duration-300 grayscale group-hover:grayscale-0" />
+                      <div className="h-24 md:h-28 rounded-xl border border-slate-100 bg-white p-4 md:p-5 flex items-center justify-center group-hover:border-[#c9a84c]/40 group-hover:shadow-lg transition-all duration-300">
+                        <img src={client.logo_url} alt={client.name} className="max-h-full max-w-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-center text-slate-400 mt-2 font-medium">{client.name}</p>
+                      <p className="text-xs text-center text-slate-500 mt-2.5 font-medium">{client.name}</p>
                     </div>
                   )}
                 </motion.div>

@@ -29,7 +29,6 @@ export async function submitContactMessage(data: {
   ]);
 
   if (error) {
-    console.error('Error submitting contact message:', error);
     return { success: false, error: 'Failed to send message. Please try again later.' };
   }
 

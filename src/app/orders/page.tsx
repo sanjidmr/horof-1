@@ -15,10 +15,12 @@ import {
   Filter,
   CornerUpLeft,
   AlertCircle,
-  Undo2
+  Undo2,
+  RotateCcw
 } from 'lucide-react';
 import { formatPrice, cn } from '@/lib/utils';
 import { cancelOrderAction, requestOrderReturnAction } from '@/lib/actions/orders';
+import { reorderOrder } from '@/lib/actions/reorder-order';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
 import toast from 'react-hot-toast';
 
@@ -39,6 +41,30 @@ export default function OrdersPage() {
   const [returnModalId, setReturnModalId] = useState<number | null>(null);
   const [returnReason, setReturnReason] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
+
+  // Reorder state
+  const [reorderModalId, setReorderModalId] = useState<string | null>(null);
+  const [reorderLoading, setReorderLoading] = useState(false);
+
+  const handleReorder = async () => {
+    if (!reorderModalId) return;
+    setReorderLoading(true);
+    try {
+      const res = await reorderOrder(reorderModalId);
+      if (res.ok && res.orderId) {
+        toast.success('Reorder placed successfully!');
+        setReorderModalId(null);
+        // Navigate to order confirmed page
+        window.location.href = `/order-confirmed?id=${res.orderId}&reorder=true`;
+      } else {
+        toast.error(res.message || 'Failed to reorder');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reorder');
+    } finally {
+      setReorderLoading(false);
+    }
+  };
 
   useEffect(() => {
     async function init() {
@@ -193,6 +219,10 @@ export default function OrdersPage() {
     const returnStatus = metadata.return_status || 'None';
     
     return differenceInDays <= 7 && returnStatus === 'None';
+  };
+
+  const isReorderEligible = (status: string) => {
+    return ['delivered', 'completed', 'cancelled', 'refunded', 'returned'].includes(status.toLowerCase());
   };
 
   return (
@@ -420,6 +450,14 @@ export default function OrdersPage() {
                           <CornerUpLeft className="h-3.5 w-3.5" /> Request Return
                         </button>
                       )}
+                      {isReorderEligible(order.status) && (
+                        <button 
+                          onClick={() => setReorderModalId(order.id)}
+                          className="h-11 px-6 rounded-2xl border border-[#1a4731]/30 text-[#1a4731] hover:bg-[#1a4731]/5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" /> Reorder
+                        </button>
+                      )}
                     </div>
                     
                     <div className="flex gap-3 w-full sm:w-auto justify-end">
@@ -518,6 +556,41 @@ export default function OrdersPage() {
                   className="h-12 px-8 bg-[#1a4731] text-white rounded-2xl text-xs font-bold hover:bg-[#2d6a4f] disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {returnLoading ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reorder Confirmation Modal */}
+        {reorderModalId && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 backdrop-blur-sm">
+            <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full border border-slate-100 shadow-2xl space-y-6">
+              <div className="flex items-center gap-3 text-[#1a4731]">
+                <RotateCcw className="h-6 w-6" />
+                <h3 className="text-xl font-bold">Reorder This Order?</h3>
+              </div>
+              <p className="text-xs text-slate-500 font-light leading-relaxed">
+                Your previous shipping address, phone, and delivery method will be used automatically.
+                Prices will be recalculated at current rates.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button 
+                  onClick={() => setReorderModalId(null)}
+                  className="h-12 px-6 rounded-2xl border text-xs font-bold hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleReorder}
+                  disabled={reorderLoading}
+                  className="h-12 px-8 bg-[#1a4731] text-white rounded-2xl text-xs font-bold hover:bg-[#2d6a4f] disabled:opacity-50 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  {reorderLoading ? (
+                    <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Reordering...</>
+                  ) : (
+                    <><RotateCcw className="h-4 w-4" /> Confirm Reorder</>
+                  )}
                 </button>
               </div>
             </div>

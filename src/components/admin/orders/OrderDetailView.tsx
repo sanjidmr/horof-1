@@ -23,7 +23,8 @@ import {
   Mail,
   MessageSquare,
   AlertCircle,
-  Warehouse
+  Warehouse,
+  RotateCcw
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -345,6 +346,14 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
               <Badge className={cn("capitalize border font-bold text-xs", getStatusColor(status))} variant="outline">
                 {status}
               </Badge>
+              {order.original_order_id && (
+                <Link
+                  href={`/admin/orders/${order.original_order_id}`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-bold hover:bg-purple-100 transition-colors"
+                >
+                  <RotateCcw className="h-3 w-3" /> Reorder
+                </Link>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               Logged by: <span className="font-semibold text-slate-700">{adminName}</span> | Created at: {new Date(order.created_at).toLocaleString()}
@@ -362,11 +371,11 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
             <Printer size={15} /> Packing Slip
           </Link>
           <Link 
-            href={`/orders/invoice/${order.id}`}
+            href={`/admin/orders/${order.id}/print-invoice`}
             target="_blank"
-            className="inline-flex items-center gap-2 h-11 px-5 border rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-2 h-11 px-5 bg-[#1a4731] text-white rounded-xl text-xs font-bold hover:bg-[#2d6a4f] transition-colors"
           >
-            <Printer size={15} /> Print Invoice
+            <Printer size={15} /> Print Invoice (A5)
           </Link>
           {status !== 'cancelled' && status !== 'returned' && (
             <Button 

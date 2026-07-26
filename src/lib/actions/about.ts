@@ -14,13 +14,6 @@ export async function getAboutPage() {
   return data;
 }
 
-export async function getAboutPagePublic() {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return null;
-  const { data } = await supabase.from('about_page').select('*').limit(1).single();
-  return data;
-}
-
 export async function upsertAboutPage(payload: Record<string, any>) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Supabase not configured' };

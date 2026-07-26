@@ -10,7 +10,7 @@ import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { useRequireAuth } from '../../context/AuthModalContext';
-import { submitContactMessage } from '@/lib/actions/contact';
+import { submitContactMessage, uploadContactFile } from '@/lib/actions/contact';
 
 const INQUIRY_TYPES = [
   'General Inquiry',
@@ -56,10 +56,21 @@ export default function ContactPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const submitForm = async (data: { name: string; email: string; phone: string; inquiryType: string; message: string; fileName?: string }) => {
+  const submitForm = async (data: { name: string; email: string; phone: string; inquiryType: string; message: string; fileName?: string; fileObj?: File }) => {
     setIsSubmitting(true);
     try {
-      const fullMessage = `${data.message}${data.phone ? `\n\nPhone: ${data.phone}` : ''}${data.inquiryType ? `\nInquiry Type: ${data.inquiryType}` : ''}${data.fileName ? `\nAttached File: ${data.fileName}` : ''}`;
+      let fileInfo = data.fileName ? `\nAttached File: ${data.fileName}` : '';
+
+      if (data.fileObj) {
+        const fd = new FormData();
+        fd.append('file', data.fileObj);
+        const uploadResult = await uploadContactFile(fd);
+        if (uploadResult?.url) {
+          fileInfo = `\nAttached File: ${data.fileName} (${uploadResult.url})`;
+        }
+      }
+
+      const fullMessage = `${data.message}${data.phone ? `\n\nPhone: ${data.phone}` : ''}${data.inquiryType ? `\nInquiry Type: ${data.inquiryType}` : ''}${fileInfo}`;
 
       const result = await submitContactMessage({
         name: data.name,
@@ -86,7 +97,7 @@ export default function ContactPage() {
     e.preventDefault();
     if (!inquiryType) { toast.error('Please select an inquiry type'); return; }
 
-    const formData = { name, email, phone, inquiryType, message, fileName: uploadedFile?.name };
+    const formData = { name, email, phone, inquiryType, message, fileName: uploadedFile?.name, fileObj: uploadedFile || undefined };
     localStorage.setItem('horof_pending_contact_message', JSON.stringify(formData));
 
     requireAuth(() => {

@@ -12,6 +12,7 @@ import { WhyChooseUs } from '../components/home/WhyChooseUs';
 import { NewArrivals } from '../components/home/NewArrivals';
 import { FAQSection } from '../components/home/FAQSection';
 import { CustomDesignCTA } from '../components/home/CustomDesignCTA';
+import { DesignRequestForm } from '../components/home/DesignRequestForm';
 import { createSupabaseServerClient } from '../lib/supabase/server';
 import { Product } from '../lib/types';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
@@ -171,6 +172,10 @@ export default async function HomePage() {
 
       <div className="max-w-7xl mx-auto px-6">
         <FAQSection />
+      </div>
+
+      <div className="max-w-[1400px] mx-auto px-6 py-8 md:py-12">
+        <DesignRequestForm />
       </div>
 
       

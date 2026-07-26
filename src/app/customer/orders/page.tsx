@@ -3,16 +3,20 @@
 import React, { useEffect, useState } from 'react';
 import { 
   Package, Clock, Truck, CheckCircle2, XCircle, Search, 
-  ChevronDown, ChevronUp, Calendar, AlertCircle, ShoppingBag, Eye
+  ChevronDown, ChevronUp, Calendar, AlertCircle, ShoppingBag, Eye,
+  RotateCcw
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import Link from 'next/link';
+import { reorderOrder } from '@/lib/actions/reorder-order';
+import toast from 'react-hot-toast';
 
 export default function CustomerOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrderId, setExpandedOrderId] = useState<any>(null);
   const [orderItems, setOrderItems] = useState<Record<string, any[]>>({});
+  const [reorderLoading, setReorderLoading] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
@@ -118,6 +122,27 @@ export default function CustomerOrdersPage() {
     } else {
       setExpandedOrderId(stringId);
       fetchOrderItems(orderId);
+    }
+  };
+
+  const isReorderEligible = (status: string) => {
+    return ['delivered', 'completed', 'cancelled', 'refunded', 'returned'].includes(status.toLowerCase());
+  };
+
+  const handleReorder = async (orderId: string) => {
+    setReorderLoading(orderId);
+    try {
+      const res = await reorderOrder(orderId);
+      if (res.ok && res.orderId) {
+        toast.success('Reorder placed successfully!');
+        window.location.href = `/order-confirmed?id=${res.orderId}&reorder=true`;
+      } else {
+        toast.error(res.message || 'Failed to reorder');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reorder');
+    } finally {
+      setReorderLoading(null);
     }
   };
 
@@ -285,6 +310,20 @@ export default function CustomerOrdersPage() {
                           </div>
                         </div>
                       </div>
+
+                      {!order.is_request && isReorderEligible(order.status) && (
+                        <button
+                          onClick={() => handleReorder(order.id)}
+                          disabled={reorderLoading === String(order.id)}
+                          className="w-full h-11 rounded-2xl bg-[#1a4731] text-white text-xs font-bold hover:bg-[#2d6a4f] disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          {reorderLoading === String(order.id) ? (
+                            <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Reordering...</>
+                          ) : (
+                            <><RotateCcw className="h-4 w-4" /> Reorder This Order</>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

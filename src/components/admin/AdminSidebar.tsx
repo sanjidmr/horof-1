@@ -26,6 +26,7 @@ import {
   Shield,
   UserCog,
   RotateCcw,
+  Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -57,11 +58,12 @@ const allNav: NavItem[] = [
       { title: 'All Products', href: '/admin/products', permission: 'products.view' },
       { title: 'Add New Product', href: '/admin/products/new', permission: 'products.create' },
       { title: 'Bulk Upload', href: '/admin/products/bulk-upload', permission: 'products.create' },
+      { title: 'Returns', href: '/admin/returns', permission: 'orders.view' },
     ],
   },
   { title: 'Orders', href: '/admin/orders', icon: ShoppingCart, permission: 'orders.view' },
   { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList, permission: 'orders.view' },
-  { title: 'Returns', href: '/admin/returns', icon: RotateCcw, permission: 'orders.view' },
+  { title: 'Design Requests', href: '/admin/design-requests', icon: Palette, permission: 'orders.view' },
   { title: 'Warehouse', href: '/admin/warehouse/orders', icon: Warehouse, permission: 'inventory.view' },
   { title: 'Customers', href: '/admin/customers', icon: Users, permission: 'customers.view' },
   {
