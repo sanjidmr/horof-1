@@ -12,20 +12,41 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role,email,avatar_url,is_warehouse_staff,assigned_warehouse_id')
-    .eq('id', user.id)
-    .single();
-  if (profileError || !profile) redirect('/login?error=forbidden');
-  const isAllowed = profile.role === 'admin' || profile.role === 'warehouse_staff' || profile.is_warehouse_staff;
+  const meta = user.user_metadata || {};
+  const appMeta = user.app_metadata || {};
+
+  const isWarehouseStaffMeta = meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true;
+  const isAdminMeta = meta.role === 'admin' || appMeta.role === 'admin';
+
+  let profile: any = null;
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role,email,avatar_url,is_warehouse_staff,assigned_warehouse_id')
+      .eq('id', user.id)
+      .single();
+    profile = data;
+  } catch {
+    // Profile query can fail if columns don't exist — auth metadata is the fallback
+  }
+
+  const isWarehouseStaff = isWarehouseStaffMeta || profile?.is_warehouse_staff === true || profile?.role === 'warehouse_staff';
+  const isAdmin = isAdminMeta || profile?.role === 'admin';
+  const isAllowed = isAdmin || isWarehouseStaff;
+
   if (!isAllowed) redirect('/login?error=forbidden');
 
+  const mergedProfile = {
+    email: profile?.email ?? user.email ?? null,
+    avatar_url: profile?.avatar_url ?? null,
+    is_warehouse_staff: isWarehouseStaff,
+    role: isAdmin ? 'admin' : isWarehouseStaff ? 'warehouse_staff' : profile?.role ?? 'customer',
+    assigned_warehouse_id: profile?.assigned_warehouse_id ?? null,
+  };
+
   return (
-    <AdminLayoutClient user={user} profile={profile}>
+    <AdminLayoutClient user={user} profile={mergedProfile}>
       {children}
     </AdminLayoutClient>
   );
 }
-
-

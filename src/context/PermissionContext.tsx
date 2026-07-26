@@ -31,14 +31,14 @@ const PermissionContext = createContext<PermissionContextValue>({
 });
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isWarehouseStaff } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createSupabaseBrowserClient();
 
   const fetchPermissions = useCallback(async () => {
-    if (!user || !isAdmin) {
+    if (!user || (!isAdmin && !isWarehouseStaff)) {
       setPermissions([]);
       setRoles([]);
       setLoading(false);
@@ -46,48 +46,121 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
-      const [permRes, rolesRes] = await Promise.all([
-        supabase.rpc('get_user_permissions', { p_user_id: user.id }).maybeSingle(),
-        supabase.from('user_roles').select('role:role_id(name)').eq('user_id', user.id),
-      ]);
+      const { data: userRoles } = await supabase
+        .from('user_roles')
+        .select('role:role_id(id, name)')
+        .eq('user_id', user.id);
 
-      if (permRes.data && Array.isArray(permRes.data) && permRes.data.length > 0) {
-        const granted = permRes.data
-          .filter((p: any) => p.granted)
-          .map((p: any) => p.permission_code as string);
-        setPermissions(granted);
-      } else if (permRes.error || !permRes.data || (Array.isArray(permRes.data) && permRes.data.length === 0)) {
-        // RPC failed or returned empty — migration not run or no user_roles assigned
-        // Fallback: admin users get ALL permissions for backward compatibility
+      const roleNames = (userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean) as string[];
+      setRoles(roleNames);
+
+      if (roleNames.includes('super_admin') || roleNames.includes('owner')) {
         const { data: allPerms } = await supabase.from('permissions').select('code');
-        if (allPerms && allPerms.length > 0) {
-          setPermissions(allPerms.map((p: any) => p.code));
-        } else {
-          setPermissions([]);
-        }
+        setPermissions((allPerms || []).map((p: any) => p.code as string));
+        setLoading(false);
+        return;
       }
 
-      if (rolesRes.data && rolesRes.data.length > 0) {
-        const roleNames = rolesRes.data.map((ur: any) => ur.role?.name).filter(Boolean) as string[];
-        setRoles(roleNames);
-      } else {
-        // No user_roles — fallback to treating admin as super_admin
+      const roleIds = (userRoles || []).map((ur: any) => ur.role?.id).filter(Boolean);
+      if (roleIds.length > 0) {
+        const { data: rolePerms } = await supabase
+          .from('role_permissions')
+          .select('permission:permission_id(code)')
+          .eq('granted', true)
+          .in('role_id', roleIds);
+
+        const codes = (rolePerms || []).map((rp: any) => rp.permission?.code).filter(Boolean) as string[];
+        setPermissions(codes);
+      } else if (isWarehouseStaff) {
+        setPermissions([
+          'dashboard.view',
+          'inventory.view',
+          'orders.view',
+          'orders.edit',
+          'products.view',
+          'products.edit',
+          'warehouse.view',
+          'warehouse.manage',
+        ]);
+      } else if (isAdmin) {
+        const { data: allPerms } = await supabase.from('permissions').select('code');
+        setPermissions((allPerms || []).map((p: any) => p.code as string));
         setRoles(['super_admin']);
+      } else {
+        setPermissions([]);
       }
     } catch (err) {
-      // RPC doesn't exist yet or other error — grant all permissions to admin
-      console.warn('Permission fetch failed, granting full access to admin:', err);
-      try {
-        const { data: allPerms } = await supabase.from('permissions').select('code');
-        if (allPerms && allPerms.length > 0) {
-          setPermissions(allPerms.map((p: any) => p.code));
-        }
-      } catch {}
-      setRoles(['super_admin']);
+      console.warn('Permission fetch failed:', err);
+      if (isWarehouseStaff) {
+        setPermissions([
+          'dashboard.view',
+          'inventory.view',
+          'orders.view',
+          'orders.edit',
+          'products.view',
+          'products.edit',
+          'warehouse.view',
+          'warehouse.manage',
+        ]);
+        setRoles(['warehouse_staff']);
+      } else if (isAdmin) {
+        setPermissions([
+          'dashboard.view', 'orders.view', 'orders.edit', 'orders.create',
+          'orders.delete', 'orders.manage_status', 'orders.manage_refunds', 'orders.export', 'orders.approve', 'orders.print',
+          'products.view', 'products.create', 'products.edit', 'products.delete',
+          'products.export', 'products.import', 'products.archive', 'products.duplicate', 'products.settings',
+          'categories.view', 'categories.manage',
+          'brands.view', 'brands.manage',
+          'customers.view', 'customers.manage', 'customers.ban', 'customers.delete', 'customers.export',
+          'inventory.view', 'inventory.manage', 'inventory.transfers', 'inventory.export', 'inventory.adjust',
+          'warehouse.view', 'warehouse.manage',
+          'suppliers.view', 'suppliers.manage',
+          'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.edit', 'purchase_orders.approve',
+          'stock_movement.view', 'stock_movement.export',
+          'reports.view', 'reports.export', 'reports.sales', 'reports.products',
+          'reports.customers', 'reports.finance', 'reports.inventory', 'reports.marketing',
+          'analytics.view', 'analytics.manage',
+          'marketing.coupons', 'marketing.campaigns', 'marketing.content', 'marketing.bundles',
+          'marketing.flash_sale', 'marketing.special_offer', 'marketing.popups',
+          'marketing.email_campaigns', 'marketing.site_visuals', 'marketing.services', 'marketing.faq',
+          'users.view', 'users.manage', 'users.roles', 'users.create', 'users.edit',
+          'users.delete', 'users.suspend', 'users.manage_roles', 'users.manage_permissions',
+          'users.reset_password', 'users.force_logout',
+          'roles.view', 'roles.create', 'roles.edit', 'roles.delete', 'roles.clone',
+          'permissions.view', 'permissions.manage',
+          'settings.view', 'settings.manage', 'settings.general', 'settings.theme',
+          'settings.homepage', 'settings.banners',
+          'security.view', 'security.manage', 'security.backup', 'security.fraud',
+          'security.audit_logs', 'security.login_history', 'security.sessions',
+          'support.chat', 'support.tickets',
+          'contact_messages.view', 'contact_messages.manage',
+          'finance.view', 'finance.manage',
+          'seo.view', 'seo.manage',
+          'notifications.view', 'notifications.manage',
+          'blog.view', 'blog.manage',
+          'faq.view', 'faq.manage',
+          'testimonials.view', 'testimonials.manage',
+          'reviews.view', 'reviews.manage',
+          'media.view', 'media.upload', 'media.delete',
+          'invoices.view', 'invoices.create', 'invoices.print', 'invoices.export',
+          'refunds.view', 'refunds.approve', 'refunds.reject', 'refunds.process',
+          'returns.view', 'returns.manage',
+          'delivery.view', 'delivery.manage',
+          'shipping.view', 'shipping.manage',
+          'payments.view', 'payments.manage', 'payments.refund',
+          'backup.view', 'backup.create', 'backup.restore', 'backup.delete', 'backup.schedule',
+          'system_logs.view', 'system_logs.manage',
+          'activity_logs.view',
+        ]);
+        setRoles(['super_admin']);
+      } else {
+        setPermissions([]);
+        setRoles([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [user, isAdmin, supabase]);
+  }, [user, isAdmin, isWarehouseStaff, supabase]);
 
   useEffect(() => {
     fetchPermissions();

@@ -426,15 +426,22 @@ export async function handleRefundAction(
 }
 
 /**
- * 8. Cancel Order (Customer or Admin)
+ * Track order by order_number (or UUID id) + customer email.
+ * Public — works for unauthenticated guest users too.
  */
-export async function getOrderTrackingData(orderId: string) {
+export async function getOrderTrackingData(identifier: string, email: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error('Supabase client not initialized');
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const cleanId = identifier.trim();
+  const cleanEmail = email.trim().toLowerCase();
 
-  const query = supabase
+  if (!cleanId || !cleanEmail) {
+    throw new Error('Order number and email are required');
+  }
+
+  // 1. Try lookup by order_number (case-insensitive)
+  let { data: order, error: fetchErr } = await supabase
     .from('orders')
     .select(`
       *,
@@ -446,22 +453,54 @@ export async function getOrderTrackingData(orderId: string) {
         )
       )
     `)
-    .eq('id', orderId)
+    .ilike('order_number', cleanId)
     .maybeSingle();
 
-  const { data: order, error: fetchErr } = await query;
+  // 2. Fallback: try by UUID id (if input looks like a UUID)
+  if (!order && cleanId.includes('-') && cleanId.length >= 30) {
+    const { data: byId } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          *,
+          products (
+            name,
+            images
+          )
+        )
+      `)
+      .eq('id', cleanId)
+      .maybeSingle();
+    order = byId;
+  }
+
   if (fetchErr) throw new Error(fetchErr.message);
   if (!order) throw new Error('Order not found');
 
-  // If user is authenticated, verify ownership
-  if (user && order.user_id !== user.id && order.customer_id !== user.id) {
-    throw new Error('You can only track your own orders');
+  // 3. Verify email matches (case-insensitive, trimmed)
+  const orderEmail = (order.customer_email || '').trim().toLowerCase();
+  if (orderEmail && orderEmail !== cleanEmail) {
+    throw new Error('Email does not match this order');
+  }
+  // If customer_email is null/empty (legacy rows), also check user email via profiles
+  if (!orderEmail && order.user_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', order.user_id)
+      .maybeSingle();
+    const profileEmail = (profile?.email || '').trim().toLowerCase();
+    if (profileEmail && profileEmail !== cleanEmail) {
+      throw new Error('Email does not match this order');
+    }
   }
 
+  // 4. Fetch timeline
   const { data: timelineData } = await supabase
     .from('order_timeline')
     .select('*')
-    .eq('order_id', orderId)
+    .eq('order_id', order.id)
     .order('created_at', { ascending: true });
 
   return { order, timeline: timelineData || [] };

@@ -20,7 +20,6 @@ import {
   MessageSquare,
   ClipboardList,
   Warehouse,
-  ArrowRightLeft,
   BarChart3,
   Monitor,
   Headset,
@@ -111,11 +110,17 @@ const allNav: NavItem[] = [
     icon: ImageIcon,
     permission: 'marketing.coupons',
     children: [
+      { title: 'Marketing Settings', href: '/admin/marketing/settings', permission: 'marketing.coupons' },
+      { title: 'SEO Settings', href: '/admin/marketing/seo', permission: 'marketing.coupons' },
+      { title: 'Redirects', href: '/admin/marketing/redirects', permission: 'marketing.coupons' },
+      { title: 'Product Feeds', href: '/admin/marketing/feeds', permission: 'marketing.coupons' },
       { title: 'Coupons', href: '/admin/marketing/coupons', permission: 'marketing.coupons' },
       { title: 'Free Shipping', href: '/admin/marketing/free-shipping', permission: 'marketing.coupons' },
       { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns', permission: 'marketing.popups' },
       { title: 'Flash Sale', href: '/admin/marketing/flash-sale', permission: 'marketing.flash_sale' },
       { title: 'Special Offer', href: '/admin/marketing/special-offer', permission: 'marketing.special_offer' },
+      { title: 'Email Campaigns', href: '/admin/marketing/email-campaigns', permission: 'marketing.coupons' },
+      { title: 'Subscribers', href: '/admin/marketing/subscribers', permission: 'marketing.coupons' },
     ]
   },
   { title: 'Users', href: '/admin/users', icon: UserCog, permission: 'users.view' },
@@ -135,7 +140,7 @@ const allNav: NavItem[] = [
 
 export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { collapsed?: boolean; toggle?: () => void; logout: () => void; closeMobile?: () => void }) {
   const pathname = usePathname();
-  const { hasPermission, loading: permLoading } = usePermissions();
+  const { hasPermission, loading: permLoading, isSuperAdmin } = usePermissions();
   const { isWarehouseStaff } = useAuth();
 
   const warehouseOnlyNav: NavItem[] = [
@@ -179,18 +184,17 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
 
   const toggleGroup = (title: string) => setOpenGroups((g) => ({ ...g, [title]: !g[title] }));
 
-  // Filter nav based on permissions and role
   const nav = useMemo(() => {
     if (permLoading) return allNav;
 
-    const source = isWarehouseStaff ? warehouseOnlyNav : allNav;
+    if (isWarehouseStaff) return warehouseOnlyNav;
 
-    return source
+    if (isSuperAdmin) return allNav;
+
+    return allNav
       .map(item => {
-        // Check parent permission
         if (item.permission && !hasPermission(item.permission)) return null;
 
-        // Filter children by permission
         if (item.children) {
           const filteredChildren = item.children.filter(
             child => !child.permission || hasPermission(child.permission)
@@ -202,7 +206,7 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
         return item;
       })
       .filter(Boolean) as NavItem[];
-  }, [permLoading, hasPermission, isWarehouseStaff]);
+  }, [permLoading, hasPermission, isWarehouseStaff, isSuperAdmin]);
 
   return (
     <div className="flex h-full flex-col bg-white text-slate-900 border-r border-slate-100">

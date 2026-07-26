@@ -11,18 +11,35 @@ export async function GET(request: Request) {
 
   const supabase = await createClient()
 
-  // Default error fallback
   let redirectUrl = `${origin}/login?error=Could_not_authenticate`
 
   const getForwardUrl = async (userId: string) => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
+    // Priority 1: Check auth user metadata (set by service role during creation)
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const meta = authUser?.user_metadata || {}
+    const appMeta = authUser?.app_metadata || {}
 
-    const role = profile?.role || 'customer'
-    if (role === 'admin') return '/admin/dashboard'
+    if (meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true) {
+      return '/admin/warehouse/orders'
+    }
+    if (meta.role === 'admin' || appMeta.role === 'admin') {
+      return '/admin/dashboard'
+    }
+
+    // Priority 2: Check DB profile (may fail if columns missing)
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, is_warehouse_staff')
+        .eq('id', userId)
+        .single()
+
+      if (profile?.is_warehouse_staff || profile?.role === 'warehouse_staff') return '/admin/warehouse/orders'
+      if (profile?.role === 'admin') return '/admin/dashboard'
+    } catch {
+      // Profile query failed — auth metadata already checked above
+    }
+
     return next
   }
 
@@ -51,6 +68,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // If we reach here, neither code nor token_hash was valid
   return NextResponse.redirect(redirectUrl)
 }

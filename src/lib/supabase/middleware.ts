@@ -33,8 +33,6 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // This will refresh session if expired - required for Server Components
-  // https://supabase.com/docs/guides/auth/server-side/nextjs
   let user = null
   try {
     const { data } = await supabase.auth.getUser()
@@ -43,8 +41,6 @@ export async function updateSession(request: NextRequest) {
     console.error('[Supabase Middleware] Error fetching user session:', error)
   }
 
-
-  // 1. Route Protection Logic
   const pathname = request.nextUrl.pathname
 
   // Redirect legacy /dashboard to /customer/dashboard
@@ -59,26 +55,54 @@ export async function updateSession(request: NextRequest) {
   // Public routes that don't need auth check redirects
   if (pathname.startsWith('/auth/')) return supabaseResponse
 
-  // Check if user has verified their email
   const isVerified = user ? !!user.email_confirmed_at : false;
 
-  // If already logged in and hitting login/signup, redirect to dashboard based on role
+  // Helper: detect warehouse staff from auth user metadata
+  const isWarehouseStaffFromMeta = (u: typeof user): boolean => {
+    const meta = u?.user_metadata || {};
+    const appMeta = u?.app_metadata || {};
+    return meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true;
+  };
+
+  const isAdminFromMeta = (u: typeof user): boolean => {
+    const meta = u?.user_metadata || {};
+    const appMeta = u?.app_metadata || {};
+    return meta.role === 'admin' || appMeta.role === 'admin';
+  };
+
+  // If already logged in and hitting login/signup, redirect based on role
   if (user && isVerified && (pathname === '/login' || pathname === '/signup' || pathname === '/register')) {
+    // Check auth metadata first (instant, no DB needed)
+    if (isWarehouseStaffFromMeta(user)) {
+      return NextResponse.redirect(new URL('/admin/warehouse/orders', request.url))
+    }
+    if (isAdminFromMeta(user)) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+
+    // Fallback to DB profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, is_warehouse_staff')
       .eq('id', user.id)
       .single()
 
-    const role = profile?.role || 'customer'
-    return NextResponse.redirect(new URL(role === 'admin' ? '/admin/dashboard' : '/customer/dashboard', request.url))
+    if (profile?.is_warehouse_staff || profile?.role === 'warehouse_staff') {
+      return NextResponse.redirect(new URL('/admin/warehouse/orders', request.url))
+    }
+    if (profile?.role === 'admin') {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
+    }
+
+    // Default customer
+    return NextResponse.redirect(new URL('/customer/dashboard', request.url))
   }
 
   // Check is_banned for all authenticated routes
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_banned')
+      .select('role, is_banned, is_warehouse_staff')
       .eq('id', user.id)
       .single()
 
@@ -87,7 +111,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=banned', request.url))
     }
 
-    // Admin protection
+    // Admin/warehouse staff protection for /admin routes
     if (pathname.startsWith('/admin')) {
       if (!isVerified) {
         if (user.email) {
@@ -96,8 +120,19 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(new URL('/login?error=verify_required', request.url))
       }
 
-      if (profile?.role !== 'admin') {
+      const isWarehouseStaff = isWarehouseStaffFromMeta(user) || profile?.is_warehouse_staff === true || profile?.role === 'warehouse_staff';
+      const isAdmin = isAdminFromMeta(user) || profile?.role === 'admin';
+
+      if (!isAdmin && !isWarehouseStaff) {
         return NextResponse.redirect(new URL('/customer/dashboard', request.url))
+      }
+
+      // Warehouse staff: only allow /admin/warehouse/* and /admin/dashboard
+      if (isWarehouseStaff && !isAdmin) {
+        const isAllowed = pathname.startsWith('/admin/warehouse') || pathname.startsWith('/admin/dashboard');
+        if (!isAllowed) {
+          return NextResponse.redirect(new URL('/admin/warehouse/orders', request.url))
+        }
       }
     }
   }

@@ -442,6 +442,8 @@ function CreateUserModal({ roles, warehouses, onClose, onCreated }: {
   const handleCreate = async () => {
     if (!form.email || !form.password) return toast.error('Email and password required');
     if (form.is_warehouse_staff && !form.assigned_warehouse_id) return toast.error('Please assign a warehouse for warehouse staff');
+    if (form.role === 'admin' && !form.roleId) return toast.error('Admin users must have an RBAC role assigned');
+    if (!form.is_warehouse_staff && form.role === 'customer' && !form.roleId) return toast.error('Please assign an RBAC role to this user');
 
     setSaving(true);
     try {
@@ -503,12 +505,17 @@ function CreateUserModal({ roles, warehouses, onClose, onCreated }: {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">RBAC Role</label>
+            <label className="block text-xs font-bold text-slate-600 mb-1">
+              RBAC Role {form.role === 'admin' && <span className="text-red-500">*</span>}
+            </label>
             <select value={form.roleId} onChange={e => setForm(p => ({ ...p, roleId: e.target.value }))}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30">
-              <option value="">No role</option>
+              <option value="">-- Select a role --</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.name.replace(/_/g, ' ')}</option>)}
             </select>
+            {form.role === 'admin' && !form.roleId && (
+              <p className="text-[10px] text-red-500 mt-1">Required — admin users must have an RBAC role to determine their permissions</p>
+            )}
           </div>
 
           <div className="border-t border-slate-100 pt-4">

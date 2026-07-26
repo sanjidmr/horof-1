@@ -13,17 +13,39 @@ export async function checkPermission(userId: string, permissionCode: string): P
   const supabase = await createSupabaseServerClient();
   if (!supabase) return false;
 
-  const { data, error } = await supabase.rpc('check_user_permission', {
-    p_user_id: userId,
-    p_permission_code: permissionCode,
-  });
+  const { data: userRoles } = await supabase
+    .from('user_roles')
+    .select('role:role_id(name, id)')
+    .eq('user_id', userId);
 
-  if (error) {
-    console.error('checkPermission error:', error);
-    return false;
+  const roleNames = (userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean) as string[];
+
+  if (roleNames.includes('super_admin') || roleNames.includes('owner')) return true;
+
+  const roleIds = (userRoles || []).map((ur: any) => ur.role?.id).filter(Boolean);
+  if (roleIds.length > 0) {
+    const { data: rolePerms } = await supabase
+      .from('role_permissions')
+      .select('permission:permission_id(code), granted')
+      .eq('granted', true)
+      .in('role_id', roleIds);
+
+    const grantedCodes = new Set((rolePerms || []).map((rp: any) => rp.permission?.code).filter(Boolean));
+    if (grantedCodes.has(permissionCode)) return true;
   }
 
-  return data === true;
+  const { data: perm } = await supabase.from('permissions').select('id').eq('code', permissionCode).single();
+  if (perm) {
+    const { data: userPerm } = await supabase
+      .from('user_permissions')
+      .select('granted')
+      .eq('user_id', userId)
+      .eq('permission_id', perm.id)
+      .maybeSingle();
+    if (userPerm?.granted) return true;
+  }
+
+  return false;
 }
 
 export async function getCurrentUserPermissions(): Promise<string[]> {
@@ -33,20 +55,28 @@ export async function getCurrentUserPermissions(): Promise<string[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase.rpc('get_user_permissions', {
-    p_user_id: user.id,
-  });
+  const { data: userRoles } = await supabase
+    .from('user_roles')
+    .select('role:role_id(name)')
+    .eq('user_id', user.id);
 
-  if (error) {
-    console.error('getCurrentUserPermissions error:', error);
-    return [];
+  const roleNames = (userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean) as string[];
+
+  if (roleNames.includes('super_admin') || roleNames.includes('owner')) {
+    const { data: allPerms } = await supabase.from('permissions').select('code');
+    return (allPerms || []).map((p: any) => p.code);
   }
 
-  if (!data) return [];
+  const roleIds = (userRoles || []).map((ur: any) => (ur.role as any)?.id).filter(Boolean);
+  if (roleIds.length === 0) return [];
 
-  return data
-    .filter((p: { granted: boolean }) => p.granted)
-    .map((p: { permission_code: string }) => p.permission_code);
+  const { data: rolePerms } = await supabase
+    .from('role_permissions')
+    .select('permission:permission_id(code)')
+    .eq('granted', true)
+    .in('role_id', roleIds);
+
+  return (rolePerms || []).map((rp: any) => rp.permission?.code).filter(Boolean) as string[];
 }
 
 export async function getCurrentUserRoles(): Promise<Role[]> {
@@ -80,6 +110,12 @@ export async function createUser(params: {
   is_warehouse_staff?: boolean;
   assigned_warehouse_id?: string | null;
 }) {
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.create');
+
+  if ((params.role === 'admin' || (!params.is_warehouse_staff && params.role === 'customer')) && !params.roleId) {
+    throw new Error('RBAC role is required for admin and customer users');
+  }
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -90,7 +126,11 @@ export async function createUser(params: {
     email: params.email,
     password: params.password,
     email_confirm: true,
-    user_metadata: { full_name: params.full_name },
+    user_metadata: {
+      full_name: params.full_name,
+      is_warehouse_staff: params.is_warehouse_staff || params.role === 'warehouse_staff' || false,
+      assigned_warehouse_id: params.assigned_warehouse_id || null,
+    },
   });
 
   if (authError) {
@@ -203,6 +243,30 @@ export async function updateUserProfile(userId: string, data: {
   const { error } = await supabase.from('profiles').update(data).eq('id', userId);
   if (error) return { error: error.message };
 
+  // Sync auth user_metadata when is_warehouse_staff changes (critical for login redirect)
+  if (data.is_warehouse_staff !== undefined || data.assigned_warehouse_id !== undefined) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
+      const { data: currentProfile } = await supabase.from('profiles')
+        .select('is_warehouse_staff, assigned_warehouse_id')
+        .eq('id', userId).single();
+
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          is_warehouse_staff: currentProfile?.is_warehouse_staff ?? data.is_warehouse_staff ?? false,
+          assigned_warehouse_id: currentProfile?.assigned_warehouse_id ?? data.assigned_warehouse_id ?? null,
+        },
+      });
+    } catch (metaErr) {
+      console.error('Failed to sync auth metadata (non-fatal):', metaErr);
+    }
+  }
+
   const { logAudit } = await import('./security');
   await logAudit('update_user', 'profiles', userId, `Updated user profile`, { fields: Object.keys(data) });
 
@@ -210,6 +274,8 @@ export async function updateUserProfile(userId: string, data: {
 }
 
 export async function toggleUserBan(userId: string, banned: boolean) {
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.suspend');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -223,6 +289,8 @@ export async function toggleUserBan(userId: string, banned: boolean) {
 }
 
 export async function deleteUser(userId: string) {
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.delete');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -240,6 +308,8 @@ export async function deleteUser(userId: string) {
 // ============================================================
 
 export async function assignUserRole(userId: string, roleId: string) {
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_roles');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -259,6 +329,8 @@ export async function assignUserRole(userId: string, roleId: string) {
 }
 
 export async function removeUserRole(userId: string, roleId: string) {
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_roles');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 

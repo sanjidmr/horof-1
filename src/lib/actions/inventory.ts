@@ -129,10 +129,10 @@ export async function createWarehouse(data: {
   phone?: string; email?: string; capacity?: number;
 }) {
   const { supabase } = await getAdmin();
-  const { error } = await supabase.from('warehouses').insert(data);
+  const { data: inserted, error } = await supabase.from('warehouses').insert(data).select('id').single();
   if (error) throw new Error(error.message);
   revalidatePath('/admin/inventory/warehouses');
-  return { success: true };
+  return { success: true, id: inserted?.id };
 }
 
 export async function updateWarehouse(id: string, data: Partial<{
@@ -682,6 +682,22 @@ export async function assignStaffToWarehouse(userId: string, warehouseId: string
     .update({ is_warehouse_staff: true, assigned_warehouse_id: warehouseId })
     .eq('id', userId);
   if (error) throw new Error(error.message);
+
+  // Sync auth user_metadata for login redirect detection
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: { is_warehouse_staff: true, assigned_warehouse_id: warehouseId },
+    });
+  } catch (metaErr) {
+    console.error('Failed to sync auth metadata (non-fatal):', metaErr);
+  }
+
   revalidatePath(`/admin/inventory/warehouses/${warehouseId}`);
   return { success: true };
 }
@@ -693,6 +709,22 @@ export async function removeStaffFromWarehouse(userId: string) {
     .update({ is_warehouse_staff: false, assigned_warehouse_id: null })
     .eq('id', userId);
   if (error) throw new Error(error.message);
+
+  // Sync auth user_metadata for login redirect detection
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+    await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: { is_warehouse_staff: false, assigned_warehouse_id: null },
+    });
+  } catch (metaErr) {
+    console.error('Failed to sync auth metadata (non-fatal):', metaErr);
+  }
+
   revalidatePath('/admin/inventory/warehouses');
   return { success: true };
 }
@@ -727,7 +759,11 @@ export async function createWarehouseStaff(params: {
     email: params.email,
     password: params.password,
     email_confirm: true,
-    user_metadata: { full_name: params.full_name },
+    user_metadata: {
+      full_name: params.full_name,
+      is_warehouse_staff: true,
+      assigned_warehouse_id: params.warehouseId,
+    },
   });
 
   if (authError) {

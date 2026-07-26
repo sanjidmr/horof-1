@@ -183,7 +183,7 @@ function OrderConfirmedContent() {
             </div>
             
             <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-mono font-bold text-slate-600 shadow-inner">
-              Order ID: #{String(order.id).toUpperCase()}
+              Order Number: {order.order_number || `#${String(order.id).substring(0, 8).toUpperCase()}`}
             </div>
           </div>
         </div>
@@ -330,7 +330,7 @@ function OrderConfirmedContent() {
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
-            href={`/track-order?order=${order.id}`}
+            href={`/track-order?order=${order.order_number || order.id}`}
             className="inline-flex justify-center items-center gap-2 px-10 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase tracking-widest transition-all duration-300 shadow-lg shadow-emerald-900/20 hover:-translate-y-0.5 active:translate-y-0"
           >
             <Eye className="w-4 h-4" /> Track Order

@@ -86,93 +86,15 @@ export default function TrackOrderPage() {
     setOrder(null);
 
     try {
-      // Try server action first (works with RLS for logged-in users)
-      try {
-        const result = await getOrderTrackingData(idOrTrx);
-        if (result.order) {
-          setOrder(result.order);
-          setTimelineEvents(result.timeline);
-          setLoading(false);
-          return;
-        }
-      } catch {}
-      
-      // Fallback: direct client-side query
-      const isIntegerId = /^\d+$/.test(idOrTrx.trim());
-      const query = supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            products (
-              name,
-              images
-            )
-          )
-        `);
-
-      if (isIntegerId) {
-        query.eq('id', parseInt(idOrTrx.trim(), 10));
+      const result = await getOrderTrackingData(idOrTrx, userEmail);
+      if (result.order) {
+        setOrder(result.order);
+        setTimelineEvents(result.timeline);
       } else {
-        query.eq('transaction_id', idOrTrx.trim());
+        setError("We couldn't find an order with those details. Please check the Order Number and Email.");
       }
-
-      // Allow match on customer_email or profiles.email
-      const emailQuery = userEmail.trim().toLowerCase();
-      const { data, error: fetchError } = await query
-        .or(`customer_email.eq.${emailQuery},customer_email.is.null`)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      
-      // If customer_email was null (guest checkouts or old database rows), we check user_id matching
-      if (!data) {
-        // Retry with pure search by id/transaction
-        const { data: retryData } = await supabase
-          .from('orders')
-          .select(`
-            *,
-            order_items (
-              *,
-              products (
-                name,
-                images
-              )
-            )
-          `)
-          .eq(isIntegerId ? 'id' : 'transaction_id', isIntegerId ? parseInt(idOrTrx.trim(), 10) : idOrTrx.trim())
-          .maybeSingle();
-
-        if (retryData && (retryData.customer_email?.toLowerCase() === emailQuery || !retryData.customer_email)) {
-          // Verify
-          const { data: timelineData } = await supabase
-            .from('order_timeline')
-            .select('*')
-            .eq('order_id', retryData.id)
-            .order('created_at', { ascending: true });
-
-          setOrder(retryData);
-          setTimelineEvents(timelineData || []);
-          setLoading(false);
-          return;
-        }
-
-        setError("We couldn't find an order with those details. Please check the ID and Email.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: timelineData } = await supabase
-        .from('order_timeline')
-        .select('*')
-        .eq('order_id', data.id)
-        .order('created_at', { ascending: true });
-
-      setOrder(data);
-      setTimelineEvents(timelineData || []);
     } catch (err: any) {
-      setError(err.message || "An error occurred while tracking the order.");
+      setError(err.message || "We couldn't find an order with those details. Please check the Order Number and Email.");
     } finally {
       setLoading(false);
     }
@@ -326,10 +248,10 @@ export default function TrackOrderPage() {
             >
               <form onSubmit={handleTrackSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="orderNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order ID or Transaction ID</Label>
+                  <Label htmlFor="orderNumber" className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Order Number</Label>
                   <Input 
                     id="orderNumber"
-                    placeholder="e.g. 31 or custom payment reference"
+                    placeholder="e.g. ORD-M4K2PXN"
                     value={orderNumber}
                     onChange={(e) => setOrderNumber(e.target.value)}
                     className="h-14 rounded-2xl bg-slate-50/50 border-slate-100 focus:bg-white focus:ring-[#1a4731] transition-all"

@@ -7,8 +7,11 @@ import { AdminPageTransition } from '@/components/admin/AdminPageTransition';
 import { Sheet, SheetContent } from '@/components/shadcn/sheet';
 import { useAdminSidebar } from '@/stores/admin-sidebar-store';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
+import { useEffect } from 'react';
+
+const WAREHOUSE_ALLOWED = ['/admin/warehouse', '/admin/dashboard'];
 
 export default function AdminLayoutClient({
   children,
@@ -22,6 +25,21 @@ export default function AdminLayoutClient({
   const mobileOpen = useAdminSidebar((s) => s.mobileOpen);
   const setMobileOpen = useAdminSidebar((s) => s.setMobileOpen);
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Use the merged profile from server layout (already combines auth metadata + DB)
+  const isWarehouseStaff = profile?.is_warehouse_staff === true || profile?.role === 'warehouse_staff';
+  const isAdmin = profile?.role === 'admin';
+
+  useEffect(() => {
+    if (isWarehouseStaff && !isAdmin) {
+      const isAllowed = WAREHOUSE_ALLOWED.some(prefix => pathname.startsWith(prefix));
+      if (!isAllowed) {
+        toast.error('Access denied — warehouse staff only');
+        router.push('/admin/warehouse/orders');
+      }
+    }
+  }, [pathname, isWarehouseStaff, isAdmin, router]);
 
   const logout = async () => {
     const sb = createSupabaseBrowserClient();

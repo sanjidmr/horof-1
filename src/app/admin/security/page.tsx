@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import {
   Shield, Activity, FileText, Users, Database, Ban, UserCheck,
   ClipboardList, Search, Filter, ChevronDown, ChevronRight, Plus,
-  Trash2, ToggleLeft, ToggleRight, Download, Upload, RefreshCw,
+  Trash2, Download, Upload, RefreshCw,
   Clock, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff,
   Server, HardDrive, Calendar, Play, Loader2, Settings,
   UserPlus, UserMinus, List, Zap, Globe, Mail, Phone,
@@ -15,7 +15,7 @@ import {
 import {
   getSecurityDashboardStats, getAuditLogs, clearAuditLogs,
   getRoles, createRole, updateRole, deleteRole,
-  getPermissions, updateRolePermission,
+  getPermissions, updateRolePermission, updateRolePermissionsBatch,
   getAdminUsers, assignUserRole, removeUserRole,
   getBackups, createBackup, getRestoreHistory, getBackupSchedules,
   createBackupSchedule, updateBackupSchedule,
@@ -148,6 +148,8 @@ export default function SecurityPage() {
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [creatingRole, setCreatingRole] = useState(false);
   const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null);
+  const [editingPerms, setEditingPerms] = useState<Record<string, boolean>>({});
+  const [savingPerms, setSavingPerms] = useState(false);
 
   // User Roles
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
@@ -275,9 +277,32 @@ export default function SecurityPage() {
   };
 
   const handleTogglePermission = async (roleId: string, permId: string, granted: boolean) => {
-    const { error } = await updateRolePermission(roleId, permId, granted);
+    setEditingPerms(prev => ({ ...prev, [permId]: granted }));
+  };
+
+  const initRolePerms = (role: Role) => {
+    const map: Record<string, boolean> = {};
+    permissions.forEach(p => {
+      const rolePerm = role.permissions?.find(rp => rp.permission?.id === p.id);
+      map[p.id] = !!rolePerm;
+    });
+    setEditingPerms(map);
+  };
+
+  const hasPermChanges = (role: Role) => {
+    return permissions.some(p => {
+      const orig = !!role.permissions?.find(rp => rp.permission?.id === p.id);
+      return editingPerms[p.id] !== orig;
+    });
+  };
+
+  const handleSavePermissions = async (roleId: string) => {
+    setSavingPerms(true);
+    const grantedIds = Object.entries(editingPerms).filter(([, v]) => v).map(([k]) => k);
+    const { error } = await updateRolePermissionsBatch(roleId, grantedIds);
     if (error) toast.error(error);
-    else { toast.success(granted ? 'Permission granted' : 'Permission revoked'); fetchRoles(); }
+    else { toast.success('Permissions saved successfully'); fetchRoles(); }
+    setSavingPerms(false);
   };
 
   const handleAssignRole = async (userId: string, roleId: string) => {
@@ -678,78 +703,131 @@ export default function SecurityPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {roles.map(role => (
-              <div key={role.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setExpandedRole(expandedRole === role.id ? null : role.id)}
-                  className="w-full flex items-center justify-between p-6 hover:bg-slate-50/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2.5 rounded-xl bg-[#1a4731]/10">
-                      <Key className="h-5 w-5 text-[#1a4731]" />
+            {roles.map(role => {
+              const isEditing = expandedRole === role.id;
+              const dirty = isEditing && hasPermChanges(role);
+              return (
+                <div key={role.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                  <button
+                    onClick={() => {
+                      if (expandedRole === role.id) { setExpandedRole(null); setEditingPerms({}); }
+                      else { setExpandedRole(role.id); initRolePerms(role); }
+                    }}
+                    className="w-full flex items-center justify-between p-6 hover:bg-slate-50/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 rounded-xl bg-[#1a4731]/10">
+                        <Key className="h-5 w-5 text-[#1a4731]" />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-base font-bold text-slate-900">{role.name}</h3>
+                        <p className="text-xs text-slate-500">{role.description || 'No description'}</p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <h3 className="text-base font-bold text-slate-900">{role.name}</h3>
-                      <p className="text-xs text-slate-500">{role.description || 'No description'}</p>
+                    <div className="flex items-center gap-3">
+                      {dirty && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-widest">Unsaved</span>}
+                      <span className="text-[10px] text-slate-400 font-bold">Priority: {role.priority}</span>
+                      {role.is_system && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-widest">System</span>
+                      )}
+                      {isEditing ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] text-slate-400 font-bold">Priority: {role.priority}</span>
-                    {role.is_system && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-widest">System</span>
-                    )}
-                    {expandedRole === role.id ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
-                  </div>
-                </button>
+                  </button>
 
-                {expandedRole === role.id && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="border-t border-slate-100 p-6">
-                    <div className="flex justify-end mb-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!!role.is_system}
-                        onClick={() => handleDeleteRole(role.id)}
-                        className="text-red-600 border-red-200 hover:bg-red-50"
-                      >
-                        {deletingRoleId === role.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
-                        Delete Role
-                      </Button>
-                    </div>
-                    <div className="space-y-6">
-                      {modules.map(mod => {
-                        const modPerms = permissions.filter(p => p.module === mod);
-                        return (
-                          <div key={mod}>
-                            <h4 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3 capitalize">{mod.replace(/_/g, ' ')}</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                              {modPerms.map(perm => {
-                                const rolePerm = role.permissions?.find(rp => rp.permission?.id === perm.id);
-                                const granted = !!rolePerm;
-                                return (
-                                  <div key={perm.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-700 capitalize">{perm.name.replace(/_/g, ' ')}</p>
-                                      {perm.description && <p className="text-[10px] text-slate-500">{perm.description}</p>}
-                                    </div>
+                  {isEditing && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="border-t border-slate-100 p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <p className="text-sm text-slate-500">
+                          {Object.values(editingPerms).filter(Boolean).length} / {permissions.length} permissions enabled
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!!role.is_system}
+                            onClick={() => handleDeleteRole(role.id)}
+                            className="text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            {deletingRoleId === role.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                            Delete
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!dirty || savingPerms}
+                            onClick={() => handleSavePermissions(role.id)}
+                            className={`rounded-xl ${dirty ? 'bg-[#1a4731] hover:bg-[#2d6a4f] text-white' : 'bg-slate-100 text-slate-400'}`}
+                          >
+                            {savingPerms ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                            Save Permissions
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        {modules.map(mod => {
+                          const modPerms = permissions.filter(p => p.module === mod);
+                          const allModOn = modPerms.every(p => editingPerms[p.id]);
+                          const someModOn = modPerms.some(p => editingPerms[p.id]);
+                          return (
+                            <div key={mod} className="rounded-xl border border-slate-100 overflow-hidden">
+                              <div className="flex items-center justify-between px-5 py-3 bg-slate-50/80 border-b border-slate-100">
+                                <h4 className="text-sm font-bold text-slate-700 uppercase tracking-widest capitalize">{mod.replace(/_/g, ' ')}</h4>
+                                <button
+                                  onClick={() => {
+                                    const next = !allModOn;
+                                    setEditingPerms(prev => {
+                                      const updated = { ...prev };
+                                      modPerms.forEach(p => { updated[p.id] = next; });
+                                      return updated;
+                                    });
+                                  }}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${allModOn ? 'bg-[#1a4731]' : someModOn ? 'bg-[#1a4731]/40' : 'bg-slate-300'}`}
+                                >
+                                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allModOn ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-x divide-y divide-slate-50">
+                                {modPerms.map(perm => {
+                                  const on = !!editingPerms[perm.id];
+                                  return (
                                     <button
-                                      onClick={() => handleTogglePermission(role.id, perm.id, !granted)}
-                                      className={`p-1.5 rounded-lg transition-colors ${granted ? 'text-[#1a4731] bg-[#1a4731]/10' : 'text-slate-300 bg-slate-100'}`}
+                                      key={perm.id}
+                                      onClick={() => handleTogglePermission(role.id, perm.id, !on)}
+                                      className={`flex items-center gap-3 p-4 transition-all text-left group ${on ? 'bg-[#1a4731]/5 hover:bg-[#1a4731]/10' : 'bg-white hover:bg-slate-50'}`}
                                     >
-                                      {granted ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                                      <div className={`w-12 h-7 rounded-full flex items-center transition-colors shrink-0 ${on ? 'bg-[#1a4731]' : 'bg-slate-200'}`}>
+                                        <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform mx-0.5 ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className={`text-sm font-semibold capitalize ${on ? 'text-[#1a4731]' : 'text-slate-500'}`}>{perm.name.replace(/_/g, ' ')}</p>
+                                        {perm.description && <p className="text-[10px] text-slate-400 truncate">{perm.description}</p>}
+                                      </div>
                                     </button>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
+                          );
+                        })}
+                      </div>
+
+                      {dirty && (
+                        <div className="sticky bottom-0 mt-6 p-4 bg-white border border-amber-200 rounded-xl shadow-lg flex items-center justify-between">
+                          <p className="text-sm text-amber-700 font-semibold">You have unsaved changes</p>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => initRolePerms(role)}>Discard</Button>
+                            <Button size="sm" disabled={savingPerms} onClick={() => handleSavePermissions(role.id)} className="bg-[#1a4731] hover:bg-[#2d6a4f] text-white">
+                              {savingPerms ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                              Save
+                            </Button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-            ))}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Create Role Modal */}

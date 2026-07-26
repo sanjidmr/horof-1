@@ -27,6 +27,22 @@ export const LoginForm: React.FC = () => {
     }
   }, [searchParams]);
 
+  const getRedirectUrl = (authUser: any): string => {
+    const meta = authUser?.user_metadata || {};
+    const appMeta = authUser?.app_metadata || {};
+
+    // Warehouse staff detection — auth metadata only (no DB dependency)
+    if (meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true) {
+      return '/admin/warehouse/orders';
+    }
+    // Admin detection
+    if (meta.role === 'admin' || appMeta.role === 'admin') {
+      return '/admin/dashboard';
+    }
+    // Default customer
+    return '/';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -47,21 +63,11 @@ export const LoginForm: React.FC = () => {
       if (explicitNext) {
         router.push(explicitNext);
       } else {
+        // Auth metadata is set during createUser by service role — always available
         const { createSupabaseBrowserClient } = await import('../../lib/supabase/client');
         const supabase = createSupabaseBrowserClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase.from('profiles').select('role, is_warehouse_staff').eq('id', user.id).maybeSingle();
-          if (profile?.is_warehouse_staff || profile?.role === 'warehouse_staff') {
-            router.push('/admin/warehouse/orders');
-          } else if (profile?.role === 'admin') {
-            router.push('/admin/dashboard');
-          } else {
-            router.push('/');
-          }
-        } else {
-          router.push('/');
-        }
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        router.push(getRedirectUrl(authUser));
       }
       router.refresh();
     } catch (err: any) {
@@ -157,4 +163,3 @@ export const LoginForm: React.FC = () => {
     </div>
   );
 };
-

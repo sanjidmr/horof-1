@@ -431,7 +431,7 @@ export default function OrdersPage() {
                         <Download className="h-3.5 w-3.5" /> Invoice
                       </Link>
                       <Link 
-                        href={`/track-order?order=${order.id}`}
+                        href={`/track-order?order=${order.order_number || order.id}`}
                         className="inline-flex items-center gap-2 h-11 px-8 bg-[#1a4731] hover:bg-[#2d6a4f] text-white rounded-2xl text-xs font-bold shadow-lg shadow-forest-900/10 transition-all"
                       >
                         Track Order <ArrowRight className="h-3.5 w-3.5" />

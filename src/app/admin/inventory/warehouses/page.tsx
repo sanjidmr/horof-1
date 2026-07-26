@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Edit2, Trash2, MapPin, Phone, Mail, RefreshCw, Search, Users, Building2, X } from 'lucide-react';
-import { getWarehouses, createWarehouse, updateWarehouse, deleteWarehouse } from '@/lib/actions/inventory';
+import { Plus, Edit2, Trash2, MapPin, Phone, Mail, RefreshCw, Search, Users, Building2, X, UserPlus, Eye, EyeOff } from 'lucide-react';
+import { getWarehouses, createWarehouse, updateWarehouse, deleteWarehouse, createWarehouseStaff } from '@/lib/actions/inventory';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -22,6 +22,9 @@ export default function WarehousesPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [staffCounts, setStaffCounts] = useState<Record<string, number>>({});
   const [form, setForm] = useState({ name: '', slug: '', location: '', manager: '', phone: '', email: '', capacity: '' });
+  const [addStaff, setAddStaff] = useState(false);
+  const [staffForm, setStaffForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
 
   const fetchWarehouses = useCallback(async () => {
     setLoading(true);
@@ -50,7 +53,7 @@ export default function WarehousesPage() {
 
   useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
 
-  const resetForm = () => { setForm({ name: '', slug: '', location: '', manager: '', phone: '', email: '', capacity: '' }); setEditing(null); };
+  const resetForm = () => { setForm({ name: '', slug: '', location: '', manager: '', phone: '', email: '', capacity: '' }); setEditing(null); setAddStaff(false); setStaffForm({ name: '', email: '', password: '', phone: '' }); };
 
   const openEdit = (w: WarehouseType) => {
     setForm({ name: w.name, slug: w.slug, location: w.location || '', manager: w.manager || '', phone: w.phone || '', email: w.email || '', capacity: w.capacity?.toString() || '' });
@@ -59,14 +62,31 @@ export default function WarehousesPage() {
 
   const handleSave = async () => {
     if (!form.name || !form.slug) { toast.error('Name and slug required'); return; }
+    if (addStaff && (!staffForm.name || !staffForm.email || !staffForm.password)) { toast.error('Staff name, email and password required'); return; }
     setSaving(true);
     try {
       if (editing) {
         await updateWarehouse(editing.id, { ...form, capacity: form.capacity ? parseInt(form.capacity) : undefined });
         toast.success('Warehouse updated');
       } else {
-        await createWarehouse({ ...form, capacity: form.capacity ? parseInt(form.capacity) : undefined });
-        toast.success('Warehouse created');
+        const result = await createWarehouse({ ...form, capacity: form.capacity ? parseInt(form.capacity) : undefined });
+        const newWarehouseId = (result as any)?.id;
+        if (addStaff && newWarehouseId && staffForm.name && staffForm.email && staffForm.password) {
+          try {
+            await createWarehouseStaff({
+              email: staffForm.email,
+              password: staffForm.password,
+              full_name: staffForm.name,
+              phone: staffForm.phone || undefined,
+              warehouseId: newWarehouseId,
+            });
+            toast.success('Warehouse and staff account created!');
+          } catch (staffErr: any) {
+            toast.success('Warehouse created, but staff failed: ' + staffErr.message);
+          }
+        } else {
+          toast.success('Warehouse created');
+        }
       }
       setShowForm(false); resetForm();
       setRefreshKey(k => k + 1);
@@ -177,6 +197,59 @@ export default function WarehousesPage() {
                 className="w-full px-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-sm" />
             </div>
           </div>
+
+          {!editing && (
+            <div className="border-t border-slate-100 pt-4 mt-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={addStaff}
+                  onChange={e => setAddStaff(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731]" />
+                <div className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-[#1a4731]" />
+                  <div>
+                    <span className="text-sm font-bold text-slate-700">Create Warehouse Staff</span>
+                    <span className="block text-[11px] text-slate-400">Add a staff member who can manage this warehouse</span>
+                  </div>
+                </div>
+              </label>
+
+              {addStaff && (
+                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Staff Name *</label>
+                    <input placeholder="Full name" value={staffForm.name}
+                      onChange={e => setStaffForm({ ...staffForm, name: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Staff Email *</label>
+                    <input type="email" placeholder="staff@email.com" value={staffForm.email}
+                      onChange={e => setStaffForm({ ...staffForm, email: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Password *</label>
+                    <div className="relative">
+                      <input type={showStaffPassword ? 'text' : 'password'} placeholder="Min 6 characters" value={staffForm.password}
+                        onChange={e => setStaffForm({ ...staffForm, password: e.target.value })}
+                        className="w-full px-3 py-2.5 pr-10 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                      <button type="button" onClick={() => setShowStaffPassword(!showStaffPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        {showStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Phone</label>
+                    <input placeholder="01XXXXXXXXX" value={staffForm.phone}
+                      onChange={e => setStaffForm({ ...staffForm, phone: e.target.value })}
+                      className="w-full px-3 py-2.5 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} disabled={saving}
               className="px-6 py-2.5 bg-[#1a4731] text-white text-sm font-bold rounded-xl hover:bg-[#14402a] disabled:opacity-50 transition-colors">
