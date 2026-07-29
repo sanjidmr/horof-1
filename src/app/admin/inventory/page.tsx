@@ -126,8 +126,6 @@ export default async function InventoryDashboardPage() {
             {[
               { label: 'Products', href: '/admin/inventory/products', desc: 'View & manage product stock' },
               { label: 'Warehouses', href: '/admin/inventory/warehouses', desc: 'Manage warehouse locations' },
-              { label: 'Suppliers', href: '/admin/inventory/suppliers', desc: 'Manage supplier information' },
-              { label: 'Purchase Orders', href: '/admin/inventory/purchase-orders', desc: 'Create & receive purchase orders' },
               { label: 'Stock Transfers', href: '/admin/inventory/transfers', desc: 'Transfer stock between warehouses' },
               { label: 'Stock Movements', href: '/admin/inventory/stock-movements', desc: 'View inventory activity log' },
             ].map((action) => (

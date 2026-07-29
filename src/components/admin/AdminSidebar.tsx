@@ -21,6 +21,7 @@ import {
   ClipboardList,
   Warehouse,
   BarChart3,
+  DollarSign,
   Monitor,
   Headset,
   Shield,
@@ -49,6 +50,8 @@ type NavItem = {
 
 const allNav: NavItem[] = [
   { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
+  { title: 'Analytics', href: '/admin/analytics', icon: BarChart3, permission: 'reports.view' },
+  { title: 'Accounts', href: '/admin/accounting', icon: DollarSign, permission: 'reports.finance' },
   { title: 'Categories', href: '/admin/categories', icon: Layers, permission: 'categories.view' },
   {
     title: 'Products',
@@ -57,7 +60,6 @@ const allNav: NavItem[] = [
     children: [
       { title: 'All Products', href: '/admin/products', permission: 'products.view' },
       { title: 'Add New Product', href: '/admin/products/new', permission: 'products.create' },
-      { title: 'Bulk Upload', href: '/admin/products/bulk-upload', permission: 'products.create' },
       { title: 'Returns', href: '/admin/returns', permission: 'orders.view' },
     ],
   },
@@ -81,7 +83,6 @@ const allNav: NavItem[] = [
       { title: 'Finance', href: '/admin/reports/finance', permission: 'reports.finance' },
       { title: 'Shipping', href: '/admin/reports/shipping', permission: 'reports.view' },
       { title: 'Marketing', href: '/admin/reports/marketing', permission: 'reports.marketing' },
-      { title: 'Suppliers', href: '/admin/reports/suppliers', permission: 'reports.view' },
       { title: 'Team Activity', href: '/admin/reports/employees', permission: 'reports.view' },
       { title: 'Website Analytics', href: '/admin/reports/analytics', permission: 'analytics.view' },
     ]

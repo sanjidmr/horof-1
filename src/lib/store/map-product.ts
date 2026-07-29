@@ -9,8 +9,7 @@ type DbProduct = {
   compare_price?: number | string | null;
   stock: number;
   perfect_for?: string[] | null;
-  is_new_arrival?: boolean;
-  is_best_selling?: boolean;
+  section?: string | null;
   product_images?: { url: string; sort_order: number | null }[] | null;
   categories?: { name: string } | null;
   subcategories?: { name: string } | null;
@@ -45,8 +44,8 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
     reviewCount,
     stock: row.stock,
     tags: row.perfect_for ?? [],
-    isNew: row.is_new_arrival ?? false,
-    isFeatured: row.is_best_selling ?? false,
+    isNew: row.section === 'new_arrival',
+    isFeatured: row.section === 'best_selling',
   };
 }
 

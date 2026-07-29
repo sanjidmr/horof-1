@@ -150,7 +150,7 @@ export async function submitDesignRequest(formData: FormData) {
   try {
     const notificationText = `New design request from ${fullName} (${uploadedFiles.length} files)`;
     const { createNotification } = await import('./notifications');
-    await createNotification('New Design Request', notificationText, 'customer');
+    await createNotification({ title: 'New Design Request', message: notificationText, type: 'customer' });
   } catch {}
 
   // Email admin
@@ -337,11 +337,11 @@ export async function updateDesignRequestStatus(
   // Notify customer
   try {
     const { createNotification } = await import('./notifications');
-    await createNotification(
-      `Design Request Updated: ${status.replace(/_/g, ' ')}`,
-      `Your design request #${id.slice(0, 8).toUpperCase()} has been updated to "${status.replace(/_/g, ' ')}".${comment ? ` Note: ${comment}` : ''}`,
-      'customer'
-    );
+    await createNotification({
+      title: `Design Request Updated: ${status.replace(/_/g, ' ')}`,
+      message: `Your design request #${id.slice(0, 8).toUpperCase()} has been updated to "${status.replace(/_/g, ' ')}".${comment ? ` Note: ${comment}` : ''}`,
+      type: 'customer',
+    });
   } catch {}
 
   // Email customer
@@ -551,11 +551,11 @@ export async function sendForApproval(
   // Notify customer
   try {
     const { createNotification } = await import('./notifications');
-    await createNotification(
-      'Design Ready for Approval',
-      `Your design for request #${requestId.slice(0, 8).toUpperCase()} is ready. Please review and approve.`,
-      'order'
-    );
+    await createNotification({
+      title: 'Design Ready for Approval',
+      message: `Your design for request #${requestId.slice(0, 8).toUpperCase()} is ready. Please review and approve.`,
+      type: 'order',
+    });
   } catch {}
 
   // Email customer
@@ -642,11 +642,11 @@ export async function customerRespond(
       revision_requested: 'has REVISION REQUESTED by the customer',
       rejected: 'has been REJECTED by the customer',
     };
-    await createNotification(
-      `Design ${actionLabels[action] || action}`,
-      `Request #${requestId.slice(0, 8).toUpperCase()} ${actionLabels[action] || action}.${comment ? ` Comment: ${comment}` : ''}`,
-      'order'
-    );
+    await createNotification({
+      title: `Design ${actionLabels[action] || action}`,
+      message: `Request #${requestId.slice(0, 8).toUpperCase()} ${actionLabels[action] || action}.${comment ? ` Comment: ${comment}` : ''}`,
+      type: 'order',
+    });
   } catch {}
 
   // Email admin

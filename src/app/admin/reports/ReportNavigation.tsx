@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, TrendingUp, Package, Users, BarChart3, ShoppingCart, DollarSign, Truck, Megaphone, Building2, Shield, Globe } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Package, Users, BarChart3, ShoppingCart, DollarSign, Truck, Megaphone, Shield, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -16,7 +16,6 @@ const TABS = [
   { label: 'Finance', href: '/admin/reports/finance', icon: DollarSign },
   { label: 'Shipping', href: '/admin/reports/shipping', icon: Truck },
   { label: 'Marketing', href: '/admin/reports/marketing', icon: Megaphone },
-  { label: 'Suppliers', href: '/admin/reports/suppliers', icon: Building2 },
   { label: 'Team', href: '/admin/reports/employees', icon: Shield },
   { label: 'Analytics', href: '/admin/reports/analytics', icon: Globe },
 ];

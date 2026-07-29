@@ -224,11 +224,11 @@ export async function reorderOrder(originalOrderId: string) {
 
   // 9. Notify admin
   try {
-    await createNotification(
-      'New Reorder Request',
-      `Reorder from ${customerName} — original order #${originalOrder.order_number || originalOrderId.slice(0, 8).toUpperCase()}`,
-      'order'
-    );
+    await createNotification({
+      title: 'New Reorder Request',
+      message: `Reorder from ${customerName} — original order #${originalOrder.order_number || originalOrderId.slice(0, 8).toUpperCase()}`,
+      type: 'order',
+    });
   } catch {}
 
   revalidatePath('/admin/dashboard');

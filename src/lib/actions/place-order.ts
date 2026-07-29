@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { createNotification, checkLowStock } from './notifications';
+import { logSystemTransaction } from './accounting';
 
 export async function placeOrder(orderData: {
   customer_name: string;
@@ -90,6 +91,16 @@ export async function placeOrder(orderData: {
     return { ok: false, message: requestErr?.message || 'Failed to submit order request' };
   }
 
+  // Log income transaction
+  logSystemTransaction({
+    type: 'income',
+    reference_id: String(orderRequest.id),
+    reference_type: 'order',
+    description: `New order #${String(orderRequest.id).slice(0, 8)} from ${orderData.customer_name}`,
+    amount: Math.max(0, finalTotal),
+    status: 'pending',
+  }).catch(() => {});
+
   // Record coupon usage if a coupon was applied
   if (orderData.coupon_id) {
     try {
@@ -150,11 +161,11 @@ export async function placeOrder(orderData: {
     console.error('Failed to clear database cart items:', clearCartErr);
   }
 
-  await createNotification(
-    'New Order Request',
-    `A new order request (#${String(orderRequest.id).slice(0, 8)}) for ৳${Math.max(0, finalTotal).toLocaleString()} placed by ${orderData.customer_name}.${orderData.coupon_code ? ` Coupon: ${orderData.coupon_code}` : ''}${orderData.bundle_offer_name ? ` Bundle: ${orderData.bundle_offer_name}` : ''}${orderData.free_shipping_offer_name ? ` Free Shipping: ${orderData.free_shipping_offer_name}` : ''}`,
-    'order'
-  );
+  await createNotification({
+    title: 'New Order Request',
+    message: `A new order request (#${String(orderRequest.id).slice(0, 8)}) for ৳${Math.max(0, finalTotal).toLocaleString()} placed by ${orderData.customer_name}.${orderData.coupon_code ? ` Coupon: ${orderData.coupon_code}` : ''}${orderData.bundle_offer_name ? ` Bundle: ${orderData.bundle_offer_name}` : ''}${orderData.free_shipping_offer_name ? ` Free Shipping: ${orderData.free_shipping_offer_name}` : ''}`,
+    type: 'order',
+  });
 
   revalidatePath('/admin/dashboard');
   revalidatePath('/admin/order-requests');

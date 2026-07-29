@@ -20,9 +20,9 @@ export default async function AdminProductEditPage({ params }: { params: Promise
 ] = await Promise.all([
   supabase
     .from('product_images')
-    .select('url')
+      .select('id, url')
     .eq('product_id', id)
-    .order('display_order', { ascending: true }),
+    .order('sort_order', { ascending: true }),
 
   supabase
     .from('product_variants')
@@ -34,7 +34,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     .from('categories')
     .select('id, name, parent_id')
     .eq('is_active', true)
-    .order('display_order', { ascending: true }),
+    .order('sort_order', { ascending: true }),
 
   supabase
     .from('subcategories')
@@ -49,12 +49,13 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     slug: product.slug,
     sku: (product as any).sku ?? '',
     price: Number(product.price),
-    offer_price: product.compare_price != null ? Number(product.compare_price) : null,
+    cost_price: (product as any).cost_price != null ? Number((product as any).cost_price) : null,
+    offer_price: (product as any).offer_price != null ? Number((product as any).offer_price) : null,
     stock: product.stock,
     description: product.description,
     specification: product.specification,
     product_details: (product as any).product_details ? objectToDetails((product as any).product_details) : null,
-    perfect_for: typeof product.perfect_for === 'string' ? product.perfect_for.split(',').map((s: string) => s.trim()) : null,
+    perfect_for: product.perfect_for ? (Array.isArray(product.perfect_for) && product.perfect_for.length > 0 ? product.perfect_for : null) : null,
     section: (product as any).section ?? (product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling'),
     flash_sale_ends_at: (product as any).flash_sale_ends_at ?? null,
     meta_title: (product as any).meta_title ?? '',
@@ -62,7 +63,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     category_id: product.category_id,
     subcategory_id: (product as any).subcategory_id ?? null,
     brand_id: (product as any).brand_id ?? null,
-    images: (images ?? []).map((img) => ({ url: (img as any).image_url ?? '' })),
+    images: (images ?? []).map((img) => ({ id: (img as any).id ?? '', url: (img as any).url ?? '' })),
     variants: (variants ?? []).map((v) => ({
       size: v.size,
       color: v.color,

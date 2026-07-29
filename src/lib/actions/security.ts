@@ -324,7 +324,7 @@ export async function createSecurityEvent(eventType: string, title: string, mess
   if (error) return { error: error.message };
 
   if (severity === 'critical' || severity === 'error') {
-    await createNotification(`Security Alert: ${title}`, message || title, 'security');
+    await createNotification({ title: `Security Alert: ${title}`, message: message || title, type: 'security' });
   }
   return { error: null };
 }
@@ -375,7 +375,7 @@ export async function createBackup(type: string = 'manual', includes: string[] =
       }).eq('id', data.id);
 
       try { await supabase.from('backups').update({ status: 'verified' }).eq('id', data.id); } catch {}
-      await createNotification('Backup Completed', `Backup ${data.id.slice(0, 8)} was created successfully`, 'backup');
+      await createNotification({ title: 'Backup Completed', message: `Backup ${data.id.slice(0, 8)} was created successfully`, type: 'backup' });
     } catch (err: any) {
       await supabase.from('backups').update({ status: 'failed', error_message: err.message }).eq('id', data.id);
     }

@@ -21,6 +21,17 @@ export default function CustomerOrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+
+    const channel = supabase
+      .channel(`customer-orders-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_requests' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+    return () => { channel.unsubscribe(); };
   }, []);
 
   const fetchOrders = async () => {

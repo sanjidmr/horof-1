@@ -63,11 +63,11 @@ export async function sendMessage(conversationId: string, message: string, messa
   await supabase.rpc('update_conversation_last_message');
 
   if (senderRole === 'customer') {
-    await createNotification(
-      'New Chat Message',
-      `A customer sent a message in conversation ${conversationId.slice(0, 8)}...`,
-      'customer'
-    );
+    await createNotification({
+      title: 'New Chat Message',
+      message: `A customer sent a message in conversation ${conversationId.slice(0, 8)}...`,
+      type: 'customer',
+    });
   }
 
   return { id: data.id, error: null };

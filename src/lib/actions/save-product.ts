@@ -29,37 +29,37 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildPayload(d: ProductFormParsed, firstImageUrl: string, allImageUrls: string[]) {
+function buildPayload(d: ProductFormParsed) {
   const specObj = rowsToSpecification(d.specification ?? []);
   const detailsObj = detailsToObject(d.product_details ?? []);
-  const perfectForStr = (d.perfect_for_tags ?? []).length > 0
-    ? (d.perfect_for_tags ?? []).map((s: string) => s.trim()).filter(Boolean).join(', ')
+  
+  // Build perfect_for as text[] array (matches DB column type)
+  const perfectForArray: string[] = (d.perfect_for_tags ?? []).length > 0
+    ? (d.perfect_for_tags ?? []).map((s: string) => s.trim()).filter(Boolean)
     : (d.perfect_for_str ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(', ');
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+  // Determine section from the section field (the DB uses a section enum column)
+  const section = d.section || 'best_selling';
 
   return {
     name: d.name.trim(),
     slug: (d.slug || autoSlug(d.name)).trim().toLowerCase(),
     price: toInt(d.price),
-    compare_price: toNum(d.offer_price),
+    cost_price: toNum(d.cost_price),
+    offer_price: toNum(d.offer_price),
     stock: toInt(d.stock),
     is_active: true,
     description: d.description?.trim() || '',
-    image: firstImageUrl,
-    images: allImageUrls,
     specification: specObj,
     product_details: detailsObj,
-    perfect_for: perfectForStr || null,
-    is_best_selling: !!d.is_best_selling,
-    is_new_arrival: !!d.is_new_arrival,
-    is_product_of_the_day: !!d.is_product_of_the_day,
+    perfect_for: perfectForArray,
+    section: section,
     category_id: d.category_id ?? null,
     subcategory_id: d.subcategory_id ?? null,
     sku: d.sku ?? '',
-    section: d.section,
     flash_sale_ends_at: d.section === 'flash_sale' && d.flash_sale_ends_at
       ? new Date(d.flash_sale_ends_at).toISOString()
       : null,
@@ -173,13 +173,22 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   if (profile?.role !== 'admin') return { ok: false, message: 'Admin access required' };
 
   const imgs = (d.images ?? []).slice(0, 3);
-  const firstImageUrl = imgs[0]?.url || '';
   const allImageUrls = imgs.map((img) => img.url);
 
-  const payload = buildPayload(d, firstImageUrl, allImageUrls);
+  const payload = buildPayload(d);
   const variants = cleanVariants(d);
 
   if (d.id) {
+    const { data: prevProduct } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', d.id)
+      .single();
+
+    const newStock = toInt(d.stock);
+    const oldStock = prevProduct?.stock ?? 0;
+    const stockIncrease = Math.max(0, newStock - oldStock);
+
     const { error: upErr } = await supabase
       .from('products')
       .update(payload)
@@ -187,16 +196,76 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
 
     if (upErr) return { ok: false, message: translateDbError(upErr) };
 
-    const { error: delImgErr } = await supabase.from('product_images').delete().eq('product_id', d.id);
-    if (delImgErr) return { ok: false, message: translateDbError(delImgErr) };
+    if (stockIncrease > 0) {
+      const { data: prod } = await supabase
+        .from('products')
+        .select('total_added')
+        .eq('id', d.id)
+        .single();
+      const currentTotal = prod?.total_added ?? oldStock;
+      await supabase
+        .from('products')
+        .update({ total_added: currentTotal + stockIncrease })
+        .eq('id', d.id);
+    }
 
-    for (let i = 0; i < imgs.length; i++) {
-      const { error: ie } = await supabase.from('product_images').insert({
-        product_id: d.id,
-        url: imgs[i].url,
-        sort_order: i,
-      });
-      if (ie) return { ok: false, message: `Image save failed: ${ie.message}` };
+    // Loss-proof image sync: never delete all and re-insert.
+    // Only delete records that were explicitly removed by the admin.
+    const { data: existingImgs } = await supabase
+      .from('product_images')
+      .select('id, url, sort_order')
+      .eq('product_id', d.id)
+      .order('sort_order', { ascending: true });
+
+    const newUrls = imgs.map((img) => img.url).filter(Boolean);
+    const oldUrls = (existingImgs ?? []).map((r: any) => r.url);
+
+    const imagesChanged = newUrls.length !== oldUrls.length || newUrls.some((u, i) => u !== oldUrls[i]);
+
+    if (imagesChanged) {
+      const newUrlsSet = new Set(newUrls);
+
+      const idsToDelete = (existingImgs ?? [])
+        .filter((r: any) => !newUrlsSet.has(r.url))
+        .map((r: any) => r.id);
+
+      if (idsToDelete.length > 0) {
+        const { error: delImgErr } = await supabase
+          .from('product_images')
+          .delete()
+          .in('id', idsToDelete);
+        if (delImgErr) return { ok: false, message: translateDbError(delImgErr) };
+      }
+
+      // Upsert: update sort_order for existing images, insert new ones
+      for (let i = 0; i < imgs.length; i++) {
+        if (!imgs[i].url) continue;
+
+        // Check if this image already exists in DB (by URL or by explicit ID)
+        const existingRecord = (existingImgs ?? []).find(
+          (r: any) => r.url === imgs[i].url
+        );
+
+        if (existingRecord) {
+          // Update sort_order if changed
+          if ((existingRecord as any).sort_order !== i) {
+            const { error: ue } = await supabase
+              .from('product_images')
+              .update({ sort_order: i })
+              .eq('id', (existingRecord as any).id);
+            if (ue) return { ok: false, message: `Image order update failed: ${ue.message}` };
+          }
+        } else {
+          // Insert new image
+          if (!imgs[i].url || typeof imgs[i].url !== 'string') continue;
+          const { error: ie } = await supabase.from('product_images').insert({
+            product_id: d.id,
+            url: imgs[i].url,
+            sort_order: i,
+          });
+          if (ie) return { ok: false, message: `Image save failed: ${ie.message}` };
+        }
+      }
     }
 
     const { error: delVarErr } = await supabase.from('product_variants').delete().eq('product_id', d.id);
@@ -222,7 +291,7 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
     return { ok: true, id: String(d.id) };
   }
 
-  const { data: inserted, error: insErr } = await supabase.from('products').insert(payload).select('id').single();
+  const { data: inserted, error: insErr } = await supabase.from('products').insert({ ...payload, total_added: toInt(d.stock) }).select('id').single();
 
   if (insErr || !inserted) {
     return { ok: false, message: translateDbError(insErr) || 'Failed to create product' };
@@ -231,9 +300,14 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   const pid = inserted.id as string;
 
   for (let i = 0; i < imgs.length; i++) {
+    const url = imgs[i].url;
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      console.warn(`[saveProduct] Skipping invalid image URL at index ${i}:`, url);
+      continue;
+    }
     const { error: ie } = await supabase.from('product_images').insert({
-      product_id: d.id,
-      url: imgs[i].url,        // image_url থেকে url করুন
+      product_id: pid,
+      url,
       sort_order: i,
     });
     if (ie) {
@@ -261,11 +335,11 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   revalidatePath('/products');
 
   try {
-    await createNotification(
-      'New Product Added',
-      `Product "${payload.name}" has been added to the store.`,
-      'product'
-    );
+    await createNotification({
+      title: 'New Product Added',
+      message: `Product "${payload.name}" has been added to the store.`,
+      type: 'product',
+    });
   } catch (_) { }
 
   try { await checkLowStock(); } catch (_) { }

@@ -167,7 +167,9 @@ export function AdminTopbar({ email, avatarUrl }: { email: string | null; avatar
             <Button type="button" variant="ghost" size="icon" className="relative text-slate-400 hover:text-[#1a4731] hover:bg-slate-50 rounded-xl transition-all" aria-label="Notifications">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
+                <span className="absolute -right-1 -top-1 flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-red-500 text-[9px] font-extrabold text-white shadow-lg shadow-red-500/30">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
               )}
             </Button>
           </DropdownMenuTrigger>

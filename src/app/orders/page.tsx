@@ -102,6 +102,14 @@ export default function OrdersPage() {
       setLoading(false);
     }
     init();
+
+    const channel = supabase
+      .channel(`orders-page-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        init();
+      })
+      .subscribe();
+    return () => { channel.unsubscribe(); };
   }, []);
 
   // Filter orders whenever searchQuery, statusFilter, or orders change

@@ -18,6 +18,7 @@ const specRowSchema = z.object({
 });
 
 const imageSchema = z.object({
+  id: z.string().optional(),
   path: z.string().min(1),
   url: z.string().url(),
 });
@@ -127,6 +128,12 @@ export const productFormSchema = z
     slug: z.string().optional().default(''),
     sku: z.string().optional().default(''),
     price: z.coerce.number().nonnegative('Price must be 0 or greater'),
+    cost_price: z.preprocess((v) => {
+      if (v === '' || v === null || v === undefined) return null;
+      const n = typeof v === 'number' ? v : Number(v);
+      if (Number.isNaN(n)) return null;
+      return n;
+    }, z.union([z.number().nonnegative(), z.null()])).optional(),
     offer_price: z
       .preprocess((v) => {
         if (v === '' || v === null || v === undefined) return null;

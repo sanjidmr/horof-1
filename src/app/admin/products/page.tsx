@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Filter, Edit3, Trash2, Package, CheckCircle, XCircle, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Package, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/shadcn/button';
@@ -20,50 +20,58 @@ export default function AdminProductsPage() {
   const fetchProducts = async () => {
     setLoading(true);
     
-    // Fetch products and order items in parallel
-    const [productsRes, orderItemsRes] = await Promise.all([
-      supabase
+    try {
+      // Fetch products with category and subcategory joins
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*, categories(name), subcategories(name)')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('order_items')
-        .select('product_id, quantity, orders(status)')
-    ]);
+        .order('created_at', { ascending: false });
 
-    if (productsRes.error) {
-      toast.error('Failed to load products');
-      setLoading(false);
-      return;
-    }
-
-    const productsData = productsRes.data || [];
-    const orderItems = orderItemsRes.data || [];
-
-    // Calculate sales per product
-    const salesMap = new Map<number, number>();
-    orderItems.forEach((item: any) => {
-      // Exclude cancelled orders
-      if (item.orders?.status !== 'cancelled') {
-        const qty = Number(item.quantity || 0);
-        salesMap.set(item.product_id, (salesMap.get(item.product_id) || 0) + qty);
+      if (productsError) {
+        console.error('[Products Fetch Error]', productsError);
+        toast.error('Failed to load products');
+        setLoading(false);
+        return;
       }
-    });
 
-    // Combine products with their sales count
-    const combined = productsData.map((p: any) => ({
-      ...p,
-      sales: salesMap.get(p.id) || 0
-    }));
+      // Fetch order items separately with a simpler query (avoid nested join issues)
+      const { data: orderItems, error: orderItemsError } = await supabase
+        .from('order_items')
+        .select('product_id, quantity');
 
-    setProducts(combined);
-    setLoading(false);
+      if (orderItemsError) {
+        console.warn('[Order Items Fetch Warning]', orderItemsError);
+        // Non-fatal - we can still show products without sales data
+      }
+
+      // Calculate sales per product
+      const salesMap = new Map<string, number>();
+      (orderItems || []).forEach((item: any) => {
+        const qty = Number(item.quantity || 0);
+        const pid = String(item.product_id);
+        salesMap.set(pid, (salesMap.get(pid) || 0) + qty);
+      });
+
+      // Combine products with their sales count
+      const combined = (productsData || []).map((p: any) => ({
+        ...p,
+        sales: salesMap.get(String(p.id)) || 0
+      }));
+
+      setProducts(combined);
+    } catch (err) {
+      console.error('[Products Fetch Exception]', err);
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) {
+      console.error('[Product Delete Error]', error);
       toast.error('Failed to delete product');
     } else {
       toast.success('Product deleted');
@@ -74,6 +82,7 @@ export default function AdminProductsPage() {
   const toggleStatus = async (product: any) => {
     const { error } = await supabase.from('products').update({ is_active: !product.is_active }).eq('id', product.id);
     if (error) {
+      console.error('[Product Status Update Error]', error);
       toast.error('Failed to update status');
     } else {
       toast.success(product.is_active ? 'Product deactivated' : 'Product activated');
@@ -87,13 +96,25 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">Products Catalog</h1>
           <p className="text-slate-500">Manage your inventory and stock levels.</p>
+          {!loading && products.length > 0 && (
+            <div className="flex items-center gap-3 mt-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E6F0EB] text-[#1B4332] text-xs font-bold">
+                Added: {products.filter(p => p.is_active).length} active
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                Total: {products.length} products
+              </span>
+            </div>
+          )}
         </div>
-        <Button asChild className="bg-[#1B4332] text-white hover:bg-[#2D6A4F]">
-          <Link href="/admin/products/new" className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Add Product
-          </Link>
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button asChild className="bg-[#1B4332] text-white hover:bg-[#2D6A4F]">
+            <Link href="/admin/products/new" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Product
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -115,17 +136,19 @@ export default function AdminProductsPage() {
                 <th className="px-6 py-4">Category</th>
                 <th className="px-6 py-4">Subcategory</th>
                 <th className="px-6 py-4">Price</th>
-                <th className="px-6 py-4">Stock</th>
-                <th className="px-6 py-4">Sales</th>
+                <th className="px-6 py-4">Cost</th>
+                <th className="px-6 py-4">stock</th>
+                <th className="px-6 py-4">Total Added</th>
+                <th className="px-6 py-4">Sold</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">Loading catalog...</td></tr>
+                <tr><td colSpan={10} className="px-6 py-8 text-center text-slate-500">Loading catalog...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">No products found.</td></tr>
+                <tr><td colSpan={10} className="px-6 py-8 text-center text-slate-500">No products found.</td></tr>
               ) : (
                 products.map((p) => {
                   const cat = p.categories?.name ?? 'Uncategorized';
@@ -134,11 +157,7 @@ export default function AdminProductsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
                           <div className="h-10 w-10 rounded bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
-                            {p.images && p.images.length > 0 ? (
-                              <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <Package className="h-5 w-5 text-slate-400" />
-                            )}
+                            <Package className="h-5 w-5 text-slate-400" />
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-900">{p.name}</p>
@@ -152,11 +171,31 @@ export default function AdminProductsPage() {
                         <p className="font-bold text-slate-900">{formatPrice(Number(p.price))}</p>
                       </td>
                       <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-slate-600">
+                          {p.cost_price > 0 ? formatPrice(Number(p.cost_price)) : <span className="text-slate-300">—</span>}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={cn(
-                          "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest",
-                          p.stock <= 5 ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-600"
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5",
+                          p.stock_status === 'out_of_stock' ? "bg-slate-100 text-slate-400" :
+                          p.stock_status === 'low_stock' ? "bg-red-100 text-red-600" :
+                          "bg-emerald-50 text-emerald-700"
                         )}>
-                          {p.stock} Units
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            p.stock_status === 'out_of_stock' ? "bg-slate-300" :
+                            p.stock_status === 'low_stock' ? "bg-red-500" :
+                            "bg-emerald-500"
+                          )} />
+                          {p.stock_status === 'low_stock' ? `${p.stock} (Low Stock)` :
+                           p.stock_status === 'out_of_stock' ? 'Out of Stock' :
+                           `${p.stock} Units`}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-700">
+                          {p.total_added ?? p.stock} Added
                         </span>
                       </td>
                       <td className="px-6 py-4">

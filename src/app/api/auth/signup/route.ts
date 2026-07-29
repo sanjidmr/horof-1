@@ -62,11 +62,11 @@ export async function POST(request: Request) {
     // Create admin notification (optional but matching original signup behavior)
     try {
       const { createNotification } = await import('@/lib/actions/notifications');
-      await createNotification(
-        'New Customer Registered',
-        `A new user (${email}) has just registered on the platform.`,
-        'customer'
-      );
+      await createNotification({
+        title: 'New Customer Registered',
+        message: `A new user (${email}) has just registered on the platform.`,
+        type: 'customer',
+      });
     } catch (e) {
       console.error('Failed to create notification:', e);
     }

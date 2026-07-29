@@ -178,14 +178,13 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
   const handleUpdateStatus = async (newStatus: string) => {
     setIsUpdating(true);
     try {
-      const res = await updateOrderStatusAction(order.id, newStatus, statusNote, adminName);
+      const res = await updateOrderStatusAction(order.id, newStatus, statusNote, adminName, sendEmail);
       if (res.success) {
         setStatus(newStatus.toLowerCase());
         setOrder(prev => ({ ...prev, status: newStatus.toLowerCase() }));
         setStatusNote('');
         toast.success(`Order status set to: ${newStatus}`);
         
-        // Simulate notifications
         if (sendEmail) toast(`Email notification sent to customer.`, { icon: '📧' });
         if (sendSms) toast(`SMS alert dispatched.`, { icon: '📱' });
 

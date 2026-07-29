@@ -58,6 +58,7 @@ export type ProductFormInitial = {
   sku?: string;
   price?: number;
   offer_price?: number | null;
+  cost_price?: number | null;
   stock?: number;
   description?: string | null;
   specification?: unknown;
@@ -107,6 +108,7 @@ const defaultValuesBase: Partial<ProductFormValues> = {
   slug: '',
   sku: '',
   price: 0,
+  cost_price: undefined,
   offer_price: undefined,
   stock: 0,
   description: '',
@@ -151,7 +153,7 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
       initial.images?.map((row) => {
         const url = row.url;
         const path = extractStoragePath(url) ?? `legacy:${url.slice(-40)}`;
-        return { path, url };
+        return { id: (row as any).id || undefined, path, url };
       }) ?? [];
 
     const specRows = (() => {
@@ -178,6 +180,7 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
       slug: initial.slug ?? '',
       sku: initial.sku ?? '',
       price: Number(initial.price ?? 0),
+      cost_price: initial.cost_price != null ? Number(initial.cost_price) : undefined,
       offer_price: initial.offer_price != null ? Number(initial.offer_price) : undefined,
       stock: Number(initial.stock ?? 0),
       description: initial.description ?? '',
@@ -372,12 +375,12 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
       try {
       const sb = createSupabaseBrowserClient();
 
-      if (values.is_product_of_the_day && sb) {
+      if (values.section === 'product_of_the_day' && sb) {
         try {
           let query = sb
             .from('products')
             .select('id', { count: 'exact', head: true })
-            .eq('is_product_of_the_day', true);
+            .eq('section', 'product_of_the_day');
 
           if (values.id) {
             query = query.neq('id', values.id);
@@ -1030,6 +1033,22 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
                   />
                 </div>
                 {form.formState.errors.offer_price && <p className="text-xs text-red-600 font-medium">{String(form.formState.errors.offer_price.message)}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cost_price" className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cost Price (BDT)</Label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">৳</span>
+                  <Input
+                    id="cost_price"
+                    type="text"
+                    inputMode="decimal"
+                    className="h-11 pl-8 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-semibold"
+                    placeholder="For profit/loss calculation"
+                    {...form.register('cost_price')}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400">Used for COGS and profit/loss calculation. Leave blank if not applicable.</p>
               </div>
 
               <div className="space-y-2">

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { buildMeta } from '@/lib/seo';
 import type { Metadata } from 'next';
 import { HeroSection } from '../components/home/HeroSection';
@@ -43,21 +43,21 @@ export default async function HomePage() {
       .from('products')
       .select('*, categories(name)')
       .eq('is_active', true)
-      .eq('is_best_selling', true)
+      .eq('section', 'best_selling')
       .order('created_at', { ascending: false })
       .limit(8),
     supabase
       .from('products')
       .select('*, categories(name)')
       .eq('is_active', true)
-      .eq('is_new_arrival', true)
+      .eq('section', 'new_arrival')
       .order('created_at', { ascending: false })
       .limit(4),
     supabase
       .from('products')
       .select('*, categories(name)')
       .eq('is_active', true)
-      .eq('is_product_of_the_day', true)
+      .eq('section', 'product_of_the_day')
       .limit(4),
     supabase
       .from('products')
@@ -109,18 +109,14 @@ export default async function HomePage() {
     reviewCount: 12,
     stock: p.stock || 0,
     tags: [],
-    isNew: !!p.is_new_arrival,
-    isFeatured: !!p.is_best_selling,
-    is_best_selling: !!p.is_best_selling,
-    is_new_arrival: !!p.is_new_arrival,
-    is_product_of_the_day: !!p.is_product_of_the_day
+    isNew: p.section === 'new_arrival',
+    isFeatured: p.section === 'best_selling',
   });
 
   const featuredProducts = bestSellingData ? bestSellingData.map(mapProduct) : [];
   const newArrivals = newArrivalsData ? newArrivalsData.map(mapProduct) : [];
   const dailyProducts = productDayData ? productDayData.map(mapProduct) : [];
   const allProducts = allProdData ? allProdData.map(mapProduct) : [];
-
   const initialDecorImages = decorImages || [];
   const heroImage = heroData?.image_url || '';
   const subtitleNormal = heroContent?.subtitle_normal || undefined;
@@ -133,13 +129,10 @@ export default async function HomePage() {
         initialSubtitleNormal={subtitleNormal}
         initialSubtitleBold={subtitleBold}
       />
-
       <DecorShowcase initialImages={initialDecorImages} />
-
       <div id="categories" className="max-w-[1400px] mx-auto px-6">
         <CategorySection categories={categories} />
       </div>
-
       <div className="max-w-[1400px] mx-auto px-6">
         <FeaturedProducts
           title="Best Selling Products"
@@ -148,37 +141,25 @@ export default async function HomePage() {
           products={featuredProducts}
         />
       </div>
-
       <div className="max-w-[1400px] mx-auto px-6">
         <OurServices services={servicesData || []} />
       </div>
-
       <FlashSale />
-
       <div className="max-w-7xl mx-auto px-6">
         <NewArrivals products={newArrivals} />
       </div>
-
       <SpecialOffer />
-
-
       <div className="max-w-7xl mx-auto px-6">
         <ProductOfTheDay products={dailyProducts} />
       </div>
-
       <WhyChooseUs />
-
       <CustomDesignCTA />
-
       <div className="max-w-7xl mx-auto px-6">
         <FAQSection />
       </div>
-
       <div className="max-w-[1400px] mx-auto px-6 py-8 md:py-12">
         <DesignRequestForm />
       </div>
-
-      
     </HomeMotionWrapper>
   );
 }

@@ -205,18 +205,18 @@ export default function ProductDetailsPage({ params }: PageProps) {
             name: p.name,
             description: p.description || '',
             price: Number(p.price),
-            discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
-            images: p.images || [],
+            discountPrice: p.offer_price ? Number(p.offer_price) : undefined,
+            images: [],
             category: p.categories?.name || 'Uncategorized',
             rating: 4.5,
             reviewCount: 12,
             stock: p.stock || 0,
             tags: [],
-            isNew: !!p.is_new_arrival,
-            isFeatured: !!p.is_best_selling,
+            isNew: p.section === 'new_arrival',
+            isFeatured: p.section === 'best_selling',
             slug: p.slug,
             specification: p.specification || '',
-            perfect_for: p.perfect_for || ''
+            perfect_for: Array.isArray(p.perfect_for) ? p.perfect_for.join(', ') : (typeof p.perfect_for === 'string' ? p.perfect_for : '')
           })));
         }
       }
@@ -369,7 +369,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
   // Base pricing
   const basePrice = product ? Number(product.price) : 0;
-  const comparePrice = product && product.compare_price ? Number(product.compare_price) : null;
+  const comparePrice = product && product.offer_price ? Number(product.offer_price) : null;
 
   // Variant modifier
   const variantCost = activeVariant ? Number(activeVariant.price_modifier) : 0;
@@ -900,17 +900,17 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
             {/* Badges Overlay */}
             <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-              {product.is_new_arrival && (
+              {product.section === 'new_arrival' && (
                 <Badge className="bg-[#1A3320] text-white rounded-full px-3 py-1 text-xs font-semibold shadow-md">
                   New Arrival
                 </Badge>
               )}
-              {product.is_best_selling && (
+              {product.section === 'best_selling' && (
                 <Badge className="bg-amber-500 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-md">
                   Best Seller
                 </Badge>
               )}
-              {product.is_product_of_the_day && (
+              {product.section === 'product_of_the_day' && (
                 <Badge className="bg-red-500 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-md flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" /> Spotlight
                 </Badge>

@@ -32,7 +32,7 @@ export async function submitContactMessage(data: {
     return { success: false, error: 'Failed to send message. Please try again later.' };
   }
 
-  createNotification('New Contact Message', `${data.name} sent: ${data.subject}`, 'customer');
+  createNotification({ title: 'New Contact Message', message: `${data.name} sent: ${data.subject}`, type: 'customer' });
   revalidatePath('/admin/messages');
   return { success: true };
 }

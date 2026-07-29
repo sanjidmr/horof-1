@@ -98,6 +98,20 @@ export async function adjustStock(
 
   if (updateError) throw new Error(updateError.message);
 
+  // Increment total_added when product stock increases (not for variants)
+  if (actualChange > 0 && !variantId) {
+    const { data: prod } = await supabase
+      .from('products')
+      .select('total_added')
+      .eq('id', productId)
+      .single();
+    const currentTotal = prod?.total_added ?? 0;
+    await supabase
+      .from('products')
+      .update({ total_added: currentTotal + actualChange })
+      .eq('id', productId);
+  }
+
   await supabase.from('stock_movements').insert({
     product_id: productId,
     variant_id: variantId || null,
@@ -274,7 +288,7 @@ export async function receivePurchaseOrder(poId: string) {
 
   const { data: items } = await supabase
     .from('purchase_order_items')
-    .select('*, products(stock)')
+    .select('*, products(stock, total_added)')
     .eq('purchase_order_id', poId);
 
   for (const item of items || []) {
@@ -286,6 +300,12 @@ export async function receivePurchaseOrder(poId: string) {
       .update({ stock: (item.products?.stock || 0) + remaining, incoming_stock: Math.max(0, (item.products?.stock || 0) - remaining) })
       .eq('id', item.product_id);
     if (stockErr) throw new Error(stockErr.message);
+
+    // Increment total_added for received stock
+    await supabase
+      .from('products')
+      .update({ total_added: ((item.products as any)?.total_added ?? (item.products?.stock || 0)) + remaining })
+      .eq('id', item.product_id);
 
     await supabase.from('stock_movements').insert({
       product_id: item.product_id,
@@ -410,6 +430,18 @@ export async function completeStockTransfer(transferId: string) {
 
   await supabase.from('products').update({ stock: (product?.stock || 0) + transfer.quantity }).eq('id', transfer.product_id);
 
+  // Increment total_added for the destination product (new stock entered via transfer)
+  const { data: destProd } = await supabase
+    .from('products')
+    .select('total_added')
+    .eq('id', transfer.product_id)
+    .single();
+  const destTotal = (destProd?.total_added ?? (product?.stock || 0)) + transfer.quantity;
+  await supabase
+    .from('products')
+    .update({ total_added: destTotal })
+    .eq('id', transfer.product_id);
+
   await supabase.from('stock_transfers').update({
     status: 'completed',
     completed_by: user.id,
@@ -488,10 +520,15 @@ export async function getProductInventory(options?: {
 export async function bulkUpdateStock(updates: { product_id: string; stock: number }[]) {
   const { supabase } = await getAdmin();
   for (const u of updates) {
-    const { data: current } = await supabase.from('products').select('stock').eq('id', u.product_id).single();
+    const { data: current } = await supabase.from('products').select('stock, total_added').eq('id', u.product_id).single();
     const change = u.stock - (current?.stock || 0);
     if (change !== 0) {
       await supabase.from('products').update({ stock: u.stock }).eq('id', u.product_id);
+      // Increment total_added if stock increased
+      if (change > 0) {
+        const curTotal = current?.total_added ?? current?.stock ?? 0;
+        await supabase.from('products').update({ total_added: curTotal + change }).eq('id', u.product_id);
+      }
       await supabase.from('stock_movements').insert({
         product_id: u.product_id,
         movement_type: 'manual_update',
@@ -817,7 +854,7 @@ export async function getWarehouseProducts(warehouseId: string) {
   if (!isAdmin && profile.assigned_warehouse_id !== warehouseId) throw new Error('Access denied to this warehouse');
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, sku, slug, price, stock, reserved_stock, min_stock_level, stock_status, is_active, default_warehouse_id, image, cost_price, categories:categories(name), brands:brands(name)')
+    .select('id, name, sku, slug, price, stock, reserved_stock, min_stock_level, stock_status, is_active, default_warehouse_id, cost_price, categories:categories(name), brands:brands(name)')
     .or(`default_warehouse_id.eq.${warehouseId},default_warehouse_id.is.null`)
     .order('name');
   if (error) throw new Error(error.message);
@@ -828,7 +865,7 @@ export async function warehouseUpdateStock(productId: string, newStock: number, 
   const { supabase, isAdmin, profile } = await requireWarehouseStaffOrAdmin();
   const { data: product, error: pErr } = await supabase
     .from('products')
-    .select('id, stock, default_warehouse_id')
+    .select('id, stock, total_added, default_warehouse_id')
     .eq('id', productId).single();
   if (pErr || !product) throw new Error('Product not found');
   if (!isAdmin && product.default_warehouse_id !== profile.assigned_warehouse_id) {
@@ -841,13 +878,24 @@ export async function warehouseUpdateStock(productId: string, newStock: number, 
     .update({ stock: newStock })
     .eq('id', productId);
   if (upErr) throw new Error(upErr.message);
+
+  // Increment total_added if stock increased
+  if (diff > 0) {
+    const curTotal = (product as any).total_added ?? oldStock;
+    await supabase
+      .from('products')
+      .update({ total_added: curTotal + diff })
+      .eq('id', productId);
+  }
   try {
     await supabase.from('stock_movements').insert({
       product_id: productId,
       warehouse_id: product.default_warehouse_id,
-      type: diff > 0 ? 'adjustment_in' : 'adjustment_out',
-      quantity: Math.abs(diff),
-      reference: reason || 'Manual stock update by warehouse staff',
+      movement_type: diff > 0 ? 'manual_update' : 'manual_update',
+      quantity_change: Math.abs(diff),
+      stock_before: oldStock,
+      stock_after: newStock,
+      reference_type: reason || 'Manual stock update by warehouse staff',
       performed_by: (await supabase.auth.getUser()).data.user?.id,
     });
   } catch (_) {}

@@ -31,11 +31,11 @@ export async function createTicket(data: {
 
   if (error) return { error: error.message, ticket: null };
 
-  await createNotification(
-    'New Support Ticket',
-    `Ticket ${ticket.ticket_number}: ${data.subject}`,
-    'customer'
-  );
+  await createNotification({
+    title: 'New Support Ticket',
+    message: `Ticket ${ticket.ticket_number}: ${data.subject}`,
+    type: 'customer',
+  });
 
   revalidatePath('/customer/support');
   revalidatePath('/admin/support');
@@ -118,7 +118,7 @@ export async function addTicketReply(ticketId: string, message: string, isIntern
 
   if (ticket && senderRole === 'customer') {
     await supabase.from('support_tickets').update({ is_read_by_admin: false }).eq('id', ticketId);
-    await createNotification('New Ticket Reply', `Customer replied to ticket ${ticket.ticket_number}`, 'customer');
+    await createNotification({ title: 'New Ticket Reply', message: `Customer replied to ticket ${ticket.ticket_number}`, type: 'customer' });
   } else if (ticket && senderRole === 'admin' && !isInternalNote) {
     await supabase.from('support_tickets').update({ is_read_by_customer: false }).eq('id', ticketId);
   }

@@ -3,6 +3,8 @@
 import { createSupabaseServerClient } from '../supabase/server';
 import { parseProductDetails, buildProductDetails } from '@/lib/utils/order-helpers';
 import { revalidatePath } from 'next/cache';
+import { sendOrderStatusEmail } from './send-order-email';
+import { logSystemTransaction } from './accounting';
 
 async function requireAdmin() {
   const supabase = await createSupabaseServerClient();
@@ -29,7 +31,8 @@ export async function updateOrderStatusAction(
   orderId: number,
   newStatus: string,
   note?: string,
-  adminName?: string
+  adminName?: string,
+  sendEmail?: boolean
 ) {
   const { supabase } = await requireAdmin();
 
@@ -85,10 +88,8 @@ export async function updateOrderStatusAction(
 
   // Handle stock adjustments for returned items
   if (newStatus.toLowerCase() === 'returned' && prevStatus !== 'returned') {
-    // Replenish stock
     await adjustStock(supabase, orderId, items, 'add');
   } else if (prevStatus === 'returned' && newStatus.toLowerCase() !== 'returned') {
-    // Re-deduct stock
     await adjustStock(supabase, orderId, items, 'deduct');
   }
 
@@ -99,10 +100,74 @@ export async function updateOrderStatusAction(
     await adjustStock(supabase, orderId, items, 'deduct');
   }
 
+  // ── Auto Log System Transaction ──
+  const orderTotal = Number(order.total ?? 0);
+  const orderLabel = order.order_number || `#${orderId}`;
+  if (newStatus.toLowerCase() === 'delivered' || newStatus.toLowerCase() === 'completed') {
+    logSystemTransaction({
+      type: 'income',
+      reference_id: String(orderId),
+      reference_type: 'order',
+      description: `Order ${orderLabel} marked as ${newStatus}`,
+      amount: orderTotal,
+      status: 'completed',
+    }).catch(() => {});
+  } else if (newStatus.toLowerCase() === 'cancelled' && prevStatus !== 'cancelled') {
+    logSystemTransaction({
+      type: 'cancellation',
+      reference_id: String(orderId),
+      reference_type: 'order',
+      description: `Order ${orderLabel} cancelled${note ? `: ${note}` : ''}`,
+      amount: orderTotal,
+      status: 'completed',
+    }).catch(() => {});
+  }
+
+  // ── Customer DB Notification ──
+  const statusLabel = newStatus.toLowerCase().replace(/_/g, ' ');
+  const orderNum = order.order_number || `#${orderId}`;
+  if (order.user_id) {
+    const { error: insertError } = await supabase.from('notifications').insert({
+      title: `Order ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+      message: `Your order ${orderNum} status has been updated to ${statusLabel}.${note ? ` ${note}` : ''}`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: `/orders`,
+    });
+    if (insertError) console.error('[Notification] Failed to create customer notification:', insertError);
+  }
+
+  // ── Admin DB Notification ──
+  const { error: adminNotifErr } = await supabase.from('notifications').insert({
+    title: `Order ${statusLabel.charAt(0).toUpperCase() + statusLabel.slice(1)}`,
+    message: `Order ${orderNum} status changed to ${statusLabel} by ${adminName || 'Admin'}.${note ? ` ${note}` : ''}`,
+    type: 'order',
+    order_id: orderId,
+    action_url: `/admin/orders/${orderId}`,
+  });
+  if (adminNotifErr) console.error('[Notification] Failed to create admin notification:', adminNotifErr);
+
+  // ── Send Email to Customer ──
+  if (sendEmail && order.customer_email) {
+    sendOrderStatusEmail({
+      to: order.customer_email,
+      customerName: order.customer_name || 'Customer',
+      orderNumber: orderNum,
+      status: newStatus.toLowerCase(),
+      note: note || undefined,
+      trackingNumber: metadata.tracking_number || undefined,
+      courierName: metadata.courier_name || undefined,
+      estimatedDelivery: metadata.estimated_delivery || undefined,
+    }).catch(err => console.error('[Email] Failed to send status email:', err));
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath('/orders');
   revalidatePath('/track-order');
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
 
   return { success: true, status: newStatus.toLowerCase() };
 }
@@ -189,9 +254,38 @@ export async function assignCourierAction(
     note: timelineNote
   });
 
+  // ── Customer DB Notification ──
+  const orderNum = order.order_number || `#${orderId}`;
+  if (order.user_id) {
+    await supabase.from('notifications').insert({
+      title: 'Courier Assigned',
+      message: `Your order ${orderNum} has been assigned to ${courierName}. Tracking: ${trackingNumber}.${estimatedDelivery ? ` Est. delivery: ${new Date(estimatedDelivery).toLocaleDateString()}` : ''}`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: `/track-order?order=${orderNum}`,
+    }).then(({ error }) => { if (error) console.error('[Notification] courier notif error:', error); });
+  }
+
+  // ── Send Email to Customer ──
+  if (order.customer_email) {
+    sendOrderStatusEmail({
+      to: order.customer_email,
+      customerName: order.customer_name || 'Customer',
+      orderNumber: orderNum,
+      status: order.status,
+      note: `Courier ${courierName} assigned. Tracking: ${trackingNumber}`,
+      trackingNumber,
+      courierName,
+      estimatedDelivery,
+    }).catch(err => console.error('[Email] Failed to send courier email:', err));
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath('/track-order');
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
@@ -238,8 +332,34 @@ export async function updateOrderNotesAction(
     note: timelineNote
   });
 
+  // ── Notify customer when customer notes are updated ──
+  if (type === 'customer' && order.user_id) {
+    const orderNum = order.order_number || `#${orderId}`;
+    await supabase.from('notifications').insert({
+      title: 'Order Note Updated',
+      message: `A note has been added to your order ${orderNum}.`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: '/orders',
+    }).then(({ error }) => { if (error) console.error('[Notification] notes notif error:', error); });
+
+    // Send email for customer note updates
+    if (order.customer_email && notesText) {
+      sendOrderStatusEmail({
+        to: order.customer_email,
+        customerName: order.customer_name || 'Customer',
+        orderNumber: orderNum,
+        status: order.status,
+        note: notesText,
+      }).catch(err => console.error('[Email] Failed to send notes email:', err));
+    }
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
@@ -397,6 +517,19 @@ export async function handleRefundAction(
 
   if (updateErr) throw new Error('Failed to process refund: ' + updateErr.message);
 
+  // Log refund transaction
+  if (approve) {
+    const refundTotal = Number(order.total ?? 0);
+    logSystemTransaction({
+      type: 'refund',
+      reference_id: String(orderId),
+      reference_type: 'order',
+      description: `Refund approved for order #${String(orderId).slice(0, 8).toUpperCase()}`,
+      amount: refundTotal,
+      status: 'completed',
+    }).catch(() => {});
+  }
+
   // Log timeline
   const timelineNote = `Refund ${approve ? 'Approved' : 'Rejected'}${adminName ? ` (by Admin: ${adminName})` : ''}.${note ? ` Note: ${note}` : ''}`;
   await supabase.from('order_timeline').insert({
@@ -541,6 +674,16 @@ export async function cancelOrderAction(
 
   if (updateErr) throw new Error('Failed to cancel order: ' + updateErr.message);
 
+  // Log cancellation transaction
+  logSystemTransaction({
+    type: 'cancellation',
+    reference_id: String(orderId),
+    reference_type: 'order',
+    description: `Order cancelled: ${order.order_number || `#${orderId}`}${reason ? ` (${reason})` : ''}`,
+    amount: Number(order.total ?? 0),
+    status: 'completed',
+  }).catch(() => {});
+
   // Log timeline
   const cancelBy = userRole === 'admin' ? `Admin: ${adminName || 'System'}` : 'Customer';
   const timelineNote = `Order Cancelled by ${cancelBy}.${reason ? ` Reason: ${reason}` : ''}`;
@@ -555,10 +698,36 @@ export async function cancelOrderAction(
     await adjustStock(supabase, orderId, items, 'add');
   }
 
+  // ── Customer DB Notification ──
+  const orderNum = order.order_number || `#${orderId}`;
+  if (order.user_id) {
+    await supabase.from('notifications').insert({
+      title: 'Order Cancelled',
+      message: `Your order ${orderNum} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
+      type: 'order',
+      user_id: order.user_id,
+      order_id: orderId,
+      action_url: '/orders',
+    }).then(({ error }) => { if (error) console.error('[Notification] cancel notif error:', error); });
+  }
+
+  // ── Send Email ──
+  if (order.customer_email) {
+    sendOrderStatusEmail({
+      to: order.customer_email,
+      customerName: order.customer_name || 'Customer',
+      orderNumber: orderNum,
+      status: 'cancelled',
+      note: reason || undefined,
+    }).catch(err => console.error('[Email] Failed to send cancel email:', err));
+  }
+
   revalidatePath('/orders');
   revalidatePath('/track-order');
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
