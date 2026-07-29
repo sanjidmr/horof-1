@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 import Link from 'next/link';
-import { 
-  Search, 
-  Package, 
+import { extractProductImages } from '@/lib/store/extract-images';
+import {
+  Search,
+  Package,
   Clock, 
   Truck, 
   CheckCircle2, 
@@ -85,7 +86,7 @@ export default function OrdersPage() {
             *,
             products (
               name,
-              images
+              product_images(url,sort_order)
             )
           )
         `)
@@ -340,11 +341,16 @@ export default function OrdersPage() {
                       <div key={item.id || idx} className="py-4 first:pt-0 last:pb-0 flex items-center gap-4 justify-between">
                         <div className="flex items-center gap-4">
                           <div className="h-16 w-16 bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 flex-shrink-0 flex items-center justify-center">
-                            {item.products?.images?.[0] || item.product?.images?.[0] ? (
-                              <img src={item.products?.images?.[0] || item.product?.images?.[0]} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <Package className="text-slate-300 h-6 w-6" />
-                            )}
+                            {(() => {
+                              const imgs = extractProductImages(item.products?.product_images);
+                              const fallback = extractProductImages(item.product?.product_images);
+                              const src = imgs[0] || fallback[0];
+                              return src ? (
+                                <img src={src} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <Package className="text-slate-300 h-6 w-6" />
+                              );
+                            })()}
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-slate-800">{item.products?.name || item.product?.name || item.name}</h4>

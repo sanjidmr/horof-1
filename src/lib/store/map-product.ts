@@ -1,4 +1,5 @@
 import type { Product, Category } from '@/lib/types';
+import { extractProductImages } from './extract-images';
 
 type DbProduct = {
   id: string;
@@ -17,12 +18,7 @@ type DbProduct = {
 };
 
 export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string): Product {
-  const images =
-    (row.product_images ?? [])
-      .slice()
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((i) => i.url)
-      .filter(Boolean) || [];
+  const images = extractProductImages(row.product_images);
   const price = typeof row.price === 'string' ? parseFloat(row.price) : Number(row.price);
   const offer = row.compare_price != null ? (typeof row.compare_price === 'string' ? parseFloat(row.compare_price) : Number(row.compare_price)) : undefined;
 
@@ -37,7 +33,7 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
     description: row.description ?? '',
     price,
     discountPrice: offer && offer < price ? offer : undefined,
-    images: images.length ? images : ['/images/about.jpg'],
+    images,
     category: categoryName ?? row.categories?.name ?? 'General',
     subcategory: row.subcategories?.name ?? undefined,
     rating,

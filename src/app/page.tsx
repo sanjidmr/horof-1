@@ -14,6 +14,7 @@ import { FAQSection } from '../components/home/FAQSection';
 import { CustomDesignCTA } from '../components/home/CustomDesignCTA';
 import { DesignRequestForm } from '../components/home/DesignRequestForm';
 import { createSupabaseServerClient } from '../lib/supabase/server';
+import { extractProductImages } from '../lib/store/extract-images';
 import { Product } from '../lib/types';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
 import { OurServices } from '../components/home/OurServices';
@@ -41,27 +42,27 @@ export default async function HomePage() {
     supabase.from('categories').select('*, products(count)').eq('is_active', true),
     supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*, product_images(url,sort_order), categories(name)')
       .eq('is_active', true)
       .eq('section', 'best_selling')
       .order('created_at', { ascending: false })
       .limit(8),
     supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*, product_images(url,sort_order), categories(name)')
       .eq('is_active', true)
       .eq('section', 'new_arrival')
       .order('created_at', { ascending: false })
       .limit(4),
     supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*, product_images(url,sort_order), categories(name)')
       .eq('is_active', true)
       .eq('section', 'product_of_the_day')
       .limit(4),
     supabase
       .from('products')
-      .select('*, categories(name)')
+      .select('*, product_images(url,sort_order), categories(name)')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(8),
@@ -103,7 +104,7 @@ export default async function HomePage() {
     description: p.description || '',
     price: Number(p.price),
     discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
-    images: p.images || [],
+    images: extractProductImages(p.product_images),
     category: p.categories?.name || 'Uncategorized',
     rating: 4.5,
     reviewCount: 12,

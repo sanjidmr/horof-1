@@ -14,9 +14,7 @@ export interface Product {
   tags: string[];
   isNew?: boolean;
   isFeatured?: boolean;
-  is_best_selling?: boolean;
-  is_new_arrival?: boolean;
-  is_product_of_the_day?: boolean;
+  section?: string;
   specification?: string;
   perfect_for?: string;
   createdAt?: string;

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Search, Plus, Edit3, Trash2, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn, formatPrice } from '@/lib/utils';
+import { extractProductImages } from '@/lib/store/extract-images';
 
 export const ProductsTab = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -32,11 +33,14 @@ export const ProductsTab = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select('*, product_images(url,sort_order)')
         .order('created_at', { ascending: false });
         
       if (!error && data) {
-        setProducts(data);
+        setProducts(data.map((p: any) => ({
+          ...p,
+          images: extractProductImages(p.product_images),
+        })));
       }
     } catch (err) {
       console.error(err);

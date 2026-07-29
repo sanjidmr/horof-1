@@ -5,37 +5,38 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/ca
 import { Badge } from '@/components/shadcn/badge';
 import { Button } from '@/components/ui/Button';
 import { formatPrice, cn } from '@/lib/utils';
-import { 
-  Package, 
-  Truck, 
-  CreditCard, 
-  User, 
-  MapPin, 
-  Clock, 
-  CheckCircle2, 
+import {
+Package,
+  Truck,
+  CreditCard,
+  User,
+  MapPin,
+  Clock,
+  CheckCircle2,
   XCircle,
   ChevronLeft,
   Printer,
   FileText,
   Save,
-  Check,
-  RefreshCw,
   Mail,
   MessageSquare,
   AlertCircle,
   Warehouse,
-  RotateCcw
+  RotateCcw,
+  ImageIcon,
+  Tag,
+  FileEdit
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { 
-  updateOrderStatusAction, 
-  assignCourierAction, 
-  updateOrderNotesAction, 
-  handleReturnAction, 
-  handleRefundAction, 
+import {
+  updateOrderStatusAction,
+  assignCourierAction,
+  updateOrderNotesAction,
+  handleReturnAction,
+  handleRefundAction,
   cancelOrderAction
 } from '@/lib/actions/orders';
 import { assignWarehouseToOrder } from '@/lib/actions/admin/order-workflow';
@@ -395,85 +396,147 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
         {/* Left Double Columns */}
         <div className="lg:col-span-2 space-y-8">
           
-          {/* Order items lists */}
+          {/* Order items lists - Complete Order Summary */}
           <Card className="border-slate-100 shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-50">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-50 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 text-slate-700">
                 <Package size={16} className="text-[#1a4731]" /> Product Collections ({items.length})
               </CardTitle>
+              <span className="text-[10px] text-slate-400 font-semibold">
+                Order #{String(order.id).slice(0, 8)}
+              </span>
             </CardHeader>
-            <CardContent className="p-0">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="border-b bg-slate-50/20 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="px-6 py-3">Bespoke Item</th>
-                    <th className="px-6 py-3 text-center">Quantity</th>
-                    <th className="px-6 py-3 text-right">Unit Rate</th>
-                    <th className="px-6 py-3 text-right">Row Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {items.map((item) => {
-                    const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
-                    const specs = matchingDetail?.selectedSpecs || item.selectedSpecs || {};
-                    const design = Number(matchingDetail?.designCharge || item.designCharge || 0);
+            <CardContent className="p-6 space-y-6">
+              {items.map((item) => {
+                const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
+                const specs = matchingDetail?.specifications || matchingDetail?.selectedSpecs || item.selectedSpecs || {};
+                const design = Number(matchingDetail?.design_charge || matchingDetail?.designCharge || item.designCharge || 0);
+                const customerNote = matchingDetail?.customer_notes || matchingDetail?.customerNotes || '';
+                const itemSubtotal = Number(item.unit_price || 0) * Number(item.quantity || 1);
+                const itemTotal = itemSubtotal + design;
+                const productImage = item.images?.[0] || null;
 
-                    return (
-                      <tr key={item.id} className="hover:bg-slate-50/30 align-top">
-                        <td className="px-6 py-4 space-y-2">
-                          <p className="font-bold text-slate-900">{item.products?.name || 'Artisan Piece'}</p>
-                          
-                          {item.product_variants?.size && (
-                            <p className="text-[10px] text-slate-500">Size: {item.product_variants.size} {item.product_variants?.color && `| Color: ${item.product_variants.color}`}</p>
-                          )}
+                return (
+                  <div key={item.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    {/* Product Header Row */}
+                    <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5 bg-white border-b border-slate-50">
+                      {/* Product Image */}
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0">
+                        {productImage ? (
+                          <img src={productImage} alt={item.products?.name || 'Product'} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center'); }} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-300">
+                            <ImageIcon size={24} />
+                          </div>
+                        )}
+                      </div>
 
-                          {specs && Object.keys(specs).length > 0 && (
-                            <div className="p-2 bg-emerald-50/30 border border-emerald-100/50 rounded-xl space-y-0.5 max-w-sm">
-                              <span className="text-[9px] font-black uppercase text-[#1B4332] block">Specifications:</span>
-                              {Object.entries(specs).map(([k, v]) => (
-                                <p key={k} className="text-[10px] text-slate-700"><span className="font-bold">{k}:</span> {v as string}</p>
-                              ))}
-                            </div>
-                          )}
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-900">{item.products?.name || matchingDetail?.product_name || 'Artisan Piece'}</h4>
+                            {item.products?.sku && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono mt-0.5">
+                                <Tag size={10} /> SKU: {item.products.sku}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-base font-black text-[#1a4731]">{formatPrice(itemTotal)}</p>
+                            <p className="text-[9px] text-slate-400 font-semibold">{item.quantity} x {formatPrice(Number(item.unit_price))}</p>
+                          </div>
+                        </div>
 
-                          {matchingDetail?.customerNotes && (
-                            <p className="text-[10px] text-amber-700 bg-amber-50/50 px-2 py-1 border border-amber-100 rounded-lg inline-block">
-                              <span className="font-bold">Customer Note:</span> {matchingDetail.customerNotes}
-                            </p>
-                          )}
-                          
-                          {design > 0 && (
-                            <p className="text-[10px] text-[#1B4332] font-semibold">+ Design Charge: {formatPrice(design)}</p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-700">{item.quantity}</td>
-                        <td className="px-6 py-4 text-right text-slate-500">{formatPrice(Number(item.unit_price))}</td>
-                        <td className="px-6 py-4 text-right font-bold text-slate-900">{formatPrice(Number(item.unit_price) * item.quantity + design)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        {/* Variant Info */}
+                        {item.product_variants && (item.product_variants.size || item.product_variants.color) && (
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {item.product_variants.size && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-[9px] font-bold text-slate-600">
+                                Size: {item.product_variants.size}
+                              </span>
+                            )}
+                            {item.product_variants.color && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-[9px] font-bold text-slate-600">
+                                Color: {item.product_variants.color}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-              {/* Price Totals bottom footer */}
-              <div className="p-6 bg-slate-50/20 border-t flex flex-col items-end gap-2 text-xs">
-                <div className="flex justify-between w-full max-w-[240px] text-slate-400">
-                  <span>Subtotal:</span>
-                  <span className="font-bold text-slate-700">{formatPrice(Number(order.total_price || order.amount || 0))}</span>
-                </div>
-                <div className="flex justify-between w-full max-w-[240px] text-slate-400">
-                  <span>Delivery Charge:</span>
-                  <span className="font-bold text-slate-700">{order.delivery_charge > 0 ? formatPrice(order.delivery_charge) : 'Free'}</span>
-                </div>
-                {metadata.discount > 0 && (
-                  <div className="flex justify-between w-full max-w-[240px] text-emerald-600 font-medium">
-                    <span>Discount {metadata.coupon_code ? `(${metadata.coupon_code})` : ''}:</span>
-                    <span>-{formatPrice(metadata.discount)}</span>
+                    {/* Specifications & Details Section */}
+                    <div className="px-4 sm:px-5 py-4 space-y-4 bg-white">
+                      {/* Full Specifications - step by step */}
+                      {specs && typeof specs === 'object' && Object.keys(specs).length > 0 && (
+                        <div>
+                          <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2">Specifications</h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                            {Object.entries(specs).map(([key, value]) => (
+                              <div key={key} className="flex items-baseline gap-2">
+                                <span className="text-[10px] font-bold text-slate-500 min-w-[90px]">{key}:</span>
+                                <span className="text-[10px] text-slate-800 font-semibold">→ {String(value)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Customer Note */}
+                      {customerNote ? (
+                        <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3">
+                          <h5 className="text-[9px] font-black uppercase text-amber-700 tracking-widest mb-1">Customer Note</h5>
+                          <p className="text-[11px] text-amber-900 font-medium">&ldquo;{customerNote}&rdquo;</p>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
+                          <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Customer Note</h5>
+                          <p className="text-[10px] text-slate-400 italic mt-0.5">No customer note.</p>
+                        </div>
+                      )}
+
+                      {/* Design Charge */}
+                      {design > 0 && (
+                        <div className="flex items-center gap-2 text-[11px] text-[#1B4332] bg-[#E6F0EB] px-3 py-1.5 rounded-lg w-fit">
+                          <FileEdit size={12} />
+                          <span className="font-bold">Design Charge:</span>
+                          <span>{formatPrice(design)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between w-full max-w-[240px] text-lg font-black text-slate-900 border-t pt-2 border-slate-200 mt-1">
-                  <span>Total:</span>
-                  <span className="text-[#1a4731]">{formatPrice(Number(order.total_price || order.amount || 0))}</span>
+                );
+              })}
+
+              {/* Order Totals Summary */}
+              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-5">
+                <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-4">Order Summary</h5>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Subtotal</span>
+                    <span className="font-bold text-slate-800">{formatPrice(Number(order.total_price || order.amount || 0))}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Delivery Charge</span>
+                    <span className="font-bold text-slate-800">{Number(order.delivery_charge) > 0 ? formatPrice(Number(order.delivery_charge)) : 'Free'}</span>
+                  </div>
+                  {metadata.discount > 0 && (
+                    <div className="flex justify-between items-center text-emerald-600">
+                      <span>Discount {metadata.coupon_code ? `(${metadata.coupon_code})` : ''}</span>
+                      <span className="font-bold">-{formatPrice(metadata.discount)}</span>
+                    </div>
+                  )}
+                  {metadata.coupon_code && metadata.discount === 0 && (
+                    <div className="flex justify-between items-center text-slate-500">
+                      <span>Coupon Code</span>
+                      <span className="font-mono font-bold text-slate-700">{metadata.coupon_code}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-base font-black text-[#1a4731] border-t border-slate-200 pt-3 mt-3">
+                    <span>Grand Total</span>
+                    <span>{formatPrice(Number(order.total_price || order.amount || 0))}</span>
+                  </div>
                 </div>
               </div>
             </CardContent>

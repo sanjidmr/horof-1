@@ -5,6 +5,7 @@ import { Product, CartItem } from '../lib/types';
 import toast from 'react-hot-toast';
 import { useAuth } from './AuthContext';
 import { createSupabaseBrowserClient } from '../lib/supabase/client';
+import { extractProductImages } from '../lib/store/extract-images';
 
 interface CartContextType {
   cart: CartItem[];
@@ -86,7 +87,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const { data: products, error: prodError } = await supabase
             .from('products')
-            .select('id, name, description, price, compare_price, stock, perfect_for')
+            .select('id, name, description, price, compare_price, stock, perfect_for, product_images(url,sort_order)')
             .in('id', uniqueIds) as unknown as { data: any[] | null; error: any };
 
           if (prodError) {
@@ -100,13 +101,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const prod = productMap.get(productId);
             if (!prod) return null;
 
+            const images = extractProductImages(prod.product_images);
+
             return {
               id: String(productId),
               name: prod.name || 'Unknown Product',
               description: prod.description || '',
               price: Number(prod.price),
               discountPrice: prod.compare_price ? Number(prod.compare_price) : undefined,
-              images: ['/images/about.jpg'],
+              images: images.length > 0 ? images : [],
               category: 'General',
               rating: 0,
               reviewCount: 0,

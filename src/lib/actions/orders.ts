@@ -582,7 +582,7 @@ export async function getOrderTrackingData(identifier: string, email: string) {
         *,
         products (
           name,
-          images
+          product_images(url,sort_order)
         )
       )
     `)

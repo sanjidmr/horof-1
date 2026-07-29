@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { extractProductImages } from '@/lib/store/extract-images';
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -7,7 +8,7 @@ export async function GET() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, description, price, compare_price, images, sku, slug, categories(name)')
+    .select('id, name, description, price, compare_price, product_images(url,sort_order), sku, slug, categories(name)')
     .eq('is_active', true);
 
   if (!products) return new NextResponse('No products', { status: 404 });
@@ -19,7 +20,7 @@ export async function GET() {
     title: p.name,
     description: p.description || p.name,
     link: `${siteUrl}/product/${p.slug}`,
-    image_link: p.images?.[0] || '',
+    image_link: extractProductImages((p as any).product_images)[0] || '',
     price: `${Number(p.price)} BDT`,
     sale_price: p.compare_price ? `${Number(p.compare_price)} BDT` : undefined,
     availability: 'in stock',

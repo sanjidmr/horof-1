@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { Star, ShoppingCart, Heart, Eye, ArrowRight } from 'lucide-react';
 import { Product } from '../../lib/types';
@@ -11,6 +11,8 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
+
+const PLACEHOLDER_IMG = '/images/about.jpg';
 
 interface ProductCardProps {
   product: Product;
@@ -42,6 +44,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
   const isWishlisted = isInWishlist(product.id);
+  const [imgError, setImgError] = useState(false);
+  const imgSrc = (!imgError && product.images[0]) ? product.images[0] : PLACEHOLDER_IMG;
 
   return (
     <motion.div
@@ -54,8 +58,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       <div className="relative aspect-[4/5] overflow-hidden bg-bg-secondary rounded-2xl m-3 border border-border-forest/20 transition-all duration-500 group-hover:border-[#2D6A4F]/30">
         <Link href={`/products/${product.id}`}>
           <img
-            src={product.images[0]}
+            src={imgSrc}
             alt={product.name}
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
           />
         </Link>

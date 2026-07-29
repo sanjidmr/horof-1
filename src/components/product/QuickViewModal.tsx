@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Heart, Star, ShieldCheck, Truck } from 'lucide-react';
 import { Product } from '@/lib/types';
@@ -8,6 +8,8 @@ import { formatPrice } from '@/lib/utils';
 import { useCart } from '@/context/CartContext';
 import { useWishlist } from '@/context/WishlistContext';
 import { Button } from '@/components/ui/Button';
+
+const PLACEHOLDER_IMG = '/images/about.jpg';
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -18,10 +20,12 @@ interface QuickViewModalProps {
 export const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClose }) => {
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist } = useWishlist();
+  const [imgError, setImgError] = useState(false);
 
   if (!product) return null;
 
   const isWishlisted = isInWishlist(product.id);
+  const imgSrc = (!imgError && product.images[0]) ? product.images[0] : PLACEHOLDER_IMG;
 
   return (
     <AnimatePresence>
@@ -50,8 +54,9 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen,
             {/* Left: Image */}
             <div className="w-full md:w-1/2 bg-slate-50">
               <img 
-                src={product.images[0]} 
-                alt={product.name} 
+                src={imgSrc}
+                alt={product.name}
+                onError={() => setImgError(true)}
                 className="w-full h-full object-cover aspect-square md:aspect-auto"
               />
             </div>

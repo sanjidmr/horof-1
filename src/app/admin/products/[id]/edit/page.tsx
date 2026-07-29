@@ -56,7 +56,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
     specification: product.specification,
     product_details: (product as any).product_details ? objectToDetails((product as any).product_details) : null,
     perfect_for: product.perfect_for ? (Array.isArray(product.perfect_for) && product.perfect_for.length > 0 ? product.perfect_for : null) : null,
-    section: (product as any).section ?? (product.is_product_of_the_day ? 'product_of_the_day' : product.is_new_arrival ? 'new_arrival' : 'best_selling'),
+    section: (product as any).section ?? 'best_selling',
     flash_sale_ends_at: (product as any).flash_sale_ends_at ?? null,
     meta_title: (product as any).meta_title ?? '',
     meta_description: (product as any).meta_description ?? '',

@@ -1,6 +1,6 @@
 import type { Product } from '../types';
 import type { DbProductRow } from './types';
-import { parseProductImages } from './orderHelpers';
+import { extractProductImages } from '../store/extract-images';
 
 export function mapDbProductToProduct(row: DbProductRow): Product {
   const priceRaw = row.price;
@@ -11,7 +11,7 @@ export function mapDbProductToProduct(row: DbProductRow): Product {
     name: row.name,
     description: '',
     price: Number.isFinite(priceNum) ? priceNum : 0,
-    images: parseProductImages(row.images),
+    images: extractProductImages(row.product_images),
     category: 'Curated',
     rating: 5,
     reviewCount: 0,

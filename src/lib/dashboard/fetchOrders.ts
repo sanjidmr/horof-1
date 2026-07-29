@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DbOrderItemRow, DbOrderRow, DbProductRow, OrderWithItems } from './types';
 import { orderRowTotal } from './orderHelpers';
+import { extractProductImages } from '../store/extract-images';
 
 /**
  * Loads orders + order_items, then attaches product rows via a single `products.in('id', …)` batch.
@@ -35,11 +36,11 @@ export async function fetchOrdersWithItemsForUser(
   if (productIds.length) {
     const { data: prodRows, error: pe } = await supabase
       .from('products')
-      .select('id,name,price,images')
+      .select('id,name,price,product_images(url,sort_order)')
       .in('id', productIds);
 
     if (!pe && prodRows) {
-      productsById = new Map(prodRows.map((p) => [String((p as DbProductRow).id), p as DbProductRow]));
+      productsById = new Map(prodRows.map((p: any) => [String(p.id), { id: p.id, name: p.name, price: p.price, images: extractProductImages(p.product_images) } as DbProductRow]));
     }
   }
 

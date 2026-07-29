@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapDbProductToCardProduct } from '@/lib/store/map-product';
+import { extractProductImages } from './extract-images';
 import type { Product } from '@/lib/types';
 
 export async function getProductDetail(slug: string) {
@@ -28,10 +29,7 @@ export async function getProductDetail(slug: string) {
 
   const { data: variants } = await supabase.from('product_variants').select('id,size,color,stock,price_modifier').eq('product_id', (row as { id: string }).id);
 
-  const imgs = ((row as { product_images?: { url: string; sort_order: number | null }[] }).product_images ?? [])
-    .slice()
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-    .map((i) => i.url);
+  const imgs = extractProductImages((row as { product_images?: { url: string; sort_order: number | null }[] }).product_images);
 
   const product = mapDbProductToCardProduct(row as never, (row as { categories?: { name?: string } }).categories?.name);
 

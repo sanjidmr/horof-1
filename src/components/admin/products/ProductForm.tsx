@@ -71,10 +71,7 @@ export type ProductFormInitial = {
   category_id?: string | null;
   subcategory_id?: string | null;
   brand_id?: string | null;
-  is_best_selling?: boolean;
-  is_new_arrival?: boolean;
-  is_product_of_the_day?: boolean;
-  images?: { url: string }[];
+  images?: { id?: string | number; url: string }[];
   variants?: { size?: string | null; color?: string | null; stock: number; price_modifier: number }[];
   order_config?: {
     quantity_discounts?: { quantity: number; discount_percent: number }[];
@@ -125,9 +122,6 @@ const defaultValuesBase: Partial<ProductFormValues> = {
   brand_id: undefined,
   images: [],
   variants: [],
-  is_best_selling: false,
-  is_new_arrival: false,
-  is_product_of_the_day: false,
   order_config: {
     quantity_discounts: [],
     specification_steps: [],
@@ -194,9 +188,6 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
       meta_description: initial.meta_description ?? '',
       category_id: (initial.category_id as '' | (string & {})) ?? '',
       subcategory_id: (initial.subcategory_id as '' | (string & {})) ?? '',
-      is_best_selling: !!initial.is_best_selling,
-      is_new_arrival: !!initial.is_new_arrival,
-      is_product_of_the_day: !!initial.is_product_of_the_day,
       images: imgs,
       order_config: {
         quantity_discounts: initial.order_config?.quantity_discounts ?? [],
@@ -405,6 +396,16 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
             : null,
       };
 
+      // Validate image URLs before saving
+      if (payload.images && payload.images.length > 0) {
+        const invalidImages = payload.images.filter(img => !img.url || typeof img.url !== 'string' || !img.url.startsWith('http'));
+        if (invalidImages.length > 0) {
+          toast.error(`${invalidImages.length} image(s) have invalid URLs. Please re-upload them.`);
+          submittingRef.current = false;
+          return;
+        }
+      }
+
       const res = await saveProduct(payload) as SaveProductResult;
       if (res.ok) {
         toast.success(mode === 'create' ? 'Product saved successfully' : 'Product updated successfully');
@@ -525,54 +526,41 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
             </CardContent>
           </Card>
 
-          {/* Product Details section */}
+          {/* Perfect For section */}
           <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white overflow-hidden transition-all duration-300">
-            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center justify-between bg-white">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-[#1a4731]" />
-                <CardTitle className="text-base font-bold text-slate-900">Product Details</CardTitle>
-              </div>
-              <Button type="button" size="sm" variant="outline" className="border border-[#1a4731]/20 hover:border-[#1a4731] hover:bg-[#E6F0EB]/50 text-[#1a4731] font-bold rounded-xl transition-all h-9 bg-white" onClick={() => appendDetail({ key: '', value: '' })}>
-                <Plus className="mr-1 h-4 w-4" /> Add Detail
-              </Button>
+            <CardHeader className="p-6 border-b border-slate-100 flex flex-row items-center gap-2 bg-white">
+              <Tag className="h-5 w-5 text-[#1a4731]" />
+              <CardTitle className="text-base font-bold text-slate-900">Perfect For</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-3 bg-white">
-              {detailFields.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No details yet. Add key-value pairs to showcase product highlights.</p>}
-              {detailFields.map((field, index) => (
-                <div
-                  key={field.id}
-                  draggable
-                  onDragStart={() => setDraggedDetailIdx(index)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (draggedDetailIdx !== null && draggedDetailIdx !== index) {
-                      moveDetail(draggedDetailIdx, index);
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Who is this product for?</Label>
+              <div className="relative">
+                <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <Input
+                  placeholder="Type a tag and press Enter"
+                  className="h-11 pl-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-medium"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      addTag(tagInput);
+                      setTagInput('');
                     }
-                    setDraggedDetailIdx(null);
                   }}
-                  className={cn(
-                    "flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150 transition-all",
-                    draggedDetailIdx === index ? "opacity-40 border-dashed border-[#1a4731]" : ""
-                  )}
-                >
-                  <div className="text-slate-400 select-none cursor-grab font-mono text-sm px-1 shrink-0">☰</div>
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Label</Label>
-                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. Material" {...form.register(`product_details.${index}.key`)} />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Value</Label>
-                    <Input className="h-9 bg-white border-slate-200 focus:border-[#1a4731] rounded-lg text-sm font-semibold" placeholder="e.g. Oak Wood" {...form.register(`product_details.${index}.value`)} />
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 mt-5">
-                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === 0} onClick={() => moveDetail(index, index - 1)}>▲</Button>
-                    <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-700 rounded-lg" disabled={index === detailFields.length - 1} onClick={() => moveDetail(index, index + 1)}>▼</Button>
-                    <Button type="button" size="icon" variant="ghost" className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg h-9 w-9 shrink-0" onClick={() => removeDetail(index)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {form.watch('perfect_for_tags')?.map((tag, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-[#1a4731]/10 px-2.5 py-1 text-xs font-semibold text-[#1a4731]">
+                    {tag}
+                    <button type="button" onClick={() => removeTag(idx)} className="hover:text-red-600 transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <input type="hidden" {...form.register('perfect_for_str')} />
             </CardContent>
           </Card>
 
@@ -1156,42 +1144,40 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
               <CardTitle className="text-base font-bold text-slate-900">Placement & Badges</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6 bg-white">
-              <div className="flex flex-col gap-3">
-                <label className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none shadow-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4.5 w-4.5 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731]/20 transition-all"
-                    {...form.register('is_best_selling')}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800">Best Selling</span>
-                    <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">Showcase on Home</span>
-                  </div>
-                </label>
-
-                <label className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none shadow-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4.5 w-4.5 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731]/20 transition-all"
-                    {...form.register('is_new_arrival')}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800">New Arrival</span>
-                    <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">Fresh Catalog Badge</span>
-                  </div>
-                </label>
-
-                <label className="flex cursor-pointer items-center gap-3.5 rounded-xl border border-slate-200 p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none shadow-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4.5 w-4.5 rounded border-slate-300 text-[#1a4731] focus:ring-[#1a4731]/20 transition-all"
-                    {...form.register('is_product_of_the_day')}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800">Product of Day</span>
-                    <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">Daily Spotlight (Max 4)</span>
-                  </div>
-                </label>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Section</label>
+                {(['best_selling', 'new_arrival', 'product_of_the_day', 'flash_sale', 'exclusive_offer'] as const).map((val) => (
+                  <label
+                    key={val}
+                    className={`flex cursor-pointer items-center gap-3.5 rounded-xl border p-3 bg-white hover:border-[#1a4731]/30 transition-all select-none shadow-sm ${
+                      section === val ? 'border-[#1a4731] ring-1 ring-[#1a4731]/20' : 'border-slate-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="h-4.5 w-4.5 text-[#1a4731] focus:ring-[#1a4731]/20 transition-all"
+                      value={val}
+                      checked={section === val}
+                      onChange={() => form.setValue('section', val, { shouldDirty: true })}
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-800">
+                        {val === 'best_selling' && 'Best Selling'}
+                        {val === 'new_arrival' && 'New Arrival'}
+                        {val === 'product_of_the_day' && 'Product of the Day'}
+                        {val === 'flash_sale' && 'Flash Sale'}
+                        {val === 'exclusive_offer' && 'Exclusive Offer'}
+                      </span>
+                      <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider mt-0.5">
+                        {val === 'best_selling' && 'Showcase on Home'}
+                        {val === 'new_arrival' && 'Fresh Catalog Badge'}
+                        {val === 'product_of_the_day' && 'Daily Spotlight (Max 4)'}
+                        {val === 'flash_sale' && 'Limited Time Offer'}
+                        {val === 'exclusive_offer' && 'Special Deal'}
+                      </span>
+                    </div>
+                  </label>
+                ))}
               </div>
 
 
@@ -1220,37 +1206,6 @@ export function ProductForm({ mode, categories, subcategories = [], initial }: P
               <CardTitle className="text-base font-bold text-slate-900">SEO & Metadata</CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-5 bg-white">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">Perfect for (tags)</Label>
-                <div className="relative">
-                  <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                  <Input
-                    placeholder="Type a tag and press Enter"
-                    className="h-11 pl-10 bg-white border-slate-200 focus:border-[#1a4731] focus:ring-[#1a4731]/10 rounded-xl transition-all duration-200 shadow-none text-slate-900 font-medium"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ',') {
-                        e.preventDefault();
-                        addTag(tagInput);
-                        setTagInput('');
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {form.watch('perfect_for_tags')?.map((tag, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-[#1a4731]/10 px-2.5 py-1 text-xs font-semibold text-[#1a4731]">
-                      {tag}
-                      <button type="button" onClick={() => removeTag(idx)} className="hover:text-red-600 transition-colors">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <input type="hidden" {...form.register('perfect_for_str')} />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="meta_title" className="text-xs font-bold text-slate-500 uppercase tracking-widest">Meta Title</Label>
                 <Input

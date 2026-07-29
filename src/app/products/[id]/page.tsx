@@ -113,7 +113,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
       const [productRes, reviewsRes] = await Promise.all([
         supabase
           .from('products')
-          .select('*, categories(name, slug), subcategories(name), brands(name, logo_url), product_variants(*)')
+          .select('*, product_images(url,sort_order), categories(name, slug), subcategories(name), brands(name, logo_url), product_variants(*)')
           .eq('id', id)
           .eq('is_active', true)
           .single(),
@@ -132,6 +132,11 @@ export default function ProductDetailsPage({ params }: PageProps) {
         const raw = (data.order_config as any) || {};
         const mappedProduct = {
           ...data,
+          images: (data.product_images || [])
+            .slice()
+            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((i: any) => i.url)
+            .filter(Boolean),
           category: data.categories?.name || 'Uncategorized',
           brandName: data.brands?.name || null,
           brandLogo: data.brands?.logo_url || null,
@@ -193,7 +198,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
         // Fetch related products
         const { data: relatedData } = await supabase
           .from('products')
-          .select('*, categories(name), subcategories(name)')
+          .select('*, product_images(url,sort_order), categories(name), subcategories(name)')
           .eq('category_id', data.category_id)
           .neq('id', data.id)
           .eq('is_active', true)
@@ -206,7 +211,11 @@ export default function ProductDetailsPage({ params }: PageProps) {
             description: p.description || '',
             price: Number(p.price),
             discountPrice: p.offer_price ? Number(p.offer_price) : undefined,
-            images: [],
+            images: (p.product_images || [])
+              .slice()
+              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((i: any) => i.url)
+              .filter(Boolean),
             category: p.categories?.name || 'Uncategorized',
             rating: 4.5,
             reviewCount: 12,
@@ -466,7 +475,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
   // Product tags
   const tagsList = useMemo(() => {
     if (!product?.perfect_for) return [];
-    if (Array.isArray(product.perfect_for)) return product.perfect_for;
+    if (Array.isArray(product.perfect_for)) return product.perfect_for.filter((t: unknown) => t && String(t).trim());
     return product.perfect_for.split(',').map((s: string) => s.trim()).filter(Boolean);
   }, [product]);
 
@@ -931,7 +940,12 @@ export default function ProductDetailsPage({ params }: PageProps) {
                       : 'border-slate-200 opacity-70 hover:opacity-100 hover:scale-95'
                   }`}
                 >
-                  <img src={img} alt={`${product.name} thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                  <img
+                    src={img || '/images/about.jpg'}
+                    alt={`${product.name} thumbnail ${idx + 1}`}
+                    onError={(e) => { (e.target as HTMLImageElement).src = '/images/about.jpg'; }}
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -1503,21 +1517,6 @@ export default function ProductDetailsPage({ params }: PageProps) {
               {product.description || 'No description has been recorded for this product.'}
             </p>
           </div>
-
-          {/* Product Details */}
-          {product.product_details && typeof product.product_details === 'object' && Object.keys(product.product_details).length > 0 && (
-            <div className="space-y-3 pt-4 border-t border-slate-100 text-left">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Product Details</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(product.product_details as Record<string, string>).map(([key, value]) => (
-                  <div key={key} className="bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{key}</span>
-                    <span className="text-sm font-semibold text-slate-800">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Specifications */}
           {product.specification && typeof product.specification === 'object' && Object.keys(product.specification).length > 0 && (

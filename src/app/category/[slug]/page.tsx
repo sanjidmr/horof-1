@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { formatPrice } from '@/lib/utils';
+import { extractProductImages } from '@/lib/store/extract-images';
 
 export const revalidate = 60;
 
@@ -24,7 +25,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
   const [{ data: subcategories }, { data: products }] = await Promise.all([
     supabase.from('subcategories').select('*').eq('category_id', category.id).eq('is_active', true).order('sort_order', { ascending: true }),
     supabase.from('products')
-      .select('*, categories(name), subcategories(name)')
+      .select('*, categories(name), subcategories(name), product_images(url,sort_order)')
       .eq('category_id', category.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false }),
@@ -78,11 +79,13 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
-            {products.map((product) => (
+            {products.map((product) => {
+              const images = extractProductImages((product as any).product_images);
+              return (
               <Link key={product.id} href={`/products/${product.id}`} className="group block">
                 <div className="relative aspect-[4/5] rounded-2xl bg-slate-100 overflow-hidden mb-4 shadow-sm group-hover:shadow-lg transition-shadow">
-                  {product.images && product.images[0] ? (
-                    <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  {images[0] ? (
+                    <img src={images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400">No Image</div>
                   )}
@@ -110,7 +113,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
                   )}
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

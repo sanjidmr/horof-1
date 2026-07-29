@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   ShoppingBag, CreditCard, Clock, PackageOpen, ArrowRight,
   Heart, MapPin, Sparkles, User, ShieldCheck, Calendar,
   Truck, CheckCircle2, AlertCircle, ShoppingCart, Eye,
-  Plus, Edit2, Trash2, X, Upload, Lock, EyeOff, Star, AlertTriangle
+  Plus, Edit2, Trash2, X, Upload, Lock, EyeOff, Star, AlertTriangle,
+  History, Loader2
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useCart } from '@/context/CartContext';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { cancelOrderAction } from '@/lib/actions/orders';
+import { extractProductImages } from '@/lib/store/extract-images';
 
 export default function CustomerDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -61,6 +63,10 @@ export default function CustomerDashboardPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  // Recently Viewed Products
+  const [recentlyViewed, setRecentlyViewed] = useState<any[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
 
   // Order Cancellation Dialog State
   const [orderToCancel, setOrderToCancel] = useState<any>(null);
@@ -131,7 +137,7 @@ export default function CustomerDashboardPage() {
           if (productIds.length > 0) {
             const { data: prodData, error: prodErr } = await supabase
               .from('products')
-              .select('id, name, price, compare_price, images')
+              .select('id, name, price, compare_price, product_images(url,sort_order)')
               .in('id', productIds);
 
             if (!prodErr && prodData) {
@@ -256,13 +262,37 @@ export default function CustomerDashboardPage() {
             compare_price,
             slug,
             stock,
-            images
+            product_images(url,sort_order)
           )
         `)
         .eq('user_id', user.id);
 
       if (!wishlistErr && wishlistData) {
         setWishlist(wishlistData.filter(item => item.products));
+      }
+
+      // 4.5 Fetch recently viewed products
+      try {
+        const stored = localStorage.getItem('recently_viewed');
+        if (stored) {
+          const ids = JSON.parse(stored) as string[];
+          if (ids.length > 0) {
+            const { data: recentData } = await supabase
+              .from('products')
+              .select('id, name, price, compare_price, slug, stock, product_images(url,sort_order)')
+              .in('id', ids.slice(0, 8));
+            if (recentData) {
+              // Sort by the order in localStorage
+              const ordered = ids
+                .map(id => recentData.find(p => String(p.id) === id))
+                .filter(Boolean)
+                .slice(0, 6);
+              setRecentlyViewed(ordered);
+            }
+          }
+        }
+      } catch (e) {
+        // localStorage not available
       }
 
       // 4. Fetch addresses
@@ -409,14 +439,13 @@ export default function CustomerDashboardPage() {
     const hasOffer = !!product.compare_price && Number(product.compare_price) > Number(product.price);
 
     // Map database product row to Product context type
+    const productImages = extractProductImages((product as any).product_images);
     const productToAdd = {
       id: String(product.id),
       name: product.name,
       price: hasOffer ? Number(product.compare_price) : Number(product.price),
       discountPrice: hasOffer ? Number(product.price) : undefined,
-      images: Array.isArray(product.images) && product.images.length > 0 
-        ? product.images 
-        : ['/images/about.jpg'],
+      images: productImages.length > 0 ? productImages : ['/images/about.jpg'],
       stock: product.stock ?? 10,
       category: 'General'
     };
@@ -961,9 +990,8 @@ export default function CustomerDashboardPage() {
               const product = item.products;
               const hasOffer = !!product.compare_price && Number(product.compare_price) > Number(product.price);
               const displayPrice = product.price;
-              const img = Array.isArray(product.images) && product.images.length > 0 
-                ? product.images[0] 
-                : null;
+              const productImgs = extractProductImages((product as any).product_images);
+              const img = productImgs[0] || null;
 
               return (
                 <div key={item.id} className="group bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md hover:border-slate-200 transition-all duration-300">
@@ -1009,7 +1037,60 @@ export default function CustomerDashboardPage() {
         )}
       </div>
 
-      {/* 5. Address Management */}
+      {/* 5. Recently Viewed Products */}
+      {recentlyViewed.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-6">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <History className="h-6 w-6 text-indigo-600" />
+              Recently Viewed
+            </h2>
+            <p className="text-xs text-slate-400 mt-1 font-medium">Products you've checked out recently.</p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {recentlyViewed.map((product: any) => {
+              const hasOffer = !!product.compare_price && Number(product.compare_price) > Number(product.price);
+              const productImgs = extractProductImages(product.product_images);
+              const img = productImgs[0] || null;
+
+              return (
+                <Link
+                  key={product.id}
+                  href={`/products/${product.slug}`}
+                  className="group bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-slate-200 transition-all duration-300"
+                >
+                  <div className="relative aspect-square bg-slate-50 border-b border-slate-100 overflow-hidden">
+                    {img ? (
+                      <img src={img} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-slate-300">
+                        <ShoppingBag className="w-8 h-8 opacity-30" />
+                      </div>
+                    )}
+                    {hasOffer && (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-rose-500 text-white text-[8px] font-bold rounded-md">
+                        -{Math.round((1 - Number(product.price) / Number(product.compare_price)) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-1">
+                    <h4 className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-[#1B4332] transition-colors">{product.name}</h4>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-extrabold text-[#1B4332]">৳{Number(product.price).toLocaleString()}</span>
+                      {hasOffer && (
+                        <span className="text-[9px] text-slate-400 line-through font-semibold">৳{Number(product.compare_price).toLocaleString()}</span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Address Management */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

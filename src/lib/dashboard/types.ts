@@ -25,6 +25,7 @@ export type DbProductRow = {
   name: string;
   price: number | string;
   images?: unknown;
+  product_images?: { url?: string | null; sort_order?: number | null }[] | null;
 };
 
 export type DbWishlistRow = {

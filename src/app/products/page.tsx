@@ -163,7 +163,7 @@ function ProductsPageContent() {
       setLoading(true);
 
       const [prodRes, catRes, subRes] = await Promise.all([
-        supabase.from('products').select('*, categories(name)').eq('is_active', true),
+        supabase.from('products').select('*, product_images(url,sort_order), categories(name)').eq('is_active', true),
         supabase.from('categories').select('*').eq('is_active', true),
         supabase.from('subcategories').select('*, categories!inner(name)').eq('is_active', true)
       ]);
@@ -176,7 +176,11 @@ function ProductsPageContent() {
           description: p.description || '',
           price: Number(p.price),
           discountPrice: p.offer_price ? Number(p.offer_price) : undefined,
-          images: [],
+          images: (p.product_images || [])
+            .slice()
+            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((i: any) => i.url)
+            .filter(Boolean),
           category: p.categories?.name || 'Uncategorized',
           rating: 4.5,
           reviewCount: 12,

@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  Package, 
-  MapPin, 
-  Calendar, 
-  CheckCircle2, 
-  Clock, 
-  Truck, 
+import {
+  Search,
+  Package,
+  MapPin,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Truck,
   ShieldCheck, 
   ArrowRight, 
   ShoppingBag,
@@ -25,6 +25,7 @@ import { Input } from '@/components/shadcn/input';
 import { Label } from '@/components/shadcn/label';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { formatPrice, cn } from '@/lib/utils';
+import { extractProductImages } from '@/lib/store/extract-images';
 import { cancelOrderAction, requestOrderReturnAction, getOrderTrackingData } from '@/lib/actions/orders';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
 import Link from 'next/link';
@@ -461,11 +462,16 @@ export default function TrackOrderPage() {
                       {itemsList.map((item: any, idx: number) => (
                         <div key={item.id || idx} className="flex gap-4 items-center">
                           <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-50 border flex-shrink-0 flex items-center justify-center">
-                            {item.products?.images?.[0] || item.product?.images?.[0] ? (
-                              <img src={item.products?.images?.[0] || item.product?.images?.[0]} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <Package className="text-slate-300 h-5 w-5" />
-                            )}
+                            {(() => {
+                              const imgs = extractProductImages(item.products?.product_images);
+                              const fallback = extractProductImages(item.product?.product_images);
+                              const src = imgs[0] || fallback[0];
+                              return src ? (
+                                <img src={src} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Package className="text-slate-300 h-5 w-5" />
+                              );
+                            })()}
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="text-xs font-bold text-slate-900 truncate">{item.products?.name || item.name}</h4>

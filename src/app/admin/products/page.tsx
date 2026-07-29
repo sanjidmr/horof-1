@@ -161,7 +161,7 @@ export default function AdminProductsPage() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-900">{p.name}</p>
-                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{p.slug}</p>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">{p.slug}</p>      
                           </div>
                         </div>
                       </td>

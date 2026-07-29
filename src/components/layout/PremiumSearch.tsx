@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Search, X, Sparkles, HelpCircle, Layers } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { extractProductImages } from '@/lib/store/extract-images';
 import { formatPrice, cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -109,7 +110,7 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
       try {
         const { data, error } = await supabase
           .from('products')
-          .select('id, name, slug, price, compare_price, stock, is_active, images, categories(name)')
+          .select('id, name, slug, price, compare_price, stock, is_active, product_images(url,sort_order), categories(name)')
           .eq('is_active', true)
           .gt('stock', 0)
           .ilike('name', `%${debouncedQuery}%`)
@@ -123,9 +124,8 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
               ? r.categories[0]?.name
               : r.categories?.name;
 
-            const image = Array.isArray(r.images) && r.images.length > 0 
-              ? r.images[0] 
-              : '/images/about.jpg';
+            const images = extractProductImages(r.product_images);
+            const image = images.length > 0 ? images[0] : null;
 
             const priceVal = typeof r.price === 'string' ? parseFloat(r.price) : Number(r.price);
             const comparePriceVal = r.compare_price != null 

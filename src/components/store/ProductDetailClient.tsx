@@ -11,6 +11,8 @@ import { ProductCard } from '../product/ProductCard';
 import type { Product } from '@/lib/types';
 import { formatPrice, cn } from '@/lib/utils';
 
+const PLACEHOLDER_IMG = '/images/about.jpg';
+
 interface Variant {
   size?: string | null;
   color?: string | null;
@@ -28,11 +30,13 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
   const { addToCart } = useCart();
   const { requireAuth } = useRequireAuth();
   const [activeImg, setActiveImg] = useState(0);
+  const [imgErrors, setImgErrors] = useState<Record<number, boolean>>({});
   const [qty, setQty] = useState(1);
   const [selectedSize, setSelectedSize] = useState<string | null>(variants.find(v => v.size)?.size || null);
   const [selectedColor, setSelectedColor] = useState<string | null>(variants.find(v => v.color)?.color || null);
 
   const gallery = images.length ? images : product.images;
+  const safeGallery = gallery.length ? gallery : [PLACEHOLDER_IMG];
   const currentVariant = variants.find(v => 
     (!selectedSize || v.size === selectedSize) && 
     (!selectedColor || v.color === selectedColor)
@@ -68,8 +72,9 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
               <AnimatePresence mode="wait">
                 <motion.img
                   key={activeImg}
-                  src={gallery[activeImg]}
+                  src={imgErrors[activeImg] ? PLACEHOLDER_IMG : (safeGallery[activeImg] || PLACEHOLDER_IMG)}
                   alt={product.name}
+                  onError={() => setImgErrors(p => ({ ...p, [activeImg]: true }))}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -86,7 +91,7 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
             </div>
             
             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-              {gallery.map((img, idx) => (
+              {safeGallery.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveImg(idx)}
@@ -95,7 +100,7 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
                     activeImg === idx ? "ring-2 ring-accent-primary ring-offset-4 scale-90" : "opacity-40 hover:opacity-100 hover:scale-95"
                   )}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img src={imgErrors[idx] ? PLACEHOLDER_IMG : img} alt="" onError={() => setImgErrors(p => ({ ...p, [idx]: true }))} className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>

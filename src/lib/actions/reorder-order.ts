@@ -49,7 +49,7 @@ export async function reorderOrder(originalOrderId: string) {
     for (const oi of originalOrder.order_items) {
       const { data: product } = await supabase
         .from('products')
-        .select('id, name, price, stock, is_active, images')
+        .select('id, name, price, stock, is_active, product_images(url,sort_order)')
         .eq('id', oi.product_id)
         .single();
 
@@ -85,7 +85,7 @@ export async function reorderOrder(originalOrderId: string) {
 
         const { data: product } = await supabase
           .from('products')
-          .select('id, name, price, stock, is_active, images')
+          .select('id, name, price, stock, is_active, product_images(url,sort_order)')
           .eq('id', d.product_id)
           .single();
 

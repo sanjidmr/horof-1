@@ -1,6 +1,7 @@
 import type { OrderWithItems } from './types';
 import { normalizeOrderStatus } from './types';
-import { orderRowTotal, parseProductImages } from './orderHelpers';
+import { orderRowTotal } from './orderHelpers';
+import { extractProductImages } from '../store/extract-images';
 
 const bd = '০১২৩৪৫৬৭৮৯';
 function toEng(n: number) {
@@ -20,7 +21,7 @@ export function buildInvoiceHtml(order: OrderWithItems, brand = 'Horof') {
   const rows = (order.items ?? [])
     .map((li) => {
       const name = escapeHtml(li.product?.name ?? 'Item');
-      const imgs = parseProductImages(li.product?.images);
+      const imgs = extractProductImages(li.product?.product_images);
       const qty = li.quantity;
       const unitRaw = typeof li.price === 'string' ? parseFloat(li.price) : Number(li.price);
       const unit = Number.isFinite(unitRaw) ? unitRaw : 0;

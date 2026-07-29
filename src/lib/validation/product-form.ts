@@ -18,7 +18,7 @@ const specRowSchema = z.object({
 });
 
 const imageSchema = z.object({
-  id: z.string().optional(),
+  id: z.union([z.string(), z.number()]).optional(),
   path: z.string().min(1),
   url: z.string().url(),
 });
@@ -150,9 +150,6 @@ export const productFormSchema = z
     perfect_for_str: z.string().optional().default(''),
     perfect_for_tags: z.array(z.string()).optional().default([]),
     section: sectionSchema,
-    is_best_selling: z.boolean().default(false),
-    is_new_arrival: z.boolean().default(false),
-    is_product_of_the_day: z.boolean().default(false),
     flash_sale_ends_at: z.string().optional().nullable(),
     meta_title: z.string().optional().default(''),
     meta_description: z.string().optional().default(''),
