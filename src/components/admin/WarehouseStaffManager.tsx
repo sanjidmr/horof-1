@@ -43,14 +43,22 @@ export default function WarehouseStaffManager({ warehouseId, warehouseName }: { 
 
   useEffect(() => { fetchStaff(); }, [fetchStaff]);
 
+  // The staff phone number automatically becomes their login password
+  useEffect(() => {
+    if (newPhone.trim()) {
+      setNewPassword(newPhone.trim());
+    }
+  }, [newPhone]);
+
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || !newEmail.trim() || !newPassword.trim()) {
-      toast.error('Please fill in all required fields');
+    if (!newName.trim() || !newEmail.trim() || !newPhone.trim()) {
+      toast.error('Please fill in the staff name, email and phone number');
       return;
     }
-    if (newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    const autoPassword = newPhone.trim();
+    if (autoPassword.length < 6) {
+      toast.error('Phone number must be at least 6 characters to use as password');
       return;
     }
 
@@ -58,12 +66,12 @@ export default function WarehouseStaffManager({ warehouseId, warehouseName }: { 
     try {
       await createWarehouseStaff({
         email: newEmail.trim(),
-        password: newPassword,
+        password: autoPassword,
         full_name: newName.trim(),
-        phone: newPhone.trim() || undefined,
+        phone: autoPassword,
         warehouseId,
       });
-      toast.success(`Staff account created! ${newEmail.trim()} can now log in with the password you set.`);
+      toast.success(`Staff account created! ${newEmail.trim()} can now log in using their phone number (${autoPassword}) as the password.`);
       setNewName('');
       setNewEmail('');
       setNewPassword('');
@@ -164,22 +172,24 @@ export default function WarehouseStaffManager({ warehouseId, warehouseName }: { 
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Password *</label>
                 <div className="relative">
                   <input
-                    type={showPassword ? 'text' : 'password'} required value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                    placeholder="Min. 6 characters"
-                    className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731]"
+                    type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Auto-set from phone number"
+                    className="w-full px-3 py-2 pr-10 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731]"
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                     {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
+                <p className="text-[10px] text-emerald-700 mt-1">Automatically set from the phone number below. You can change it if needed.</p>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone (optional)</label>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone *</label>
                 <input
-                  type="text" value={newPhone} onChange={e => setNewPhone(e.target.value)}
-                  placeholder="+880..."
+                  type="tel" required value={newPhone} onChange={e => setNewPhone(e.target.value)}
+                  placeholder="01XXXXXXXXX"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:border-[#1a4731]"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">This number will be the staff&apos;s login password.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 pt-1">

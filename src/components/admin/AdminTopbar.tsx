@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Bell, Menu, Moon, Search, Sun, User, LogOut, ShoppingBag, UserPlus, Package, AlertCircle, Clock } from 'lucide-react';
+import { Bell, Menu, Moon, Search, Sun, User, LogOut, ShoppingBag, UserPlus, Package, AlertCircle, Clock, Palette } from 'lucide-react';
 import { Button } from '@/components/shadcn/button';
 import { Input } from '@/components/shadcn/input';
 import { useEffect, useState } from 'react';
@@ -23,7 +23,7 @@ export interface Notification {
   id: string;
   title: string;
   message: string;
-  type: 'order' | 'customer' | 'stock' | 'product';
+  type: 'order' | 'customer' | 'stock' | 'product' | 'design';
   is_read: boolean;
   created_at: string;
 }
@@ -122,6 +122,7 @@ export function AdminTopbar({ email, avatarUrl }: { email: string | null; avatar
       case 'customer': return <UserPlus className="h-4 w-4 text-emerald-500" />;
       case 'stock': return <AlertCircle className="h-4 w-4 text-rose-500" />;
       case 'product': return <Package className="h-4 w-4 text-amber-500" />;
+      case 'design': return <Palette className="h-4 w-4 text-purple-500" />;
       default: return <Bell className="h-4 w-4 text-slate-400" />;
     }
   };

@@ -27,5 +27,5 @@ export default async function PrivacyPolicyPage() {
     );
   }
 
-  return <LegalPageContent data={data} />;
+  return <LegalPageContent data={data} pageType="privacy_policy" />;
 }

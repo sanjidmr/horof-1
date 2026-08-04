@@ -180,11 +180,11 @@ export function CouponManager({ initialCoupons }: { initialCoupons: CouponRow[] 
         list.sort((a, b) => b.used_count - a.used_count);
         break;
       case 'created_at_asc':
-        list.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        list.sort((a, b) => new Date(a.created_at || a.updated_at).getTime() - new Date(b.created_at || b.updated_at).getTime());
         break;
       case 'created_at_desc':
       default:
-        list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        list.sort((a, b) => new Date(b.created_at || b.updated_at).getTime() - new Date(a.created_at || a.updated_at).getTime());
         break;
     }
 
@@ -555,8 +555,9 @@ export function CouponManager({ initialCoupons }: { initialCoupons: CouponRow[] 
                         type="number"
                         min={0}
                         step="0.01"
-                        value={formData.value}
+                        value={formData.value || ''}
                         onChange={(e) => setFormData({ ...formData, value: parseFloat(e.target.value) || 0 })}
+                        placeholder={formData.type === 'percent' ? 'e.g. 10' : 'e.g. 500'}
                       />
                     </div>
                   )}
@@ -594,8 +595,9 @@ export function CouponManager({ initialCoupons }: { initialCoupons: CouponRow[] 
                     type="number"
                     min={0}
                     step="0.01"
-                    value={formData.min_order}
+                    value={formData.min_order || ''}
                     onChange={(e) => setFormData({ ...formData, min_order: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
                   />
                 </div>
 

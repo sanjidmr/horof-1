@@ -34,30 +34,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 function detectRole(
   authUser: SupabaseUser | null,
-  profile: { role?: string; is_warehouse_staff?: boolean; assigned_warehouse_id?: string } | null
+  profile: { role?: string; is_warehouse_staff?: boolean; assigned_warehouse_id?: string; user_type?: string } | null
 ): 'admin' | 'customer' | 'warehouse_staff' | null {
   if (!authUser) return null;
 
   const meta = authUser.user_metadata || {};
   const appMeta = authUser.app_metadata || {};
 
-  // Priority 1: Auth user metadata (set by service role, always reliable)
+  // Priority 1: Check user_type from DB profile (most reliable)
+  if (profile?.user_type === 'internal') {
+    if (profile.is_warehouse_staff === true || profile.role === 'warehouse_staff') {
+      return 'warehouse_staff';
+    }
+    if (profile.role === 'admin' || profile.role === 'super_admin' || profile.role === 'manager' || profile.role === 'staff') {
+      return 'admin';
+    }
+  }
+
+  // Priority 2: Auth user metadata (set by service role, always reliable)
   if (meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true) {
     return 'warehouse_staff';
   }
-  if (meta.role === 'admin' || appMeta.role === 'admin') {
+  if (meta.role === 'admin' || appMeta.role === 'admin' || meta.role === 'super_admin' || meta.role === 'manager' || meta.role === 'staff') {
     return 'admin';
   }
 
-  // Priority 2: DB profile (may not exist if column missing, but try)
+  // Priority 3: DB profile fallback
   if (profile) {
     if (profile.is_warehouse_staff === true) return 'warehouse_staff';
     if (profile.role === 'warehouse_staff') return 'warehouse_staff';
-    if (profile.role === 'admin') return 'admin';
-    if (profile.role) return profile.role as 'admin' | 'customer' | 'warehouse_staff';
+    if (profile.role === 'admin' || profile.role === 'super_admin' || profile.role === 'manager' || profile.role === 'staff') return 'admin';
+    if (profile.role === 'customer' && profile.user_type === 'customer') return 'customer';
   }
 
-  // Priority 3: Default
+  // Priority 4: Default - customers are always customers
   return 'customer';
 }
 
@@ -112,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, is_warehouse_staff, assigned_warehouse_id')
+          .select('role, is_warehouse_staff, assigned_warehouse_id, user_type')
           .eq('id', user.id)
           .maybeSingle();
 

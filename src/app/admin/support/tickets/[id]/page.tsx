@@ -251,7 +251,7 @@ export default function AdminTicketDetailPage() {
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name, email, avatar_url')
-        .eq('role', 'admin');
+        .in('role', ['admin', 'super_admin', 'manager']);
       setAdmins(data || []);
     } catch {
       // silently fail

@@ -150,8 +150,8 @@ export function CategoryManager({ initialCategories }: { initialCategories: any[
                 <Label>Sort Order</Label>
                 <Input 
                   type="number"
-                  value={formData.order} 
-                  onChange={e => setFormData({ ...formData, order: parseInt(e.target.value) })} 
+                  value={formData.order || ''} 
+                  onChange={e => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })} 
                 />
               </div>
               <div className="pt-4 flex gap-2">

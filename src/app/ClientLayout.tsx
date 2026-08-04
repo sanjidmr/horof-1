@@ -12,6 +12,7 @@ import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
 import { CartSidebar } from '../components/layout/CartSidebar';
 import { PopupDisplay } from '../components/campaign/PopupDisplay';
+import { FloatingActions } from '../components/layout/FloatingActions';
 
 export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -45,6 +46,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
 
               {!isAdminPath && !isDashboardPath && <Footer />}
               {!isAdminPath && !isDashboardPath && <PopupDisplay />}
+              {!isAdminPath && !isDashboardPath && <FloatingActions />}
               <Toaster 
                 position="bottom-right"
                 toastOptions={{

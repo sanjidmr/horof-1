@@ -13,7 +13,7 @@ export function mapDbProductToProduct(row: DbProductRow): Product {
     price: Number.isFinite(priceNum) ? priceNum : 0,
     images: extractProductImages(row.product_images),
     category: 'Curated',
-    rating: 5,
+    rating: 0,
     reviewCount: 0,
     stock: 99,
     tags: [],

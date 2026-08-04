@@ -2,6 +2,9 @@
 // ENTERPRISE RBAC TYPES
 // ============================================================
 
+export type UserType = 'customer' | 'internal';
+export type UserRoleName = 'super_admin' | 'owner' | 'manager' | 'inventory_manager' | 'sales_manager' | 'marketing_manager' | 'customer_support' | 'content_manager' | 'finance_manager' | 'staff' | 'warehouse_staff' | 'customer';
+
 export interface Role {
   id: string;
   name: string;
@@ -61,8 +64,11 @@ export interface UserProfile {
   email: string | null;
   full_name: string | null;
   phone: string | null;
-  role: 'admin' | 'customer';
+  role: 'admin' | 'customer' | 'super_admin' | 'staff' | 'warehouse_staff' | 'manager';
+  user_type: UserType;
   is_banned: boolean;
+  is_warehouse_staff: boolean;
+  assigned_warehouse_id: string | null;
   notes: string | null;
   avatar_url: string | null;
   created_at: string;
@@ -72,6 +78,12 @@ export interface UserProfile {
 export interface AdminUser extends UserProfile {
   user_roles?: UserRole[];
   user_permissions?: UserPermission[];
+}
+
+export interface CustomerProfile extends UserProfile {
+  orders_count?: number;
+  total_spent?: number;
+  last_order_at?: string | null;
 }
 
 export interface UserSession {
@@ -199,7 +211,6 @@ export const ADMIN_MODULES = [
   { id: 'purchase_orders', label: 'Purchase Orders', permission: 'purchase_orders.view', href: '/admin/inventory/purchase-orders' },
   { id: 'stock_movement', label: 'Stock Movements', permission: 'stock_movement.view', href: '/admin/inventory/stock-movements' },
   { id: 'reports', label: 'Reports', permission: 'reports.view', href: '/admin/reports/dashboard' },
-  { id: 'analytics', label: 'Analytics', permission: 'analytics.view', href: '/admin/reports/analytics' },
   { id: 'marketing', label: 'Marketing', permission: 'marketing.coupons', href: '/admin/marketing/coupons' },
   { id: 'coupons', label: 'Coupons', permission: 'marketing.coupons', href: '/admin/marketing/coupons' },
   { id: 'bundles', label: 'Bundle Offers', permission: 'marketing.bundles', href: '/admin/marketing/bundle-offers' },

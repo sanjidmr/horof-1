@@ -1,167 +1,174 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { Package, TrendingUp, AlertTriangle, ShoppingBag, DollarSign } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { KPICard } from '@/components/reports/KPICard';
-import { ChartCard } from '@/components/reports/ChartCard';
-import { DateRangePicker } from '@/components/reports/DateRangePicker';
-import { ExportButton } from '@/components/reports/ExportButton';
-import { formatPrice } from '@/lib/utils';
+import { Package, ShoppingCart, TrendingUp, Wallet, Boxes, AlertTriangle, PackageX, PackageCheck, Layers } from 'lucide-react';
+import { getReportProducts } from '@/lib/actions/reports';
+import { useReportRange } from '@/components/admin/reports/useReportRange';
+import { useReportData } from '@/components/admin/reports/useReportData';
+import { ReportFilters } from '@/components/admin/reports/ReportFilters';
+import { StatCard } from '@/components/admin/reports/StatCard';
+import { ReportCard } from '@/components/admin/reports/ReportCard';
+import { ReportTable } from '@/components/admin/reports/ReportTable';
+import { BarTrendChart } from '@/components/admin/reports/charts';
+import { ReportGridSkeleton } from '@/components/admin/reports/Skeletons';
+import { EmptyState } from '@/components/admin/reports/EmptyState';
+import { formatCurrency, formatNumber, titleCase } from '@/lib/reports/format';
+import { exportCSV, exportExcel, openPrintable, buildPrintBlock, safeFilename, type PrintBlock } from '@/lib/reports/export';
+import type { ProductsReportData, ProductPerformanceRow, ReportColumn } from '@/lib/reports/types';
+import type { ExportFormat } from '@/components/admin/reports/ExportMenu';
 
-const COLORS = ['#1a4731', '#2d6a4f', '#52b788', '#95d5b2', '#b7e4c7', '#d8f3dc'];
-const STATUS_COLORS: Record<string, string> = { in_stock: '#16a34a', low_stock: '#ca8a04', out_of_stock: '#dc2626', discontinued: '#64748b', pre_order: '#2563eb' };
+function stockBadge(status: string, stock: number) {
+  const s = (status || '').toLowerCase();
+  const cls = stock <= 0 ? 'bg-red-50 text-red-600' : s.includes('low') || s.includes('out') ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600';
+  const label = stock <= 0 ? 'Out of stock' : s.includes('low') ? 'Low stock' : s.includes('out') ? 'Out of stock' : 'In stock';
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${cls}`}>{label}</span>;
+}
 
-export function ProductReportClient({ data, currentRange }: { data: any; currentRange: string }) {
-  const router = useRouter();
+const productColumns: ReportColumn<ProductPerformanceRow>[] = [
+  { key: 'name', label: 'Product', render: (r) => <span className="font-semibold text-slate-700">{r.name}</span> },
+  { key: 'sku', label: 'SKU' },
+  { key: 'category', label: 'Category', render: (r) => titleCase(r.category) },
+  { key: 'quantity', label: 'Units Sold', align: 'right' },
+  { key: 'revenue', label: 'Revenue', align: 'right', render: (r) => formatCurrency(r.revenue) },
+  { key: 'profit', label: 'Profit', align: 'right', render: (r) => <span className={r.profit >= 0 ? 'font-bold text-emerald-600' : 'font-bold text-red-500'}>{formatCurrency(r.profit)}</span> },
+  { key: 'margin', label: 'Margin', align: 'right', render: (r) => `${r.margin.toFixed(1)}%` },
+  { key: 'stock', label: 'Stock', align: 'right', render: (r) => `${formatNumber(r.stock)} ${stockBadge(r.stockStatus, r.stock)}` },
+  { key: 'popularity', label: 'Popularity', align: 'right', render: (r) => formatNumber(r.popularity) },
+];
 
-  const handleRangeChange = (range: string) => {
-    router.push(`/admin/reports/products?range=${encodeURIComponent(range)}`);
+const stockColumns: ReportColumn<ProductPerformanceRow>[] = [
+  { key: 'name', label: 'Product', render: (r) => <span className="font-semibold text-slate-700">{r.name}</span> },
+  { key: 'sku', label: 'SKU' },
+  { key: 'category', label: 'Category', render: (r) => titleCase(r.category) },
+  { key: 'stock', label: 'Stock', align: 'right', render: (r) => <span className={r.stock <= 0 ? 'font-bold text-red-500' : 'font-bold text-amber-600'}>{formatNumber(r.stock)}</span> },
+];
+
+export function ProductReportClient() {
+  const { preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, search, setSearch, range, key } = useReportRange('last7');
+  const { data, loading, error, reload } = useReportData<ProductsReportData>(getReportProducts, range, key);
+
+  if (loading || (!data && !error)) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading exportDisabled />
+        <ReportGridSkeleton />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} />
+        <ReportCard>
+          <EmptyState icon={AlertTriangle} title="Unable to load products report" message={error || 'Something went wrong. Please refresh and try again.'} />
+        </ReportCard>
+      </div>
+    );
+  }
+
+  const k = data.kpis;
+
+  const handleExport = (fmt: ExportFormat) => {
+    const name = safeFilename('products-report', range.label);
+    if (fmt === 'csv') {
+      exportCSV(`${name}.csv`, productColumns, data.performance);
+      return;
+    }
+    if (fmt === 'excel') {
+      exportExcel(`${name}.xlsx`, productColumns, data.performance);
+      return;
+    }
+    const blocks: PrintBlock[] = [
+      buildPrintBlock('Product Performance', productColumns, data.performance),
+      buildPrintBlock('Low Stock Products', stockColumns, data.lowStockProducts),
+      buildPrintBlock('Out of Stock Products', stockColumns, data.outOfStockProducts),
+    ];
+    openPrintable('Products Report', `Period: ${range.label}`, blocks);
   };
-
-  const totalSold = data.topSelling.reduce((s: number, p: any) => s + p.quantity_sold, 0);
-  const totalRevenue = data.topSelling.reduce((s: number, p: any) => s + Number(p.revenue || 0), 0);
-
-  const stockPie = [
-    { name: 'In Stock', value: data.stockSummary.totalProducts - data.stockSummary.lowStock - data.stockSummary.outOfStock },
-    { name: 'Low Stock', value: data.stockSummary.lowStock },
-    { name: 'Out of Stock', value: data.stockSummary.outOfStock },
-  ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DateRangePicker value={currentRange} onChange={handleRangeChange} />
-        <ExportButton data={data.productPerformance} filename="product-performance" columns={[
-          { key: 'name', label: 'Name' }, { key: 'sku', label: 'SKU' }, { key: 'category', label: 'Category' },
-          { key: 'total_sold', label: 'Sold' }, { key: 'total_revenue', label: 'Revenue' },
-          { key: 'total_profit', label: 'Profit' }, { key: 'profit_margin', label: 'Margin %' },
-        ]} />
+      <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading={loading} onExport={handleExport} exportDisabled={data.performance.length === 0} />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="Total Products" value={formatNumber(k.totalProducts)} icon={<Package className="h-5 w-5" />} accent="slate" />
+        <StatCard label="Products Sold" value={formatNumber(k.productsSold)} icon={<ShoppingCart className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Units Sold" value={formatNumber(k.totalUnitsSold)} icon={<Layers className="h-5 w-5" />} accent="green" />
+        <StatCard label="Revenue" value={formatCurrency(k.totalRevenue)} icon={<TrendingUp className="h-5 w-5" />} accent="green" />
+        <StatCard label="Profit" value={formatCurrency(k.totalProfit)} icon={<Wallet className="h-5 w-5" />} accent="violet" />
+        <StatCard label="Stock Units" value={formatNumber(k.totalStockUnits)} icon={<Boxes className="h-5 w-5" />} accent="slate" />
+        <StatCard label="Stock Value" value={formatCurrency(k.stockValue)} icon={<Wallet className="h-5 w-5" />} accent="amber" />
+        <StatCard label="In Stock" value={formatNumber(k.inStockCount)} icon={<PackageCheck className="h-5 w-5" />} accent="green" />
+        <StatCard label="Low Stock" value={formatNumber(k.lowStockCount)} icon={<AlertTriangle className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Out of Stock" value={formatNumber(k.outOfStockCount)} icon={<PackageX className="h-5 w-5" />} accent="red" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Total Products" value={String(data.stockSummary.totalProducts)} icon={Package} color="bg-blue-50 text-blue-600" />
-        <KPICard label="Items Sold" value={String(totalSold)} icon={ShoppingBag} color="bg-purple-50 text-purple-600" />
-        <KPICard label="Product Revenue" value={formatPrice(totalRevenue)} icon={DollarSign} color="bg-emerald-50 text-emerald-600" />
-        <KPICard label="Low Stock Items" value={String(data.stockSummary.lowStock)} icon={AlertTriangle} color="bg-amber-50 text-amber-600" />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Top Products by Revenue" subtitle="Best performers in this period">
+          {data.performance.length === 0 ? (
+            <EmptyState title="No sales data" message="No products were sold within this period." />
+          ) : (
+            <BarTrendChart
+              data={data.performance.slice(0, 10).map((p) => ({ label: p.name.length > 22 ? `${p.name.slice(0, 22)}…` : p.name, revenue: p.revenue }))}
+              xKey="label"
+              series={[{ key: 'revenue', label: 'Revenue', color: '#1a4731' }]}
+              format="currency"
+            />
+          )}
+        </ReportCard>
+
+        <ReportCard title="Most Popular" subtitle="Ranked by popularity signal & units sold">
+          {data.mostPopular.length === 0 ? (
+            <EmptyState title="No popularity data" />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={productColumns} rows={data.mostPopular} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Top Selling Products" subtitle="By quantity sold">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.topSelling.slice(0, 10)} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={120} />
-                <Tooltip formatter={(v: number) => `${v} sold`} />
-                <Bar dataKey="quantity_sold" fill="#1a4731" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <ReportCard title="Product Performance" subtitle="Revenue, profit and margin across all products">
+        {data.performance.length === 0 ? (
+          <EmptyState title="No product sales" />
+        ) : (
+          <ReportTable<ProductPerformanceRow> columns={productColumns} rows={data.performance} rowKey={(r) => r.productId} pageSize={10} searchText={search} searchKeys={(r) => `${r.name} ${r.sku} ${r.category}`} />
+        )}
+      </ReportCard>
 
-        <ChartCard title="Top Revenue Products" subtitle="By revenue generated">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[...data.topSelling].sort((a: any, b: any) => b.revenue - a.revenue).slice(0, 10)} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={120} />
-                <Tooltip formatter={(v: number) => formatPrice(v)} />
-                <Bar dataKey="revenue" fill="#2d6a4f" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Best Selling" subtitle="Top by units sold">
+          {data.bestSelling.length === 0 ? (
+            <EmptyState title="No sales" />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={productColumns} rows={data.bestSelling} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
+
+        <ReportCard title="Worst Selling" subtitle="Bottom by units sold">
+          {data.worstSelling.length === 0 ? (
+            <EmptyState title="No products" />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={productColumns} rows={data.worstSelling} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Stock Status" subtitle="Inventory health">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={stockPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }: any) => `${name}: ${value}`}>
-                  {stockPie.map((_, i) => (
-                    <Cell key={i} fill={['#16a34a', '#ca8a04', '#dc2626'][i]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Low Stock" subtitle="Products at or below minimum stock level">
+          {data.lowStockProducts.length === 0 ? (
+            <EmptyState title="All good" message="No products are below their minimum stock level." />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={stockColumns} rows={data.lowStockProducts} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
 
-        <ChartCard title="Low Stock Products" subtitle="Needs attention">
-          <div className="h-64 overflow-y-auto">
-            {data.stockSummary.lowStockProducts.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">No low stock products</p>
-            ) : (
-              data.stockSummary.lowStockProducts.map((p: any, i: number) => (
-                <div key={i} className="flex items-center justify-between py-2.5 px-3 border-b border-slate-50">
-                  <span className="text-xs font-medium text-slate-800 truncate max-w-[200px]">{p.name}</span>
-                  <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{p.stock}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Out of Stock" subtitle="Unavailable products">
-          <div className="h-64 overflow-y-auto">
-            {data.stockSummary.outOfStockProducts.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">All products in stock</p>
-            ) : (
-              data.stockSummary.outOfStockProducts.map((p: any, i: number) => (
-                <div key={i} className="flex items-center justify-between py-2.5 px-3 border-b border-slate-50">
-                  <span className="text-xs font-medium text-slate-800 truncate max-w-[200px]">{p.name}</span>
-                  <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">0</span>
-                </div>
-              ))
-            )}
-          </div>
-        </ChartCard>
+        <ReportCard title="Recently Added" subtitle="Latest products in the catalog">
+          {data.recentlyAdded.length === 0 ? (
+            <EmptyState title="No products" />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={stockColumns} rows={data.recentlyAdded} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
       </div>
-
-      <ChartCard title="Full Product Performance" subtitle="All products with sales data">
-        <div className="overflow-x-auto max-h-96">
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-slate-400 border-b border-slate-100">
-              <th className="py-2.5 px-3 font-bold">Product</th>
-              <th className="py-2.5 px-3 font-bold">SKU</th>
-              <th className="py-2.5 px-3 font-bold text-right">Stock</th>
-              <th className="py-2.5 px-3 font-bold text-right">Sold</th>
-              <th className="py-2.5 px-3 font-bold text-right">Revenue</th>
-              <th className="py-2.5 px-3 font-bold text-right">Profit</th>
-              <th className="py-2.5 px-3 font-bold text-right">Margin</th>
-              <th className="py-2.5 px-3 font-bold text-right">Returns</th>
-            </tr></thead>
-            <tbody>
-              {data.productPerformance.length === 0 && (
-                <tr><td colSpan={8} className="py-10 text-center text-slate-400">No product data available</td></tr>
-              )}
-              {data.productPerformance.map((p: any, i: number) => (
-                <tr key={p.product_id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 font-medium text-slate-800 max-w-[200px] truncate">{p.name}</td>
-                  <td className="py-2.5 px-3 text-slate-500">{p.sku || '-'}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <span className={`font-bold ${p.stock === 0 ? 'text-red-600' : p.stock <= 5 ? 'text-amber-600' : 'text-slate-800'}`}>
-                      {p.stock}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right">{p.total_sold}</td>
-                  <td className="py-2.5 px-3 text-right font-medium">{formatPrice(p.total_revenue || 0)}</td>
-                  <td className="py-2.5 px-3 text-right font-medium text-emerald-600">{formatPrice(p.total_profit || 0)}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <span className={`font-bold ${Number(p.profit_margin) >= 20 ? 'text-emerald-600' : Number(p.profit_margin) >= 0 ? 'text-amber-600' : 'text-red-600'}`}>
-                      {p.profit_margin}%
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right">{p.return_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
     </div>
   );
 }

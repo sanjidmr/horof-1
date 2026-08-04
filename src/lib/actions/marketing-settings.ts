@@ -27,12 +27,8 @@ export const MARKETING_KEYS = {
   SEO_ORGANIZATION_SCHEMA: 'seo_organization_schema',
   
   // Social
-  TWITTER_HANDLE: 'twitter_handle',
-  TWITTER_CARD_TYPE: 'twitter_card_type',
   PINTEREST_VERIFICATION: 'pinterest_verification',
   TIKTOK_PIXEL: 'tiktok_pixel',
-  LINKEDIN_INSIGHT: 'linkedin_insight',
-  SNAPCHAT_PIXEL: 'snapchat_pixel',
   
   // Analytics
   MICROSOFT_CLARITY: 'microsoft_clarity',

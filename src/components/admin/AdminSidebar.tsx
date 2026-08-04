@@ -28,6 +28,8 @@ import {
   UserCog,
   RotateCcw,
   Palette,
+  Star,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/shadcn/button';
@@ -39,6 +41,7 @@ import { toast } from 'sonner';
 import { useState, useEffect, useMemo } from 'react';
 import { usePermissions } from '@/context/PermissionContext';
 import { useAuth } from '@/context/AuthContext';
+import { useAppSettings } from '@/hooks/useAppSettings';
 
 type NavItem = {
   title: string;
@@ -50,8 +53,8 @@ type NavItem = {
 
 const allNav: NavItem[] = [
   { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
-  { title: 'Analytics', href: '/admin/analytics', icon: BarChart3, permission: 'reports.view' },
-  { title: 'Accounts', href: '/admin/accounting', icon: DollarSign, permission: 'reports.finance' },
+  { title: 'Analytics', href: '/admin/analytics', icon: BarChart3, permission: 'analytics.view' },
+  { title: 'Accounts', href: '/admin/accounting', icon: DollarSign, permission: 'finance.view' },
   { title: 'Categories', href: '/admin/categories', icon: Layers, permission: 'categories.view' },
   {
     title: 'Products',
@@ -60,31 +63,38 @@ const allNav: NavItem[] = [
     children: [
       { title: 'All Products', href: '/admin/products', permission: 'products.view' },
       { title: 'Add New Product', href: '/admin/products/new', permission: 'products.create' },
-      { title: 'Returns', href: '/admin/returns', permission: 'orders.view' },
+      { title: 'Returns', href: '/admin/returns', permission: 'returns.view' },
     ],
   },
   { title: 'Orders', href: '/admin/orders', icon: ShoppingCart, permission: 'orders.view' },
-  { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList, permission: 'orders.view' },
-  { title: 'Design Requests', href: '/admin/design-requests', icon: Palette, permission: 'orders.view' },
-  { title: 'Warehouse', href: '/admin/warehouse/orders', icon: Warehouse, permission: 'inventory.view' },
+  { title: 'Order Requests', href: '/admin/order-requests', icon: ClipboardList, permission: 'order_requests.view' },
+  { title: 'Design Requests', href: '/admin/design-requests', icon: Palette, permission: 'design_requests.view' },
+  {
+    title: 'Warehouse',
+    icon: Warehouse,
+    permission: 'inventory.view',
+    children: [
+      { title: 'Orders', href: '/admin/warehouse/orders', permission: 'orders.view' },
+      { title: 'Products', href: '/admin/warehouse/products', permission: 'products.view' },
+      { title: 'Activity & Review', href: '/admin/warehouse/activity', permission: 'inventory.view' },
+    ],
+  },
   { title: 'Customers', href: '/admin/customers', icon: Users, permission: 'customers.view' },
+  { title: 'Reviews', href: '/admin/reviews', icon: Star, permission: 'reviews.view' },
   {
     title: 'Reports',
     icon: BarChart3,
     permission: 'reports.view',
     children: [
       { title: 'Dashboard', href: '/admin/reports/dashboard', permission: 'reports.view' },
-      { title: 'Sales', href: '/admin/reports/sales', permission: 'reports.sales' },
-      { title: 'Products', href: '/admin/reports/products', permission: 'reports.products' },
-      { title: 'Customers', href: '/admin/reports/customers', permission: 'reports.customers' },
-      { title: 'Profit & Loss', href: '/admin/reports/profit-loss', permission: 'reports.finance' },
+      { title: 'Sales', href: '/admin/reports/sales', permission: 'reports.view' },
+      { title: 'Products', href: '/admin/reports/products', permission: 'reports.view' },
+      { title: 'Customers', href: '/admin/reports/customers', permission: 'reports.view' },
+      { title: 'Profit & Loss', href: '/admin/reports/profit-loss', permission: 'reports.view' },
       { title: 'Orders', href: '/admin/reports/orders', permission: 'reports.view' },
-      { title: 'Inventory', href: '/admin/reports/inventory', permission: 'reports.inventory' },
-      { title: 'Finance', href: '/admin/reports/finance', permission: 'reports.finance' },
-      { title: 'Shipping', href: '/admin/reports/shipping', permission: 'reports.view' },
-      { title: 'Marketing', href: '/admin/reports/marketing', permission: 'reports.marketing' },
-      { title: 'Team Activity', href: '/admin/reports/employees', permission: 'reports.view' },
-      { title: 'Website Analytics', href: '/admin/reports/analytics', permission: 'analytics.view' },
+      { title: 'Inventory', href: '/admin/reports/inventory', permission: 'reports.view' },
+      { title: 'Expenses', href: '/admin/reports/expenses', permission: 'reports.view' },
+      { title: 'Payments', href: '/admin/reports/payments', permission: 'reports.view' },
     ]
   },
   {
@@ -94,36 +104,34 @@ const allNav: NavItem[] = [
     children: [
       { title: 'Dashboard', href: '/admin/inventory', permission: 'inventory.view' },
       { title: 'Products', href: '/admin/inventory/products', permission: 'inventory.view' },
-      { title: 'Warehouses', href: '/admin/inventory/warehouses', permission: 'warehouse.view' },
-      { title: 'Stock Transfers', href: '/admin/inventory/transfers', permission: 'inventory.transfers' },
+      { title: 'Warehouses', href: '/admin/inventory/warehouses', permission: 'warehouses.view' },
+      { title: 'Stock Transfers', href: '/admin/inventory/transfers', permission: 'inventory.view' },
+      { title: 'Stock Movements', href: '/admin/inventory/stock-movements', permission: 'stock_movement.view' },
     ]
   },
   { title: 'Messages', href: '/admin/messages', icon: MessageSquare, permission: 'contact_messages.view' },
   {
     title: 'Support',
     icon: Headset,
-    permission: 'security.view',
+    permission: 'support_tickets.view',
     children: [
-      { title: 'Dashboard', href: '/admin/support', permission: 'security.view' },
-      { title: 'Tickets', href: '/admin/support?tab=tickets', permission: 'security.view' },
+      { title: 'Dashboard', href: '/admin/support', permission: 'support_tickets.view' },
+      { title: 'Tickets', href: '/admin/support?tab=tickets', permission: 'support_tickets.view' },
     ]
   },
   {
     title: 'Marketing',
     icon: ImageIcon,
-    permission: 'marketing.coupons',
     children: [
-      { title: 'Marketing Settings', href: '/admin/marketing/settings', permission: 'marketing.coupons' },
-      { title: 'SEO Settings', href: '/admin/marketing/seo', permission: 'marketing.coupons' },
-      { title: 'Redirects', href: '/admin/marketing/redirects', permission: 'marketing.coupons' },
-      { title: 'Product Feeds', href: '/admin/marketing/feeds', permission: 'marketing.coupons' },
-      { title: 'Coupons', href: '/admin/marketing/coupons', permission: 'marketing.coupons' },
-      { title: 'Free Shipping', href: '/admin/marketing/free-shipping', permission: 'marketing.coupons' },
-      { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns', permission: 'marketing.popups' },
-      { title: 'Flash Sale', href: '/admin/marketing/flash-sale', permission: 'marketing.flash_sale' },
-      { title: 'Special Offer', href: '/admin/marketing/special-offer', permission: 'marketing.special_offer' },
-      { title: 'Email Campaigns', href: '/admin/marketing/email-campaigns', permission: 'marketing.coupons' },
-      { title: 'Subscribers', href: '/admin/marketing/subscribers', permission: 'marketing.coupons' },
+      { title: 'Marketing Settings', href: '/admin/marketing/settings', permission: 'marketing_settings.view' },
+      { title: 'SEO Settings', href: '/admin/marketing/seo', permission: 'seo.view' },
+      { title: 'Coupons', href: '/admin/marketing/coupons', permission: 'coupons.view' },
+      { title: 'Free Shipping', href: '/admin/marketing/free-shipping', permission: 'free_shipping.view' },
+      { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns', permission: 'popup_campaigns.view' },
+      { title: 'Flash Sale', href: '/admin/marketing/flash-sale', permission: 'flash_sale.view' },
+      { title: 'Special Offer', href: '/admin/marketing/special-offer', permission: 'special_offer.view' },
+      { title: 'Email Campaigns', href: '/admin/marketing/email-campaigns', permission: 'email_campaigns.view' },
+      { title: 'Bundle Offers', href: '/admin/marketing/bundle-offers', permission: 'bundle_offers.view' },
     ]
   },
   { title: 'Users', href: '/admin/users', icon: UserCog, permission: 'users.view' },
@@ -131,23 +139,28 @@ const allNav: NavItem[] = [
   {
     title: 'Display Pages',
     icon: Monitor,
-    permission: 'settings.view',
     children: [
-      { title: 'Site Visuals', href: '/admin/marketing/site-images', permission: 'marketing.site_visuals' },
-      { title: 'Our Services', href: '/admin/marketing/services', permission: 'marketing.services' },
-      { title: 'FAQ', href: '/admin/marketing/faq', permission: 'marketing.faq' },
-      { title: 'About', href: '/admin/settings/about', permission: 'settings.view' },
+      { title: 'Site Visuals', href: '/admin/marketing/site-images', permission: 'site_visuals.view' },
+      { title: 'Our Services', href: '/admin/marketing/services', permission: 'services.view' },
+      { title: 'FAQ', href: '/admin/marketing/faq', permission: 'faq.view' },
+      { title: 'About', href: '/admin/settings/about', permission: 'about_page.view' },
     ]
   },
+  { title: 'Settings Center', href: '/admin/settings', icon: Settings, permission: 'settings.view' },
 ];
 
 export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { collapsed?: boolean; toggle?: () => void; logout: () => void; closeMobile?: () => void }) {
   const pathname = usePathname();
   const { hasPermission, loading: permLoading, isSuperAdmin } = usePermissions();
   const { isWarehouseStaff } = useAuth();
+  const { settings } = useAppSettings();
+
+  const adminLogo = settings?.general.admin_logo;
+  const adminBrand = settings?.general.website_name || 'Horof';
 
   const warehouseOnlyNav: NavItem[] = [
-    { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
+    // For warehouse staff, the dashboard should point to the warehouse orders view.
+    { title: 'Dashboard', href: '/admin/warehouse/orders', icon: LayoutDashboard, permission: 'dashboard.view' },
     { title: 'Warehouse Orders', href: '/admin/warehouse/orders', icon: Warehouse, permission: 'inventory.view' },
     { title: 'My Products', href: '/admin/warehouse/products', icon: Package, permission: 'inventory.view' },
   ];
@@ -196,15 +209,15 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
 
     return allNav
       .map(item => {
-        if (item.permission && !hasPermission(item.permission)) return null;
-
         if (item.children) {
           const filteredChildren = item.children.filter(
             child => !child.permission || hasPermission(child.permission)
           );
-          if (filteredChildren.length === 0 && item.permission) return null;
+          if (filteredChildren.length === 0) return null;
           return { ...item, children: filteredChildren };
         }
+
+        if (item.permission && !hasPermission(item.permission)) return null;
 
         return item;
       })
@@ -215,13 +228,17 @@ export function SidebarContent({ collapsed, toggle, logout, closeMobile }: { col
     <div className="flex h-full flex-col bg-white text-slate-900 border-r border-slate-100">
       <div className="flex h-24 items-center justify-between gap-2 px-6">
         {!collapsed && (
-          <Link href="/admin/dashboard" className="flex items-center gap-3 group" onClick={closeMobile}>
-            <div className="bg-[#1a4731] p-2.5 rounded-2xl shadow-lg shadow-forest-900/10 group-hover:scale-105 transition-transform">
-              <TreePine className="h-6 w-6 text-white" />
+          <Link href={isWarehouseStaff ? "/admin/warehouse/orders" : "/admin/dashboard"} className="flex items-center gap-3 group" onClick={closeMobile}>
+            <div className="bg-[#1a4731] p-2.5 rounded-2xl shadow-lg shadow-forest-900/10 group-hover:scale-105 transition-transform overflow-hidden">
+              {adminLogo ? (
+                <img src={adminLogo} alt={adminBrand} className="h-6 w-6 object-contain" />
+              ) : (
+                <TreePine className="h-6 w-6 text-white" />
+              )}
             </div>
             <div className="flex flex-col">
               <span className="text-xl font-display font-bold tracking-tight text-[#1a4731]">
-                Horof<span className="text-emerald-600 font-sans text-[10px] ml-1 uppercase tracking-widest font-black">Admin</span>
+                {adminBrand}<span className="text-emerald-600 font-sans text-[10px] ml-1 uppercase tracking-widest font-black">Admin</span>
               </span>
             </div>
           </Link>

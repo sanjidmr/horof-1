@@ -22,7 +22,6 @@ type Popup = {
   display_pages: string[]; display_devices: string[];
   show_to_new_visitors: boolean; show_to_returning_visitors: boolean;
   show_to_logged_in: boolean; show_to_guests: boolean;
-  restricted_countries: string[];
   date_start: string | null; date_end: string | null;
   ab_test_enabled: boolean; views: number; conversions: number; closes: number;
   is_active: boolean; priority: number; created_at: string; updated_at: string;
@@ -69,7 +68,7 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
     display_pages: '', display_devices: 'desktop,mobile',
     show_to_new_visitors: true, show_to_returning_visitors: true,
     show_to_logged_in: true, show_to_guests: true,
-    restricted_countries: '', date_start: '', date_end: '', priority: 0, is_active: true,
+    date_start: '', date_end: '', priority: 0, is_active: true,
   });
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createSupabaseBrowserClient();
@@ -90,7 +89,7 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
       display_pages: '', display_devices: 'desktop,mobile',
       show_to_new_visitors: true, show_to_returning_visitors: true,
       show_to_logged_in: true, show_to_guests: true,
-      restricted_countries: '', date_start: '', date_end: '', priority: 0, is_active: true,
+      date_start: '', date_end: '', priority: 0, is_active: true,
     });
   };
 
@@ -110,7 +109,6 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
       show_to_new_visitors: p.show_to_new_visitors,
       show_to_returning_visitors: p.show_to_returning_visitors,
       show_to_logged_in: p.show_to_logged_in, show_to_guests: p.show_to_guests,
-      restricted_countries: p.restricted_countries.join(', '),
       date_start: p.date_start ? p.date_start.split('T')[0] : '',
       date_end: p.date_end ? p.date_end.split('T')[0] : '',
       priority: p.priority, is_active: p.is_active,
@@ -134,7 +132,6 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
       show_to_new_visitors: formData.show_to_new_visitors,
       show_to_returning_visitors: formData.show_to_returning_visitors,
       show_to_logged_in: formData.show_to_logged_in, show_to_guests: formData.show_to_guests,
-      restricted_countries: formData.restricted_countries.split(',').map((s) => s.trim()).filter(Boolean),
       date_start: formData.date_start ? new Date(formData.date_start).toISOString() : null,
       date_end: formData.date_end ? new Date(formData.date_end).toISOString() : null,
       priority: formData.priority, is_active: formData.is_active,
@@ -142,7 +139,7 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
     if (editingId) payload.id = editingId;
     let query;
     if (editingId) {
-      query = supabase.from('popup_campaigns').update(payload).eq('id', editingId);
+      query = supabase.from('popup_campaigns').update(payload).eq('id', editingId).select('*').single();
     } else {
       query = supabase.from('popup_campaigns').insert(payload).select('*').single();
     }
@@ -214,7 +211,7 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
             </div>
             <div className="space-y-1.5">
               <Label>Priority</Label>
-              <Input type="number" value={formData.priority} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
+              <Input type="number" value={formData.priority || ''} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
             </div>
           </div>
 
@@ -277,7 +274,7 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Trigger Value (seconds or %)</Label>
-                <Input type="number" min={0} value={formData.trigger_value} onChange={(e) => setFormData((p) => ({ ...p, trigger_value: Number(e.target.value) }))} />
+                <Input type="number" min={0} value={formData.trigger_value || ''} onChange={(e) => setFormData((p) => ({ ...p, trigger_value: Number(e.target.value) }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Frequency</Label>
@@ -299,10 +296,6 @@ export function PopupCampaignManager({ initial }: { initial: Popup[] }) {
               <div className="space-y-1.5">
                 <Label>Devices</Label>
                 <Input value={formData.display_devices} onChange={(e) => setFormData((p) => ({ ...p, display_devices: e.target.value }))} placeholder="desktop, mobile, tablet" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Restricted Countries</Label>
-                <Input value={formData.restricted_countries} onChange={(e) => setFormData((p) => ({ ...p, restricted_countries: e.target.value }))} placeholder="Leave empty for all" />
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">

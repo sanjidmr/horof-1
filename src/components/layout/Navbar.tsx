@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import { IoLogoWhatsapp } from "react-icons/io";
 import toast from 'react-hot-toast';
 import { PremiumSearch } from './PremiumSearch';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 
 
 interface NavbarProps {
@@ -29,9 +30,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
 
   const lastScrollY = useRef(0);
   const { itemCount } = useCart();
-  const { isAuthenticated, isAdmin, logout } = useAuth();
+  const { isAuthenticated, isAdmin, isWarehouseStaff, logout } = useAuth();
+  const { settings } = usePublicSettings();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Ensure the dashboard link points to the correct dashboard for the role.
+  // Warehouse staff must always be routed to the warehouse dashboard.
+  const dashboardHref = isWarehouseStaff ? '/admin/warehouse/orders' : (isAdmin ? '/admin/dashboard' : '/customer/dashboard');
+  const dashboardTitle = isWarehouseStaff ? 'Warehouse Dashboard' : (isAdmin ? 'Admin Panel' : 'My dashboard');
 
   // Scroll logic for background and hide/show behavior
   useEffect(() => {
@@ -102,7 +109,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
     { name: 'Home', path: '/', icon: Home },
     { name: 'Shop', path: '/products', icon: ShoppingCart },
     { name: 'About', path: '/about', icon: Info },
-    { name: 'WhatsApp', path: 'https://wa.me/yournumber', icon: IoLogoWhatsapp, external: true },
+    { name: 'WhatsApp', path: settings.social.whatsapp || 'https://wa.me/', icon: IoLogoWhatsapp, external: true },
     { name: 'Contact', path: '/contact', icon: Phone },
   ];
 
@@ -157,12 +164,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
           <div className="lg:hidden flex items-center flex-1">
             {isAuthenticated ? (
               <Link
-                href="/customer/dashboard"
+                href={dashboardHref}
                 className={cn(
                   "p-2 flex items-center justify-center transition-all hover:scale-110",
                   (isScrolled || !isTransparentPage) ? "text-slate-800" : "text-white"
                 )}
-                title="My Dashboard"
+                title={dashboardTitle}
               >
                 <User size={20} />
               </Link>
@@ -185,8 +192,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             <Link href="/" className="relative block group">
               <div className="relative h-15 md:h-20 w-[140px] md:w-[160px] px-2 flex items-center justify-center">
                 <Image
-                  src="/images/horof.svg"
-                  alt="Horof Logo"
+                  src={settings.general.company_logo || '/images/horof.svg'}
+                  alt={`${settings.general.website_name} Logo`}
                   fill
                   priority
                   className={cn(
@@ -235,12 +242,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href={isAdmin ? "/admin/dashboard" : "/customer/dashboard"}
+                  href={dashboardHref}
                   className={cn(
                     "hidden sm:flex h-9 w-9 rounded-full items-center justify-center transition-all",
                     (isScrolled || !isTransparentPage) ? "bg-slate-100 text-slate-800" : "bg-white/10 text-white backdrop-blur-sm"
                   )}
-                  title={isAdmin ? "Admin Panel" : "My dashboard"}
+                  title={dashboardTitle}
                 >
                   <User size={18} />
                 </Link>
@@ -327,9 +334,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
                   )}
                   {isAuthenticated && (
                     <div className="space-y-4">
-                      <Link href={isAdmin ? "/admin/dashboard" : "/customer/dashboard"} onClick={() => setIsMobileMenuOpen(false)}>
+                      <Link href={dashboardHref} onClick={() => setIsMobileMenuOpen(false)}>
                         <Button className="w-full h-12 rounded-xl border border-[#1A3320] text-[#1A3320] hover:bg-slate-50 text-sm font-bold tracking-[0.2em] uppercase">
-                          {isAdmin ? "Admin Panel" : "My dashboard"}
+                          {dashboardTitle}
                         </Button>
                       </Link>
                       <Button

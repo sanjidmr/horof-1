@@ -11,7 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import { useEffect } from 'react';
 
-const WAREHOUSE_ALLOWED = ['/admin/warehouse', '/admin/dashboard'];
+const WAREHOUSE_ALLOWED = ['/admin/warehouse', '/admin/warehouse/orders', '/admin/warehouse/products', '/admin/warehouse/activity'];
 
 export default function AdminLayoutClient({
   children,

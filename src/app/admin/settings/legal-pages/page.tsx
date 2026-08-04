@@ -5,6 +5,8 @@ import { Save, Plus, Trash2, ChevronUp, ChevronDown, FileText, Shield, GripVerti
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { RichTextEditor } from '@/components/admin/settings/RichTextEditor';
+import { revalidateLegalPages } from '@/lib/actions/app-settings';
 
 type Section = { id: string; title: string; content: string; order: number };
 
@@ -142,6 +144,9 @@ export default function AdminLegalPagesPage() {
       };
       const { error } = await supabase.from('legal_pages').upsert(payload, { onConflict: 'page_type' });
       if (error) throw error;
+      try {
+        await revalidateLegalPages(activeTab);
+      } catch {}
       toast.success(`${activeTab === 'terms' ? 'Terms' : 'Privacy Policy'} saved`);
       loadData();
     } catch (err: any) {
@@ -265,12 +270,13 @@ export default function AdminLegalPagesPage() {
                   </button>
                 </div>
                 <div className="p-3">
-                  <textarea value={section.content} onChange={e => updateSection(section.id, 'content', e.target.value)} rows={5}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 resize-y font-mono text-slate-700"
-                    placeholder="<p>Write HTML content here...</p>" />
-                  <div className="mt-2 text-[10px] text-slate-400">
-                    Supports HTML: &lt;p&gt;, &lt;h3&gt;, &lt;ul&gt;&lt;li&gt;, &lt;ol&gt;&lt;li&gt;, &lt;a&gt;, &lt;strong&gt;, &lt;em&gt;
-                  </div>
+                  <RichTextEditor
+                    key={`${activeTab}-${section.id}`}
+                    value={section.content || ''}
+                    onChange={(html) => updateSection(section.id, 'content', html)}
+                    placeholder={`Write content for "${section.title}"...`}
+                    folder="legal"
+                  />
                 </div>
               </div>
             ))}
@@ -280,9 +286,13 @@ export default function AdminLegalPagesPage() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-3">
           <h3 className="font-bold text-slate-900">Contact Information</h3>
           <p className="text-xs text-slate-400">Displayed at the bottom of the page if provided.</p>
-          <textarea value={page?.contact_info || ''} onChange={e => setPageField('contact_info', e.target.value)} rows={3}
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 resize-none font-mono text-slate-700"
-            placeholder='<p>Email: studio@horof.com<br/>Phone: +880 1234 567890</p>' />
+          <RichTextEditor
+            key={`${activeTab}-contact`}
+            value={page?.contact_info || ''}
+            onChange={(html) => setPageField('contact_info', html)}
+            placeholder="Email: studio@horof.com / Phone: +880 1234 567890"
+            folder="legal"
+          />
         </div>
       </div>
     </div>

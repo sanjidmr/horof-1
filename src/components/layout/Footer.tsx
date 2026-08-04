@@ -6,18 +6,14 @@ import Image from 'next/image';
 import {
   Facebook,
   Instagram,
-  Twitter,
   Youtube,
   Mail,
   Phone,
   MapPin,
-  Shield,
-  Truck,
-  RefreshCcw,
-  HeadphonesIcon,
   ChevronRight,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 
 // ─── Cash on Delivery Badge ───────────────────────────────────────────────────
 
@@ -48,13 +44,6 @@ const supportLinks = [
   { label: 'Privacy Policy', href: '/privacy-policy' },
 ];
 
-const socialLinks = [
-  { icon: Facebook, href: '#', label: 'Facebook', hoverBg: 'hover:bg-[#1877F2]' },
-  { icon: Instagram, href: '#', label: 'Instagram', hoverBg: 'hover:bg-[#E1306C]' },
-  { icon: Twitter, href: '#', label: 'Twitter', hoverBg: 'hover:bg-[#1DA1F2]' },
-  { icon: Youtube, href: '#', label: 'YouTube', hoverBg: 'hover:bg-[#FF0000]' },
-];
-
 
 
 // ─── Category type ────────────────────────────────────────────────────────────
@@ -67,6 +56,7 @@ interface Category {
 // ─── Component ────────────────────────────────────────────────────────────────
 export const Footer: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
+  const { settings } = usePublicSettings();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -80,6 +70,14 @@ export const Footer: React.FC = () => {
         if (data) setCategories(data as Category[]);
       });
   }, []);
+
+  const socialLinks = [
+    { icon: Facebook, href: settings.social.facebook, label: 'Facebook', hoverBg: 'hover:bg-[#1877F2]' },
+    { icon: Instagram, href: settings.social.instagram, label: 'Instagram', hoverBg: 'hover:bg-[#E1306C]' },
+    { icon: Youtube, href: settings.social.youtube, label: 'YouTube', hoverBg: 'hover:bg-[#FF0000]' },
+  ].filter((s) => s.href);
+
+  const { website_name, business_address, phone, support_email, company_logo } = settings.general;
 
   return (
     <footer className="bg-[#0F2016] text-white overflow-hidden">
@@ -96,8 +94,8 @@ export const Footer: React.FC = () => {
             <Link href="/" className="inline-block group">
               <div className="relative h-12 w-[120px]">
                 <Image
-                  src="/images/horof.svg"
-                  alt="Horof Logo"
+                  src={company_logo || '/images/horof.svg'}
+                  alt={`${website_name} Logo`}
                   width={120}
                   height={48}
                   className="object-contain brightness-0 invert opacity-85 group-hover:opacity-100 transition-opacity"
@@ -110,23 +108,23 @@ export const Footer: React.FC = () => {
             </p>
 
             <div className="space-y-2">
-              <a href="mailto:studio@horof.com" className="flex items-center gap-2.5 text-white/45 hover:text-accent-light transition-colors group">
+              <a href={`mailto:${support_email}`} className="flex items-center gap-2.5 text-white/45 hover:text-accent-light transition-colors group">
                 <div className="h-6 w-6 rounded-md bg-white/5 flex items-center justify-center group-hover:bg-accent-light/10 transition-colors flex-shrink-0">
                   <Mail className="h-3 w-3 text-accent-light" />
                 </div>
-                <span className="text-[12px] font-light">studio@horof.com</span>
+                <span className="text-[12px] font-light">{support_email}</span>
               </a>
-              <a href="tel:+8801234567890" className="flex items-center gap-2.5 text-white/45 hover:text-accent-light transition-colors group">
+              <a href={`tel:${phone}`} className="flex items-center gap-2.5 text-white/45 hover:text-accent-light transition-colors group">
                 <div className="h-6 w-6 rounded-md bg-white/5 flex items-center justify-center group-hover:bg-accent-light/10 transition-colors flex-shrink-0">
                   <Phone className="h-3 w-3 text-accent-light" />
                 </div>
-                <span className="text-[12px] font-light">+880 1234 567890</span>
+                <span className="text-[12px] font-light">{phone}</span>
               </a>
               <div className="flex items-center gap-2.5 text-white/35">
                 <div className="h-6 w-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
                   <MapPin className="h-3 w-3 text-accent-light" />
                 </div>
-                <span className="text-[12px] font-light">Mymensingh, Dhaka</span>
+                <span className="text-[12px] font-light">{business_address}</span>
               </div>
             </div>
 
@@ -240,7 +238,7 @@ export const Footer: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-white/25 text-[11px] font-light tracking-wide">
               © {new Date().getFullYear()}{' '}
-              <span className="text-white/40 font-medium">Horof Studio</span>.
+              <span className="text-white/40 font-medium">{website_name || 'Horof Studio'}</span>.
               All rights reserved.
             </p>
             <div className="flex items-center gap-5">

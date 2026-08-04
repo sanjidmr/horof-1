@@ -25,7 +25,8 @@ Package,
   RotateCcw,
   ImageIcon,
   Tag,
-  FileEdit
+  FileEdit,
+  Download
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -370,12 +371,20 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
           >
             <Printer size={15} /> Packing Slip
           </Link>
+          <a 
+            href={`/api/invoice/${order.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 h-11 px-5 border rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+          >
+            <Download size={15} /> Download PDF
+          </a>
           <Link 
-            href={`/admin/orders/${order.id}/print-invoice`}
+            href={`/invoice/print/${order.id}`}
             target="_blank"
             className="inline-flex items-center gap-2 h-11 px-5 bg-[#1a4731] text-white rounded-xl text-xs font-bold hover:bg-[#2d6a4f] transition-colors"
           >
-            <Printer size={15} /> Print Invoice (A5)
+            <Printer size={15} /> Print Invoice
           </Link>
           {status !== 'cancelled' && status !== 'returned' && (
             <Button 

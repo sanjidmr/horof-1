@@ -39,9 +39,8 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const SEGMENTS = [
-  { value: 'all', label: 'All Subscribers' },
-  { value: 'subscribers', label: 'Newsletter Subscribers' },
-  { value: 'customers', label: 'All Customers' },
+  { value: 'all', label: 'All Customers' },
+  { value: 'customers', label: 'Registered Customers' },
   { value: 'vip', label: 'VIP Customers' },
   { value: 'new', label: 'New (Last 30 Days)' },
   { value: 'abandoned', label: 'Abandoned Cart' },
@@ -153,7 +152,7 @@ export function EmailCampaignManager({
     if (editingId) payload.id = editingId;
     let query;
     if (editingId) {
-      query = supabase.from('email_campaigns').update(payload).eq('id', editingId);
+      query = supabase.from('email_campaigns').update(payload).eq('id', editingId).select('*').single();
     } else {
       query = supabase.from('email_campaigns').insert(payload).select('*').single();
     }
@@ -211,7 +210,7 @@ export function EmailCampaignManager({
   };
 
   const getAudienceCountLabel = (segment: string) => {
-    const map: Record<string, string> = { all: 'All subscribers', subscribers: 'Newsletter only', customers: 'All customers', vip: 'VIP customers', new: 'New customers', abandoned: 'Abandoned cart' };
+    const map: Record<string, string> = { all: 'All customers', customers: 'Registered customers', vip: 'VIP customers', new: 'New customers', abandoned: 'Abandoned cart' };
     return map[segment] || segment;
   };
 

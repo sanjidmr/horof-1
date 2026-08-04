@@ -28,6 +28,7 @@ import {
   createConversation,
   getConversationMessages,
   uploadChatFile,
+  markConversationRead,
 } from '@/lib/actions/chat';
 
 type TabType = 'tickets' | 'chat';
@@ -940,7 +941,13 @@ function ChatView({
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${activeConvId}` },
         (payload) => {
           const newMsg = payload.new as ChatMessage;
-          setMessages(prev => [...prev, newMsg]);
+          setMessages(prev => {
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, newMsg];
+          });
+          if (newMsg.sender_role === 'admin') {
+            markConversationRead(activeConvId, 'customer');
+          }
         }
       )
       .subscribe();

@@ -39,12 +39,6 @@ export function buildMeta({
       locale: 'en_US',
       images: ogImages,
     },
-    twitter: {
-      card: 'summary_large_image',
-      title: `${title} | ${SITE_NAME}`,
-      description,
-      images: ogImages.map((i) => i.url),
-    },
     robots: noIndex ? { index: false, follow: false } : { index: true, follow: true },
   };
 }

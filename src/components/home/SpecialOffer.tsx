@@ -14,9 +14,18 @@ export const SpecialOffer: React.FC = () => {
   useEffect(() => {
     async function fetchOffer() {
       const { data } = await supabase.from('special_offers').select('*').limit(1).maybeSingle();
-      if (data) setOffer(data);
+      setOffer(data || null);
     }
     fetchOffer();
+
+    const channel = supabase
+      .channel('home-special-offer')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'special_offers' }, fetchOffer)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [supabase]);
 
   if (!offer) return null;

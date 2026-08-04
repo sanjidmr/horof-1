@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../lib/types';
 import toast from 'react-hot-toast';
 import { useRequireAuth } from './AuthModalContext';
+import { safeJsonParseArray } from '@/lib/utils/safe-json';
 
 interface WishlistContextType {
   wishlist: Product[];
@@ -20,7 +21,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [wishlist, setWishlist] = useState<Product[]>(() => {
     if (typeof window === 'undefined') return [];
     const saved = localStorage.getItem('horof_wishlist');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? safeJsonParseArray<Product>(saved) : [];
   });
 
   useEffect(() => {

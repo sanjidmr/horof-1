@@ -169,8 +169,12 @@ export async function saveProduct(input: unknown): Promise<SaveProductResult> {
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: 'You must be signed in to save products' };
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-  if (profile?.role !== 'admin') return { ok: false, message: 'Admin access required' };
+  const { requirePermission } = await import('./security');
+  try {
+    await requirePermission(d.id ? 'products.edit' : 'products.create');
+  } catch (e: any) {
+    return { ok: false, message: e?.message || 'Permission denied' };
+  }
 
   const imgs = (d.images ?? []).slice(0, 3);
   const allImageUrls = imgs.map((img) => img.url);

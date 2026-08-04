@@ -1,157 +1,182 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { ShoppingCart, CheckCircle, XCircle, Clock, Truck, CreditCard } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { KPICard } from '@/components/reports/KPICard';
-import { ChartCard } from '@/components/reports/ChartCard';
-import { DateRangePicker } from '@/components/reports/DateRangePicker';
-import { ExportButton } from '@/components/reports/ExportButton';
-import { formatPrice } from '@/lib/utils';
+import { ShoppingCart, Banknote, Clock, CheckCircle2, Package, PackageCheck, Truck, Undo2, XCircle, AlertTriangle } from 'lucide-react';
+import { getReportOrders } from '@/lib/actions/reports';
+import { useReportRange } from '@/components/admin/reports/useReportRange';
+import { useReportData } from '@/components/admin/reports/useReportData';
+import { ReportFilters } from '@/components/admin/reports/ReportFilters';
+import { StatCard } from '@/components/admin/reports/StatCard';
+import { ReportCard } from '@/components/admin/reports/ReportCard';
+import { ReportTable } from '@/components/admin/reports/ReportTable';
+import { BarTrendChart, DonutChart, ChartLegend } from '@/components/admin/reports/charts';
+import { ReportGridSkeleton } from '@/components/admin/reports/Skeletons';
+import { EmptyState } from '@/components/admin/reports/EmptyState';
+import { formatCurrency, formatNumber, formatDateTime, titleCase } from '@/lib/reports/format';
+import { exportCSV, exportExcel, openPrintable, buildPrintBlock, safeFilename, type PrintBlock } from '@/lib/reports/export';
+import type { OrdersReportData, ReportColumn } from '@/lib/reports/types';
+import type { ExportFormat } from '@/components/admin/reports/ExportMenu';
 
-const COLORS = ['#1a4731', '#2d6a4f', '#52b788', '#95d5b2', '#b7e4c7', '#d8f3dc'];
+const statusColors: Record<string, string> = {
+  pending: 'bg-amber-50 text-amber-600',
+  confirmed: 'bg-blue-50 text-blue-600',
+  processing: 'bg-sky-50 text-sky-600',
+  packed: 'bg-violet-50 text-violet-600',
+  shipped: 'bg-indigo-50 text-indigo-600',
+  in_transit: 'bg-indigo-50 text-indigo-600',
+  out_for_delivery: 'bg-cyan-50 text-cyan-600',
+  delivered: 'bg-emerald-50 text-emerald-600',
+  cancelled: 'bg-red-50 text-red-600',
+  returned: 'bg-orange-50 text-orange-600',
+  refunded: 'bg-rose-50 text-rose-600',
+};
 
-function statusColor(name: string) {
-  const map: Record<string, string> = { pending: '#ca8a04', confirmed: '#2563eb', processing: '#9333ea', packed: '#ea580c', shipped: '#7c3aed', delivered: '#16a34a', cancelled: '#dc2626', returned: '#f97316', refunded: '#dc2626', paid: '#16a34a', unpaid: '#dc2626' };
-  return map[name] || '#64748b';
+export function statusBadge(status: string) {
+  const s = (status || '').toLowerCase();
+  const cls = statusColors[s] ?? 'bg-slate-100 text-slate-600';
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${cls}`}>{titleCase(s)}</span>;
 }
 
-export function OrdersReportClient({ data, currentRange }: { data: any; currentRange: string }) {
-  const router = useRouter();
+export function OrdersReportClient() {
+  const { preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, search, setSearch, range, key } = useReportRange('last7');
+  const { data, loading, error, reload } = useReportData<OrdersReportData>(getReportOrders, range, key);
 
-  const totalOrders = data.byStatus.reduce((s: number, d: any) => s + d.count, 0);
-  const pending = data.byStatus.find((s: any) => s.status === 'pending')?.count || 0;
-  const delivered = data.byStatus.find((s: any) => s.status === 'delivered')?.count || 0;
-  const cancelled = data.byStatus.find((s: any) => s.status === 'cancelled')?.count || 0;
-  const returned = data.byStatus.find((s: any) => s.status === 'returned')?.count || 0;
-  const codOrders = data.codVsOnline.find((s: any) => s.type === 'cod')?.count || 0;
+  if (loading || (!data && !error)) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading exportDisabled />
+        <ReportGridSkeleton />
+      </div>
+    );
+  }
 
-  const kpiCards = [
-    { label: 'Total Orders', value: String(totalOrders), icon: ShoppingCart, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Pending', value: String(pending), icon: Clock, color: 'bg-amber-50 text-amber-600' },
-    { label: 'Delivered', value: String(delivered), icon: CheckCircle, color: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Cancelled', value: String(cancelled), icon: XCircle, color: 'bg-red-50 text-red-600' },
-    { label: 'Returned', value: String(returned), icon: Truck, color: 'bg-orange-50 text-orange-600' },
-    { label: 'COD Orders', value: String(codOrders), icon: CreditCard, color: 'bg-purple-50 text-purple-600' },
+  if (error || !data) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} />
+        <ReportCard>
+          <EmptyState icon={AlertTriangle} title="Unable to load orders report" message={error || 'Something went wrong. Please refresh and try again.'} />
+        </ReportCard>
+      </div>
+    );
+  }
+
+  const k = data.kpis;
+
+  const statusColumns: ReportColumn<any>[] = [
+    { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+    { key: 'count', label: 'Orders', align: 'right' },
+    { key: 'total', label: 'Total Value', align: 'right', render: (r) => formatCurrency(r.total) },
+  ];
+  const methodColumns: ReportColumn<any>[] = [
+    { key: 'method', label: 'Payment Method', render: (r) => titleCase(r.method) },
+    { key: 'count', label: 'Orders', align: 'right' },
+    { key: 'total', label: 'Total Value', align: 'right', render: (r) => formatCurrency(r.total) },
+  ];
+  const recentColumns: ReportColumn<any>[] = [
+    { key: 'orderNumber', label: 'Order #', render: (r) => <span className="font-bold text-slate-700">{r.orderNumber}</span> },
+    { key: 'customerName', label: 'Customer' },
+    { key: 'createdAt', label: 'Date', render: (r) => formatDateTime(r.createdAt) },
+    { key: 'total', label: 'Total', align: 'right', render: (r) => <span className="font-bold text-emerald-600">{formatCurrency(r.total)}</span> },
+    { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+    { key: 'paymentStatus', label: 'Payment', render: (r) => <span className={r.paymentStatus === 'paid' ? 'inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600' : 'inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-600'}>{titleCase(r.paymentStatus)}</span> },
+  ];
+  const volumeColumns: ReportColumn<any>[] = [
+    { key: 'label', label: 'Date' },
+    { key: 'orders', label: 'Orders', align: 'right' },
+    { key: 'revenue', label: 'Revenue', align: 'right', render: (r) => formatCurrency(r.revenue) },
   ];
 
-  const handleRangeChange = (range: string) => {
-    router.push(`/admin/reports/orders?range=${encodeURIComponent(range)}`);
+  const handleExport = (fmt: ExportFormat) => {
+    const name = safeFilename('orders-report', range.label);
+    if (fmt === 'csv') {
+      exportCSV(`${name}.csv`, recentColumns, data.recentOrders);
+      return;
+    }
+    if (fmt === 'excel') {
+      exportExcel(`${name}.xlsx`, recentColumns, data.recentOrders);
+      return;
+    }
+    const blocks: PrintBlock[] = [
+      buildPrintBlock('Orders by Status', statusColumns, data.byStatus),
+      buildPrintBlock('Orders by Payment Method', methodColumns, data.byPaymentMethod),
+      buildPrintBlock('Recent Orders', recentColumns, data.recentOrders),
+    ];
+    openPrintable('Orders Report', `Period: ${range.label}`, blocks);
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DateRangePicker value={currentRange} onChange={handleRangeChange} />
-        <ExportButton data={data.dailyVolume} filename="orders-report" columns={[
-          { key: 'date', label: 'Date' }, { key: 'total_orders', label: 'Total Orders' },
-          { key: 'pending', label: 'Pending' }, { key: 'confirmed', label: 'Confirmed' },
-          { key: 'delivered', label: 'Delivered' }, { key: 'cancelled', label: 'Cancelled' },
-          { key: 'returned', label: 'Returned' },
-        ]} />
+      <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading={loading} onExport={handleExport} exportDisabled={data.recentOrders.length === 0} />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard label="Total Orders" value={formatNumber(k.totalOrders)} icon={<ShoppingCart className="h-5 w-5" />} accent="slate" />
+        <StatCard label="Total Revenue" value={formatCurrency(k.totalRevenue)} icon={<Banknote className="h-5 w-5" />} accent="green" />
+        <StatCard label="Pending" value={formatNumber(k.pending)} icon={<Clock className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Confirmed" value={formatNumber(k.confirmed)} icon={<CheckCircle2 className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Processing" value={formatNumber(k.processing)} icon={<Package className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Packed" value={formatNumber(k.packed)} icon={<PackageCheck className="h-5 w-5" />} accent="violet" />
+        <StatCard label="Shipped" value={formatNumber(k.shipped)} icon={<Truck className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Delivered" value={formatNumber(k.delivered)} icon={<PackageCheck className="h-5 w-5" />} accent="green" />
+        <StatCard label="Returned" value={formatNumber(k.returned)} icon={<Undo2 className="h-5 w-5" />} accent="violet" />
+        <StatCard label="Cancelled" value={formatNumber(k.cancelled)} icon={<XCircle className="h-5 w-5" />} accent="red" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpiCards.map((kpi) => <KPICard key={kpi.label} {...kpi} />)}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Order Volume" subtitle="Daily orders & revenue">
+          {data.dailyVolume.length === 0 ? (
+            <EmptyState title="No orders" message="No orders placed within this period." />
+          ) : (
+            <BarTrendChart
+              data={data.dailyVolume}
+              xKey="label"
+              series={[
+                { key: 'orders', label: 'Orders', color: '#3b82f6', format: 'number' },
+                { key: 'revenue', label: 'Revenue', color: '#1a4731' },
+              ]}
+              format="number"
+            />
+          )}
+        </ReportCard>
+
+        <ReportCard title="Orders by Status" subtitle="Distribution across statuses">
+          {data.byStatus.length === 0 ? (
+            <EmptyState title="No orders" />
+          ) : (
+            <>
+              <DonutChart
+                data={data.byStatus.map((s) => ({ name: titleCase(s.status), value: s.count }))}
+                nameKey="name"
+                valueKey="value"
+                format="number"
+                centerLabel="Orders"
+              />
+              <ChartLegend items={data.byStatus.slice(0, 6).map((s) => ({ label: titleCase(s.status), color: ['#1a4731', '#10b981', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444'][data.byStatus.indexOf(s) % 6] }))} />
+            </>
+          )}
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Orders by Status" subtitle="Distribution of order statuses">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data.byStatus} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={70} label={({ status, count }: any) => `${status}: ${count}`}>
-                  {data.byStatus.map((_: any, i: number) => (
-                    <Cell key={i} fill={statusColor(_.status)} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Order Status Detail" subtitle="Count & value per status">
+          <ReportTable<any> columns={statusColumns} rows={data.byStatus} rowKey={(r) => r.status} pageSize={8} searchText={search} searchKeys={(r) => r.status} />
+        </ReportCard>
 
-        <ChartCard title="COD Orders" subtitle="All orders are Cash on Delivery">
-          <div className="h-64 flex items-center justify-center">
-            <p className="text-slate-400 text-sm">This store operates exclusively on Cash on Delivery.</p>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Orders by Method" subtitle="All COD">
-          <div className="h-64 flex items-center justify-center">
-            <p className="text-slate-400 text-sm">All orders are placed with Cash on Delivery.</p>
-          </div>
-        </ChartCard>
+        <ReportCard title="Payment Methods" subtitle="Orders grouped by payment method">
+          {data.byPaymentMethod.length === 0 ? (
+            <EmptyState title="No orders" />
+          ) : (
+            <ReportTable<any> columns={methodColumns} rows={data.byPaymentMethod} rowKey={(r) => r.method} pageSize={8} searchText={search} searchKeys={(r) => r.method} />
+          )}
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Fulfillment Status" subtitle="Orders by fulfillment stage">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.fulfillment} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                <YAxis type="category" dataKey="status" tick={{ fontSize: 10 }} width={100} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#2d6a4f" radius={[0, 4, 4, 0]}>
-                  {data.fulfillment.map((_: any, i: number) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Daily Order Volume" subtitle="Orders per day">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.dailyVolume}>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="pending" stackId="a" fill="#ca8a04" />
-                <Bar dataKey="confirmed" stackId="a" fill="#2563eb" />
-                <Bar dataKey="delivered" stackId="a" fill="#16a34a" />
-                <Bar dataKey="cancelled" stackId="a" fill="#dc2626" />
-                <Bar dataKey="returned" stackId="a" fill="#f97316" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-      </div>
-
-      <ChartCard title="Daily Volume Data Table" subtitle="Detailed daily breakdown">
-        <div className="overflow-x-auto max-h-96">
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-slate-400 border-b border-slate-100">
-              <th className="py-2.5 px-3 font-bold">Date</th>
-              <th className="py-2.5 px-3 font-bold text-right">Total</th>
-              <th className="py-2.5 px-3 font-bold text-right">Pending</th>
-              <th className="py-2.5 px-3 font-bold text-right">Confirmed</th>
-              <th className="py-2.5 px-3 font-bold text-right">Delivered</th>
-              <th className="py-2.5 px-3 font-bold text-right">Cancelled</th>
-              <th className="py-2.5 px-3 font-bold text-right">Returned</th>
-            </tr></thead>
-            <tbody>
-              {data.dailyVolume.length === 0 && (
-                <tr><td colSpan={7} className="py-10 text-center text-slate-400">No order data in this period</td></tr>
-              )}
-              {data.dailyVolume.map((row: any, i: number) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 font-medium text-slate-800">{row.date}</td>
-                  <td className="py-2.5 px-3 text-right font-medium">{row.total_orders ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right">{row.pending ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right">{row.confirmed ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right text-emerald-600">{row.delivered ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right text-red-600">{row.cancelled ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right text-orange-600">{row.returned ?? 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
+      <ReportCard title="Recent Orders" subtitle="Latest 100 orders in this period">
+        {data.recentOrders.length === 0 ? (
+          <EmptyState title="No orders" />
+        ) : (
+          <ReportTable<any> columns={recentColumns} rows={data.recentOrders} rowKey={(r) => r.id} pageSize={10} searchText={search} searchKeys={(r) => `${r.orderNumber} ${r.customerName}`} />
+        )}
+      </ReportCard>
     </div>
   );
 }

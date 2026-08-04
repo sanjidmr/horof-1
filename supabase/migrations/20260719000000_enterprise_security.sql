@@ -286,59 +286,10 @@ CREATE POLICY "restore_history_select_admin" ON public.restore_history FOR SELEC
 CREATE POLICY "restore_history_insert_admin" ON public.restore_history FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
 -- ============================================================
--- PART 6: FRAUD PROTECTION SYSTEM
+-- PART 6: FRAUD RULES (risk scoring rules only)
+-- NOTE: fraud_blacklist, fraud_whitelist, and fraud_events tables
+-- do NOT exist in the actual schema. Only fraud_rules exists.
 -- ============================================================
-
-CREATE TABLE IF NOT EXISTS public.fraud_blacklist (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('ip', 'email', 'domain', 'phone', 'card', 'device')),
-  value TEXT NOT NULL,
-  reason TEXT,
-  risk_score INTEGER DEFAULT 100,
-  is_active BOOLEAN DEFAULT true,
-  expires_at TIMESTAMPTZ,
-  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(type, value)
-);
-
-CREATE TABLE IF NOT EXISTS public.fraud_whitelist (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('ip', 'email', 'domain', 'phone')),
-  value TEXT NOT NULL,
-  reason TEXT,
-  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(type, value)
-);
-
-CREATE TABLE IF NOT EXISTS public.fraud_events (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  event_type TEXT NOT NULL CHECK (event_type IN (
-    'suspicious_login', 'multiple_failed_logins', 'fake_account', 'fake_order',
-    'high_risk_order', 'duplicate_order', 'suspicious_payment', 'spam_detected',
-    'bot_detected', 'ip_blacklisted', 'email_blacklisted', 'chargeback',
-    'account_takeover', 'device_fingerprint_mismatch', 'velocity_check'
-  )),
-  risk_score INTEGER DEFAULT 0,
-  details JSONB DEFAULT '{}',
-  ip_address TEXT,
-  user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  email TEXT,
-  order_id UUID REFERENCES public.orders(id) ON DELETE SET NULL,
-  is_resolved BOOLEAN DEFAULT false,
-  resolved_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  resolved_at TIMESTAMPTZ,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_fraud_events_type ON public.fraud_events(event_type);
-CREATE INDEX IF NOT EXISTS idx_fraud_events_ip ON public.fraud_events(ip_address);
-CREATE INDEX IF NOT EXISTS idx_fraud_events_user ON public.fraud_events(user_id);
-CREATE INDEX IF NOT EXISTS idx_fraud_events_risk ON public.fraud_events(risk_score DESC);
-CREATE INDEX IF NOT EXISTS idx_fraud_events_created ON public.fraud_events(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_fraud_events_resolved ON public.fraud_events(is_resolved);
 
 -- Risk scoring rules
 CREATE TABLE IF NOT EXISTS public.fraud_rules (
@@ -358,23 +309,7 @@ CREATE TABLE IF NOT EXISTS public.fraud_rules (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-ALTER TABLE public.fraud_blacklist ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fraud_whitelist ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.fraud_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fraud_rules ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "fraud_blacklist_select_admin" ON public.fraud_blacklist FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_blacklist_insert_admin" ON public.fraud_blacklist FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_blacklist_update_admin" ON public.fraud_blacklist FOR UPDATE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_blacklist_delete_admin" ON public.fraud_blacklist FOR DELETE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-
-CREATE POLICY "fraud_whitelist_select_admin" ON public.fraud_whitelist FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_whitelist_insert_admin" ON public.fraud_whitelist FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_whitelist_delete_admin" ON public.fraud_whitelist FOR DELETE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-
-CREATE POLICY "fraud_events_select_admin" ON public.fraud_events FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_events_insert_admin" ON public.fraud_events FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "fraud_events_update_admin" ON public.fraud_events FOR UPDATE USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 
 CREATE POLICY "fraud_rules_select_admin" ON public.fraud_rules FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
 CREATE POLICY "fraud_rules_insert_admin" ON public.fraud_rules FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
@@ -583,5 +518,4 @@ $$;
 
 ALTER PUBLICATION supabase_realtime ADD TABLE public.audit_logs;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.security_events;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.fraud_events;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.login_history;

@@ -104,7 +104,7 @@ export async function checkFreeShippingEligibility(
     .from('free_shipping_offers')
     .select('*')
     .eq('is_active', true)
-    .lte('starts_at', now)
+    .or(`starts_at.is.null,starts_at.lte.${now}`)
     .or(`expires_at.is.null,expires_at.gte.${now}`)
     .order('priority', { ascending: false });
 

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Users, Plus, Search, Shield, Ban, Trash2, Edit,
   UserCheck, UserX, AlertTriangle, Building2,
-  ChevronLeft, ChevronRight, X, Check, Warehouse,
+  ChevronLeft, ChevronRight, X, Check, Warehouse, Phone, KeyRound,
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { createUser, updateUserProfile } from '@/lib/actions/user-management';
@@ -17,6 +17,7 @@ interface AdminUser {
   full_name: string | null;
   phone: string | null;
   role: string;
+  user_type: string;
   is_banned: boolean;
   avatar_url: string | null;
   created_at: string;
@@ -51,6 +52,7 @@ const ROLE_COLORS: Record<string, string> = {
   content_manager: 'bg-indigo-50 text-indigo-700 border-indigo-100',
   finance_manager: 'bg-orange-50 text-orange-700 border-orange-100',
   staff: 'bg-slate-50 text-slate-700 border-slate-100',
+  warehouse_staff: 'bg-blue-50 text-blue-700 border-blue-100',
 };
 
 export default function UsersPage() {
@@ -79,7 +81,11 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase.from('profiles').select('*, user_roles:user_roles!user_id(role:role_id(id, name, description, color, priority))', { count: 'exact' });
+      // Fetch ONLY internal users (never customers)
+      let query = supabase
+        .from('profiles')
+        .select('*, user_roles:user_roles!user_id(role:role_id(id, name, description, color, priority))', { count: 'exact' })
+        .eq('user_type', 'internal');
 
       if (search) {
         query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
@@ -135,7 +141,7 @@ export default function UsersPage() {
       return badges;
     }
     if (!user.user_roles || user.user_roles.length === 0) {
-      return [{ name: user.role, color: user.role === 'admin' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600' }];
+      return [{ name: user.role, color: ROLE_COLORS[user.role] || 'bg-slate-100 text-slate-600' }];
     }
     return user.user_roles.map(ur => ({
       name: ur.role?.name || 'Unknown',
@@ -162,6 +168,8 @@ export default function UsersPage() {
   const handleAssignRole = async (userId: string, roleId: string) => {
     const { error } = await supabase.from('user_roles').upsert({ user_id: userId, role_id: roleId }, { onConflict: 'user_id,role_id' });
     if (error) return toast.error(error.message);
+    // Ensure user is marked as internal
+    await supabase.from('profiles').update({ user_type: 'internal' }).eq('id', userId);
     toast.success('Role assigned');
     refreshUsers();
     setShowAssignRole(null);
@@ -181,7 +189,7 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">User Management</h1>
-          <p className="text-slate-500 mt-1">{total} total users</p>
+          <p className="text-slate-500 mt-1">{total} total internal users</p>
         </div>
         <PermissionGate permission="users.create">
           <button onClick={() => setShowCreateUser(true)}
@@ -194,14 +202,16 @@ export default function UsersPage() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input type="text" placeholder="Search users..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+          <input type="text" placeholder="Search internal users..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
         </div>
         <select value={filterRole} onChange={e => { setFilterRole(e.target.value); setPage(1); }}
           className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30">
           <option value="">All Roles</option>
+          <option value="super_admin">Super Admin</option>
           <option value="admin">Admin</option>
-          <option value="customer">Customer</option>
+          <option value="manager">Manager</option>
+          <option value="staff">Staff</option>
           <option value="warehouse_staff">Warehouse Staff</option>
         </select>
       </div>
@@ -215,7 +225,7 @@ export default function UsersPage() {
         ) : users.length === 0 ? (
           <div className="p-10 text-center text-slate-400">
             <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
-            <p>No users found</p>
+            <p>No internal users found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -434,31 +444,39 @@ function CreateUserModal({ roles, warehouses, onClose, onCreated }: {
 }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    full_name: '', email: '', phone: '', password: '',
-    role: 'customer', roleId: '',
+    full_name: '', email: '', phone: '',
+    role: 'admin', roleId: '',
     is_warehouse_staff: false, assigned_warehouse_id: '',
   });
 
   const handleCreate = async () => {
-    if (!form.email || !form.password) return toast.error('Email and password required');
+    // Validate all required fields
+    if (!form.full_name.trim()) return toast.error('Full name is required');
+    if (!form.email.trim()) return toast.error('Email is required');
+    if (!form.phone.trim()) return toast.error('Phone number is required — it will be used as the initial login password');
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(form.email.trim())) return toast.error('Please enter a valid email address');
+
+    const phoneRegex = /^\+?[0-9\s\-()]{10,15}$/;
+    if (!phoneRegex.test(form.phone.trim())) return toast.error('Please enter a valid phone number (10-15 digits)');
+
     if (form.is_warehouse_staff && !form.assigned_warehouse_id) return toast.error('Please assign a warehouse for warehouse staff');
     if (form.role === 'admin' && !form.roleId) return toast.error('Admin users must have an RBAC role assigned');
-    if (!form.is_warehouse_staff && form.role === 'customer' && !form.roleId) return toast.error('Please assign an RBAC role to this user');
 
     setSaving(true);
     try {
       await createUser({
-        email: form.email,
-        password: form.password,
-        full_name: form.full_name,
-        phone: form.phone || undefined,
-        role: form.is_warehouse_staff ? 'customer' : form.role,
+        email: form.email.trim(),
+        full_name: form.full_name.trim(),
+        phone: form.phone.trim(),
+        role: form.is_warehouse_staff ? 'warehouse_staff' : form.role,
         roleId: form.roleId || undefined,
         is_warehouse_staff: form.is_warehouse_staff,
         assigned_warehouse_id: form.assigned_warehouse_id || undefined,
       });
 
-      toast.success('User created successfully');
+      toast.success(`User created successfully. Initial password is the phone number: ${form.phone.trim()}`);
       onCreated();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create user');
@@ -477,7 +495,7 @@ function CreateUserModal({ roles, warehouses, onClose, onCreated }: {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Full Name</label>
+            <label className="block text-xs font-bold text-slate-600 mb-1">Full Name *</label>
             <input type="text" value={form.full_name} onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
           </div>
@@ -487,21 +505,28 @@ function CreateUserModal({ roles, warehouses, onClose, onCreated }: {
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Phone</label>
-            <input type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-600 mb-1">Password *</label>
-            <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
+            <label className="block text-xs font-bold text-slate-600 mb-1">Phone Number *</label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                placeholder="+8801XXXXXXXXX"
+                className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
+            </div>
+            <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+              <KeyRound className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                <strong>Important:</strong> The phone number will automatically become the user's initial login password. The user can change it after first login.
+              </p>
+            </div>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 mb-1">Account Type</label>
             <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30">
               <option value="admin">Admin</option>
-              <option value="customer">Customer</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
             </select>
           </div>
           <div>
@@ -579,7 +604,7 @@ function EditUserModal({ user, roles, warehouses, onClose, onUpdated }: {
   const [form, setForm] = useState({
     full_name: user.full_name || '',
     phone: user.phone || '',
-    role: user.role || 'customer',
+    role: user.role || 'admin',
     is_warehouse_staff: user.is_warehouse_staff || false,
     assigned_warehouse_id: user.assigned_warehouse_id || '',
   });
@@ -592,7 +617,7 @@ function EditUserModal({ user, roles, warehouses, onClose, onUpdated }: {
       const result = await updateUserProfile(user.id, {
         full_name: form.full_name,
         phone: form.phone,
-        role: form.is_warehouse_staff ? 'customer' : form.role,
+        role: form.is_warehouse_staff ? 'warehouse_staff' : form.role,
         is_warehouse_staff: form.is_warehouse_staff,
         assigned_warehouse_id: form.assigned_warehouse_id || null,
       });
@@ -640,7 +665,9 @@ function EditUserModal({ user, roles, warehouses, onClose, onUpdated }: {
             <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30">
               <option value="admin">Admin</option>
-              <option value="customer">Customer</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="manager">Manager</option>
+              <option value="staff">Staff</option>
             </select>
           </div>
 

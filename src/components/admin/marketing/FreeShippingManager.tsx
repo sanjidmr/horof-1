@@ -180,7 +180,7 @@ export function FreeShippingManager({ initial }: { initial: FreeShippingOffer[] 
             </div>
             <div className="space-y-1.5">
               <Label>Min Order Amount</Label>
-              <Input type="number" min={0} value={formData.min_order_amount} onChange={(e) => setFormData((p) => ({ ...p, min_order_amount: Number(e.target.value) }))} />
+              <Input type="number" min={0} value={formData.min_order_amount || ''} onChange={(e) => setFormData((p) => ({ ...p, min_order_amount: Number(e.target.value) }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Coupon Code (optional)</Label>
@@ -222,7 +222,7 @@ export function FreeShippingManager({ initial }: { initial: FreeShippingOffer[] 
             </div>
             <div className="space-y-1.5">
               <Label>Priority</Label>
-              <Input type="number" value={formData.priority} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
+              <Input type="number" value={formData.priority || ''} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
             </div>
             <div className="space-y-1.5 flex items-end">
               <label className="flex items-center gap-2 cursor-pointer">

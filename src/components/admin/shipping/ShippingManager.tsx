@@ -136,7 +136,7 @@ export function ShippingManager({ initialZones }: { initialZones: any[] }) {
               </div>
               <div className="space-y-2">
                 <Label>Shipping Charge (BDT)</Label>
-                <Input type="number" value={formData.charge} onChange={e => setFormData({ ...formData, charge: parseFloat(e.target.value) })} />
+                <Input type="number" value={formData.charge || ''} onChange={e => setFormData({ ...formData, charge: parseFloat(e.target.value) || 0 })} />
               </div>
               <div className="space-y-2">
                 <Label>Estimated Delivery (e.g. 2-3 days)</Label>

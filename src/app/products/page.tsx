@@ -163,32 +163,37 @@ function ProductsPageContent() {
       setLoading(true);
 
       const [prodRes, catRes, subRes] = await Promise.all([
-        supabase.from('products').select('*, product_images(url,sort_order), categories(name)').eq('is_active', true),
+        supabase.from('products').select('*, product_images(url,sort_order), categories(name), reviews(rating)').eq('is_active', true),
         supabase.from('categories').select('*').eq('is_active', true),
         supabase.from('subcategories').select('*, categories!inner(name)').eq('is_active', true)
       ]);
 
       if (prodRes.data) {
-        setDbProducts(prodRes.data.map(p => ({
-          id: p.id,
-          slug: p.slug,
-          name: p.name,
-          description: p.description || '',
-          price: Number(p.price),
-          discountPrice: p.offer_price ? Number(p.offer_price) : undefined,
-          images: (p.product_images || [])
-            .slice()
-            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-            .map((i: any) => i.url)
-            .filter(Boolean),
-          category: p.categories?.name || 'Uncategorized',
-          rating: 4.5,
-          reviewCount: 12,
-          stock: p.stock || 0,
-          tags: [],
-          isNew: true,
-          createdAt: p.created_at
-        })));
+        setDbProducts(prodRes.data.map(p => {
+          const reviews = (p.reviews ?? []).filter((r: any) => r.rating >= 1);
+          const reviewCount = reviews.length;
+          const rating = reviewCount > 0 ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount : 0;
+          return {
+            id: p.id,
+            slug: p.slug,
+            name: p.name,
+            description: p.description || '',
+            price: Number(p.price),
+            discountPrice: p.offer_price ? Number(p.offer_price) : undefined,
+            images: (p.product_images || [])
+              .slice()
+              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((i: any) => i.url)
+              .filter(Boolean),
+            category: p.categories?.name || 'Uncategorized',
+            rating,
+            reviewCount,
+            stock: p.stock || 0,
+            tags: [],
+            isNew: true,
+            createdAt: p.created_at
+          };
+        }));
       }
 
       if (catRes.data) {

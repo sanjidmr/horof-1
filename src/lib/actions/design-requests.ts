@@ -4,13 +4,25 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabasePublicEnv } from '@/lib/supabase/public-env';
 import { revalidatePath } from 'next/cache';
+import { loadNotificationSettings, loadEmailSettingsForGate } from '@/lib/actions/notifications';
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf', 'image/svg+xml', 'image/vnd.adobe.photoshop', 'image/x-eps', 'application/postscript', 'application/x-zip-compressed', 'application/zip'];
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf', 'ai', 'psd', 'svg', 'eps', 'zip'];
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+  'application/pdf', 'image/vnd.adobe.photoshop', 'image/x-eps',
+  'application/postscript', 'application/x-zip-compressed', 'application/zip',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/x-7z-compressed', 'application/x-rar-compressed',
+  'image/tiff', 'image/bmp', 'image/x-icon',
+];
+const ALLOWED_EXTENSIONS = [
+  'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'pdf', 'ai', 'psd', 'eps',
+  'zip', 'doc', 'docx', 'xls', 'xlsx', '7z', 'rar', 'tif', 'tiff', 'bmp', 'ico',
+];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 function createAdminClient() {
@@ -23,6 +35,10 @@ function createAdminClient() {
 
 async function sendEmail(to: string, subject: string, html: string) {
   try {
+    const notifications = await loadNotificationSettings();
+    const email = await loadEmailSettingsForGate();
+    if (notifications.email_enabled === false || notifications.design_request_enabled === false) return;
+
     await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/email/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -35,6 +51,75 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').toLowerCase();
+}
+
+function isAllowedFile(file: File): { ok: boolean; error?: string } {
+  if (file.size > MAX_FILE_SIZE) {
+    return { ok: false, error: `${file.name}: File exceeds 50MB limit` };
+  }
+
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+    return { ok: false, error: `${file.name}: File type .${ext || 'unknown'} not allowed` };
+  }
+
+  // Also check MIME type if available
+  if (file.type && !ALLOWED_TYPES.includes(file.type) && !file.type.startsWith('image/')) {
+    // Some browsers report empty MIME for certain files - only reject if we have a non-empty, non-allowed type
+    return { ok: false, error: `${file.name}: File type ${file.type} not allowed` };
+  }
+
+  return { ok: true };
+}
+
+async function uploadFileToStorage(
+  storageClient: any,
+  requestId: string,
+  file: File,
+  subfolder: string,
+): Promise<{ url: string; path: string; error?: string }> {
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const filePath = `requests/${requestId}/${subfolder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitizeFileName(file.name)}`;
+
+    const { error: uploadErr } = await storageClient.storage
+      .from('design-files')
+      .upload(filePath, buffer, { contentType: file.type || 'application/octet-stream', upsert: false });
+
+    if (uploadErr) {
+      return { url: '', path: '', error: `${file.name}: ${uploadErr.message}` };
+    }
+
+    const { data: { publicUrl } } = storageClient.storage.from('design-files').getPublicUrl(filePath);
+
+    return { url: publicUrl, path: filePath };
+  } catch (err: any) {
+    return { url: '', path: '', error: `${file.name}: ${err.message}` };
+  }
+}
+
+async function createNotification(options: {
+  title: string;
+  message: string;
+  type: string;
+  user_id?: string | null;
+  action_url?: string | null;
+  design_request_id?: string | null;
+}) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    await supabase.from('notifications').insert({
+      title: options.title,
+      message: options.message,
+      type: options.type,
+      is_read: false,
+      ...(options.user_id ? { user_id: options.user_id } : {}),
+      ...(options.action_url ? { action_url: options.action_url } : {}),
+      ...(options.design_request_id ? { design_request_id: options.design_request_id } : {}),
+    });
+  } catch (err) {
+    console.error('Failed to create notification:', err);
+  }
 }
 
 // ============================================================
@@ -50,6 +135,7 @@ export async function submitDesignRequest(formData: FormData) {
   const email = formData.get('email') as string;
   const productName = formData.get('product_name') as string || null;
   const description = formData.get('description') as string;
+  const priority = formData.get('priority') as string || 'normal';
 
   if (!fullName || !phoneNumber || !email || !description) {
     return { error: 'All required fields must be filled' };
@@ -57,6 +143,10 @@ export async function submitDesignRequest(formData: FormData) {
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: 'Invalid email address' };
+  }
+
+  if (!['low', 'normal', 'high', 'urgent'].includes(priority)) {
+    return { error: 'Invalid priority' };
   }
 
   // Get current user if logged in
@@ -74,6 +164,7 @@ export async function submitDesignRequest(formData: FormData) {
       product_name: productName,
       description,
       status: 'pending',
+      priority,
     })
     .select('id')
     .single();
@@ -96,46 +187,35 @@ export async function submitDesignRequest(formData: FormData) {
   const storageClient = adminClient || supabase;
 
   for (const { file } of fileEntries) {
-    if (file.size > MAX_FILE_SIZE) {
-      uploadErrors.push(`${file.name}: File exceeds 50MB limit`);
+    const validation = isAllowedFile(file);
+    if (!validation.ok) {
+      uploadErrors.push(validation.error!);
       continue;
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
-      uploadErrors.push(`${file.name}: File type not allowed (${ext})`);
+    const result = await uploadFileToStorage(storageClient, request.id, file, 'customer');
+    if (result.error) {
+      uploadErrors.push(result.error);
       continue;
     }
 
-    try {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const filePath = `requests/${request.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
+    // Insert file record in database
+    const { error: dbErr } = await supabase.from('design_request_files').insert({
+      request_id: request.id,
+      uploaded_by: customerId,
+      file_url: result.url,
+      file_name: file.name,
+      file_size: file.size,
+      mime_type: file.type,
+      file_type: 'customer_upload',
+    });
 
-      const { error: uploadErr } = await storageClient.storage
-        .from('design-files')
-        .upload(filePath, buffer, { contentType: file.type, upsert: false });
-
-      if (uploadErr) {
-        uploadErrors.push(`${file.name}: ${uploadErr.message}`);
-        continue;
-      }
-
-      const { data: { publicUrl } } = storageClient.storage.from('design-files').getPublicUrl(filePath);
-
-      await supabase.from('design_request_files').insert({
-        request_id: request.id,
-        uploaded_by: customerId,
-        file_url: publicUrl,
-        file_name: file.name,
-        file_size: file.size,
-        mime_type: file.type,
-        file_type: 'customer_upload',
-      });
-
-      uploadedFiles.push({ url: publicUrl, name: file.name, size: file.size, mime: file.type });
-    } catch (err: any) {
-      uploadErrors.push(`${file.name}: ${err.message}`);
+    if (dbErr) {
+      uploadErrors.push(`${file.name}: Failed to save file record: ${dbErr.message}`);
+      continue;
     }
+
+    uploadedFiles.push({ url: result.url, name: file.name, size: file.size, mime: file.type });
   }
 
   // Record status history
@@ -146,12 +226,35 @@ export async function submitDesignRequest(formData: FormData) {
     changed_by: customerId,
   });
 
+  // Create initial system message in the conversation thread
+  await supabase.from('design_request_messages').insert({
+    request_id: request.id,
+    sender_id: customerId,
+    sender_role: customerId ? 'customer' : 'customer',
+    message: `New design request submitted${productName ? ` for ${productName}` : ''}. ${uploadedFiles.length > 0 ? `${uploadedFiles.length} file(s) uploaded.` : ''}`,
+    message_type: 'system',
+  });
+
   // Notify admin
-  try {
-    const notificationText = `New design request from ${fullName} (${uploadedFiles.length} files)`;
-    const { createNotification } = await import('./notifications');
-    await createNotification({ title: 'New Design Request', message: notificationText, type: 'customer' });
-  } catch {}
+  await createNotification({
+    title: 'New Design Request',
+    message: `New design request from ${fullName} (${uploadedFiles.length} files)`,
+    type: 'design',
+    action_url: `/admin/design-requests/${request.id}`,
+    design_request_id: request.id,
+  });
+
+  // Notify customer if logged in
+  if (customerId) {
+    await createNotification({
+      title: 'Design Request Submitted',
+      message: `Your design request #${request.id.slice(0, 8).toUpperCase()} has been submitted successfully.`,
+      type: 'design',
+      user_id: customerId,
+      action_url: `/design-requests/${request.id}`,
+      design_request_id: request.id,
+    });
+  }
 
   // Email admin
   try {
@@ -161,11 +264,17 @@ export async function submitDesignRequest(formData: FormData) {
       <p><strong>Email:</strong> ${email}</p>
       <p><strong>Phone:</strong> ${phoneNumber}</p>
       ${productName ? `<p><strong>Product:</strong> ${productName}</p>` : ''}
+      <p><strong>Priority:</strong> ${priority}</p>
       <p><strong>Description:</strong></p>
       <p>${description.replace(/\n/g, '<br>')}</p>
       ${uploadedFiles.length > 0 ? `<p><strong>Files (${uploadedFiles.length}):</strong></p><ul>${uploadedFiles.map(f => `<li><a href="${f.url}">${f.name}</a></li>`).join('')}</ul>` : ''}
       <p><a href="${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/admin/design-requests/${request.id}" style="display:inline-block;padding:12px 24px;background:#1a4731;color:#fff;text-decoration:none;border-radius:8px;">View Request</a></p>
     `;
+    await sendEmail(process.env.EMAIL_FROM || 'admin@horof.com', `New Design Request: ${fullName}`, adminHtml);
+  } catch {}
+
+  // Email customer confirmation
+  try {
     await sendEmail(email, 'New Design Request Received', `
       <h2>Thank You, ${fullName}!</h2>
       <p>We have received your custom design request. Our team will review it and get back to you soon.</p>
@@ -173,9 +282,6 @@ export async function submitDesignRequest(formData: FormData) {
       ${productName ? `<p><strong>Product:</strong> ${productName}</p>` : ''}
       <p>You will receive email updates as your request progresses.</p>
     `);
-
-    // Also try to send to site email
-    await sendEmail(process.env.EMAIL_FROM || 'admin@horof.com', `New Design Request: ${fullName}`, adminHtml);
   } catch {}
 
   revalidatePath('/admin/design-requests');
@@ -197,17 +303,22 @@ export async function getDesignRequests(options?: {
   sort?: string;
   page?: number;
   perPage?: number;
+  priority?: string;
 }) {
   const supabase = await createSupabaseServerClient();
 
   let query = supabase
     .from('design_requests')
-    .select('*, files:design_request_files(count)', { count: 'exact' });
+    .select('*, files:design_request_files(count), messages:design_request_messages(count)', { count: 'exact' });
 
   query = query.order(options?.sort === 'updated' ? 'updated_at' : 'created_at', { ascending: false });
 
   if (options?.status && options.status !== 'all') {
     query = query.eq('status', options.status);
+  }
+
+  if (options?.priority && options.priority !== 'all') {
+    query = query.eq('priority', options.priority);
   }
 
   if (options?.search) {
@@ -229,7 +340,7 @@ export async function getDesignRequests(options?: {
 }
 
 // ============================================================
-// GET SINGLE DESIGN REQUEST (with files, comments, history)
+// GET SINGLE DESIGN REQUEST (with files, messages, history)
 // ============================================================
 
 export async function getDesignRequest(id: string) {
@@ -242,12 +353,18 @@ export async function getDesignRequest(id: string) {
     .single();
 
   if (reqErr || !request) {
-    return { request: null, files: [], comments: [], history: [], error: reqErr?.message || 'Not found' };
+    return { request: null, files: [], messages: [], comments: [], history: [], error: reqErr?.message || 'Not found' };
   }
 
   const { data: files } = await supabase
     .from('design_request_files')
     .select('*')
+    .eq('request_id', id)
+    .order('created_at', { ascending: true });
+
+  const { data: messages } = await supabase
+    .from('design_request_messages')
+    .select('*, files:design_request_message_files(*)')
     .eq('request_id', id)
     .order('created_at', { ascending: true });
 
@@ -266,6 +383,7 @@ export async function getDesignRequest(id: string) {
   return {
     request,
     files: files || [],
+    messages: messages || [],
     comments: comments || [],
     history: history || [],
     error: null,
@@ -334,15 +452,26 @@ export async function updateDesignRequestStatus(
     });
   }
 
+  // Add system message to conversation
+  await supabase.from('design_request_messages').insert({
+    request_id: id,
+    sender_id: user.id,
+    sender_role: 'admin',
+    message: `Status changed to "${status.replace(/_/g, ' ')}"${comment ? `: ${comment}` : ''}`,
+    message_type: 'system',
+  });
+
   // Notify customer
-  try {
-    const { createNotification } = await import('./notifications');
+  if (current.customer_id) {
     await createNotification({
       title: `Design Request Updated: ${status.replace(/_/g, ' ')}`,
       message: `Your design request #${id.slice(0, 8).toUpperCase()} has been updated to "${status.replace(/_/g, ' ')}".${comment ? ` Note: ${comment}` : ''}`,
-      type: 'customer',
+      type: 'design',
+      user_id: current.customer_id,
+      action_url: `/design-requests/${id}`,
+      design_request_id: id,
     });
-  } catch {}
+  }
 
   // Email customer
   try {
@@ -395,6 +524,7 @@ export async function updateDesignRequestStatus(
 
 export async function uploadDesignFile(requestId: string, formData: FormData) {
   const supabase = await createSupabaseServerClient();
+  const adminClient = createAdminClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -410,42 +540,214 @@ export async function uploadDesignFile(requestId: string, formData: FormData) {
   const file = formData.get('file') as File;
   if (!file || file.size === 0) return { error: 'No file provided' };
 
-  if (file.size > MAX_FILE_SIZE) return { error: 'File exceeds 50MB limit' };
+  const validation = isAllowedFile(file);
+  if (!validation.ok) return { error: validation.error };
 
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) return { error: `File type .${ext} not allowed` };
+  const storageClient = adminClient || supabase;
 
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const filePath = `requests/${requestId}/admin/${Date.now()}-${sanitizeFileName(file.name)}`;
+  const result = await uploadFileToStorage(storageClient, requestId, file, 'admin');
+  if (result.error) return { error: result.error };
 
-    const { error: uploadErr } = await supabase.storage
-      .from('design-files')
-      .upload(filePath, buffer, { contentType: file.type, upsert: false });
+  const { error: dbErr } = await supabase.from('design_request_files').insert({
+    request_id: requestId,
+    uploaded_by: user.id,
+    file_url: result.url,
+    file_name: file.name,
+    file_size: file.size,
+    mime_type: file.type,
+    file_type: 'design_file',
+  });
 
-    if (uploadErr) return { error: uploadErr.message };
+  if (dbErr) return { error: dbErr.message };
 
-    const { data: { publicUrl } } = supabase.storage.from('design-files').getPublicUrl(filePath);
+  // Add system message to conversation
+  await supabase.from('design_request_messages').insert({
+    request_id: requestId,
+    sender_id: user.id,
+    sender_role: 'admin',
+    message: `Design file uploaded: ${file.name}`,
+    message_type: 'file',
+  });
 
-    const { error: dbErr } = await supabase.from('design_request_files').insert({
-      request_id: requestId,
-      uploaded_by: user.id,
-      file_url: publicUrl,
-      file_name: file.name,
-      file_size: file.size,
-      mime_type: file.type,
-      file_type: 'design_file',
+  // Notify customer
+  const { data: request } = await supabase
+    .from('design_requests')
+    .select('customer_id')
+    .eq('id', requestId)
+    .single();
+
+  if (request?.customer_id) {
+    await createNotification({
+      title: 'New Design File',
+      message: `A new design file "${file.name}" has been uploaded to your request #${requestId.slice(0, 8).toUpperCase()}.`,
+      type: 'design',
+      user_id: request.customer_id,
+      action_url: `/design-requests/${requestId}`,
+      design_request_id: requestId,
     });
-
-    if (dbErr) return { error: dbErr.message };
-
-    revalidatePath(`/admin/design-requests/${requestId}`);
-    revalidatePath(`/design-requests/${requestId}`);
-
-    return { error: null, url: publicUrl, name: file.name };
-  } catch (err: any) {
-    return { error: err.message };
   }
+
+  revalidatePath(`/admin/design-requests/${requestId}`);
+  revalidatePath(`/design-requests/${requestId}`);
+
+  return { error: null, url: result.url, name: file.name };
+}
+
+// ============================================================
+// SEND MESSAGE (customer or admin)
+// ============================================================
+
+export async function sendDesignRequestMessage(
+  requestId: string,
+  message: string,
+  files?: File[],
+) {
+  const supabase = await createSupabaseServerClient();
+  const adminClient = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const isAdmin = profile?.role === 'admin';
+
+  // Verify access
+  const { data: request } = await supabase
+    .from('design_requests')
+    .select('customer_id, email, full_name')
+    .eq('id', requestId)
+    .single();
+
+  if (!request) return { error: 'Request not found' };
+
+  if (!isAdmin && request.customer_id !== user.id) {
+    return { error: 'You can only message on your own requests' };
+  }
+
+  if (!message?.trim() && (!files || files.length === 0)) {
+    return { error: 'Message or file is required' };
+  }
+
+  // Create the message
+  const messageType = files && files.length > 0 ? 'file' : 'text';
+  const { data: msg, error: msgErr } = await supabase
+    .from('design_request_messages')
+    .insert({
+      request_id: requestId,
+      sender_id: user.id,
+      sender_role: isAdmin ? 'admin' : 'customer',
+      message: message?.trim() || null,
+      message_type: messageType,
+    })
+    .select('id')
+    .single();
+
+  if (msgErr || !msg) return { error: msgErr?.message || 'Failed to send message' };
+
+  // Upload files if any
+  const storageClient = adminClient || supabase;
+  const uploadedFiles: { url: string; name: string; size: number; mime: string }[] = [];
+  const uploadErrors: string[] = [];
+
+  if (files && files.length > 0) {
+    for (const file of files) {
+      const validation = isAllowedFile(file);
+      if (!validation.ok) {
+        uploadErrors.push(validation.error!);
+        continue;
+      }
+
+      const result = await uploadFileToStorage(storageClient, requestId, file, isAdmin ? 'admin' : 'customer');
+      if (result.error) {
+        uploadErrors.push(result.error);
+        continue;
+      }
+
+      const { error: dbErr } = await supabase.from('design_request_message_files').insert({
+        message_id: msg.id,
+        request_id: requestId,
+        uploaded_by: user.id,
+        file_url: result.url,
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type,
+        file_type: isAdmin ? 'design_file' : 'customer_upload',
+      });
+
+      if (dbErr) {
+        uploadErrors.push(`${file.name}: Failed to save file record: ${dbErr.message}`);
+        continue;
+      }
+
+      uploadedFiles.push({ url: result.url, name: file.name, size: file.size, mime: file.type });
+    }
+  }
+
+  // Notify the other party
+  if (isAdmin) {
+    if (request.customer_id) {
+      await createNotification({
+        title: 'New Admin Reply',
+        message: `Admin replied to your design request #${requestId.slice(0, 8).toUpperCase()}.`,
+        type: 'design',
+        user_id: request.customer_id,
+        action_url: `/design-requests/${requestId}`,
+        design_request_id: requestId,
+      });
+    }
+  } else {
+    await createNotification({
+      title: 'New Customer Message',
+      message: `New message from ${request.full_name} on design request #${requestId.slice(0, 8).toUpperCase()}.`,
+      type: 'design',
+      action_url: `/admin/design-requests/${requestId}`,
+      design_request_id: requestId,
+    });
+  }
+
+  revalidatePath(`/admin/design-requests/${requestId}`);
+  revalidatePath(`/design-requests/${requestId}`);
+
+  return {
+    error: null,
+    messageId: msg.id,
+    uploadErrors: uploadErrors.length > 0 ? uploadErrors : undefined,
+  };
+}
+
+// ============================================================
+// MARK MESSAGES AS READ
+// ============================================================
+
+export async function markDesignRequestMessagesRead(requestId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const isAdmin = profile?.role === 'admin';
+
+  const { error } = await supabase
+    .from('design_request_messages')
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq('request_id', requestId)
+    .eq('is_read', false)
+    .neq('sender_id', user.id);
+
+  if (error) return { error: error.message };
+
+  return { error: null };
 }
 
 // ============================================================
@@ -468,6 +770,18 @@ export async function addDesignComment(requestId: string, comment: string) {
 
   if (!request) return { error: 'Request not found' };
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const isAdmin = profile?.role === 'admin';
+
+  if (!isAdmin && request.customer_id !== user.id) {
+    return { error: 'You can only comment on your own requests' };
+  }
+
   const { error } = await supabase.from('design_request_comments').insert({
     request_id: requestId,
     user_id: user.id,
@@ -475,6 +789,37 @@ export async function addDesignComment(requestId: string, comment: string) {
   });
 
   if (error) return { error: error.message };
+
+  // Also add to messages for the conversation thread
+  await supabase.from('design_request_messages').insert({
+    request_id: requestId,
+    sender_id: user.id,
+    sender_role: isAdmin ? 'admin' : 'customer',
+    message: comment.trim(),
+    message_type: 'text',
+  });
+
+  // Notify the other party
+  if (isAdmin) {
+    if (request.customer_id) {
+      await createNotification({
+        title: 'New Admin Reply',
+        message: `Admin replied to your design request #${requestId.slice(0, 8).toUpperCase()}.`,
+        type: 'design',
+        user_id: request.customer_id,
+        action_url: `/design-requests/${requestId}`,
+        design_request_id: requestId,
+      });
+    }
+  } else {
+    await createNotification({
+      title: 'New Customer Message',
+      message: `New message from ${request.full_name} on design request #${requestId.slice(0, 8).toUpperCase()}.`,
+      type: 'design',
+      action_url: `/admin/design-requests/${requestId}`,
+      design_request_id: requestId,
+    });
+  }
 
   revalidatePath(`/admin/design-requests/${requestId}`);
   revalidatePath(`/design-requests/${requestId}`);
@@ -509,7 +854,7 @@ export async function sendForApproval(
 
   const { data: request } = await supabase
     .from('design_requests')
-    .select('email, full_name')
+    .select('email, full_name, customer_id')
     .eq('id', requestId)
     .single();
 
@@ -548,15 +893,26 @@ export async function sendForApproval(
     });
   }
 
+  // Add system message to conversation
+  await supabase.from('design_request_messages').insert({
+    request_id: requestId,
+    sender_id: user.id,
+    sender_role: 'admin',
+    message: `Design sent for approval${data.comment ? `: ${data.comment}` : ''}${data.estimatedQuantity ? ` (Qty: ${data.estimatedQuantity})` : ''}${data.estimatedPrice ? ` (Price: $${Number(data.estimatedPrice).toFixed(2)})` : ''}`,
+    message_type: 'system',
+  });
+
   // Notify customer
-  try {
-    const { createNotification } = await import('./notifications');
+  if (request.customer_id) {
     await createNotification({
       title: 'Design Ready for Approval',
       message: `Your design for request #${requestId.slice(0, 8).toUpperCase()} is ready. Please review and approve.`,
-      type: 'order',
+      type: 'design',
+      user_id: request.customer_id,
+      action_url: `/design-requests/${requestId}`,
+      design_request_id: requestId,
     });
-  } catch {}
+  }
 
   // Email customer
   try {
@@ -634,20 +990,23 @@ export async function customerRespond(
     });
   }
 
+  // Add system message to conversation
+  await supabase.from('design_request_messages').insert({
+    request_id: requestId,
+    sender_id: user?.id,
+    sender_role: 'customer',
+    message: `Design ${action === 'approved' ? 'approved' : action === 'revision_requested' ? 'revision requested' : 'rejected'}${comment ? `: ${comment}` : ''}`,
+    message_type: 'system',
+  });
+
   // Notify admin
-  try {
-    const { createNotification } = await import('./notifications');
-    const actionLabels: Record<string, string> = {
-      approved: 'has been APPROVED by the customer',
-      revision_requested: 'has REVISION REQUESTED by the customer',
-      rejected: 'has been REJECTED by the customer',
-    };
-    await createNotification({
-      title: `Design ${actionLabels[action] || action}`,
-      message: `Request #${requestId.slice(0, 8).toUpperCase()} ${actionLabels[action] || action}.${comment ? ` Comment: ${comment}` : ''}`,
-      type: 'order',
-    });
-  } catch {}
+  await createNotification({
+    title: `Design ${action === 'approved' ? 'Approved' : action === 'revision_requested' ? 'Revision Requested' : 'Rejected'}`,
+    message: `Request #${requestId.slice(0, 8).toUpperCase()} was ${action === 'approved' ? 'approved' : action === 'revision_requested' ? 'revision requested' : 'rejected'} by the customer.${comment ? ` Comment: ${comment}` : ''}`,
+    type: 'design',
+    action_url: `/admin/design-requests/${requestId}`,
+    design_request_id: requestId,
+  });
 
   // Email admin
   try {
@@ -703,11 +1062,26 @@ export async function deleteDesignFile(fileId: string) {
 
   const { data: file } = await supabase
     .from('design_request_files')
-    .select('id, request_id')
+    .select('id, request_id, file_url')
     .eq('id', fileId)
     .single();
 
   if (!file) return { error: 'File not found' };
+
+  // Delete from storage
+  try {
+    const adminClient = createAdminClient();
+    const storageClient = adminClient || supabase;
+    const url = new URL(file.file_url);
+    const pathParts = url.pathname.split('/');
+    const bucketIndex = pathParts.indexOf('design-files');
+    if (bucketIndex >= 0) {
+      const storagePath = pathParts.slice(bucketIndex + 1).join('/');
+      await storageClient.storage.from('design-files').remove([storagePath]);
+    }
+  } catch (err) {
+    console.error('Failed to delete file from storage:', err);
+  }
 
   const { error: delErr } = await supabase
     .from('design_request_files')
@@ -717,6 +1091,41 @@ export async function deleteDesignFile(fileId: string) {
   if (delErr) return { error: delErr.message };
 
   revalidatePath(`/admin/design-requests/${file.request_id}`);
+
+  return { error: null };
+}
+
+// ============================================================
+// UPDATE PRIORITY
+// ============================================================
+
+export async function updateDesignRequestPriority(id: string, priority: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.role !== 'admin') return { error: 'Access denied' };
+
+  if (!['low', 'normal', 'high', 'urgent'].includes(priority)) {
+    return { error: 'Invalid priority' };
+  }
+
+  const { error } = await supabase
+    .from('design_requests')
+    .update({ priority, updated_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/design-requests/${id}`);
+  revalidatePath('/admin/design-requests');
 
   return { error: null };
 }

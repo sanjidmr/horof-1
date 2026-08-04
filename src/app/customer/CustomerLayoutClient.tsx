@@ -7,7 +7,8 @@ import {
   LayoutDashboard, User, ShoppingBag, HeadphonesIcon, Settings,
   ArrowLeft, LogOut, Bell, Search, Menu, X,
   Package, CheckCircle2, Clock, AlertCircle, Truck, RotateCcw,
-  CreditCard, ShieldCheck, MessageSquare, ChevronDown, ExternalLink
+  CreditCard, ShieldCheck, MessageSquare, ChevronDown, ExternalLink,
+  Palette
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -118,6 +119,7 @@ export default function CustomerLayoutClient({
     { name: 'Dashboard', href: '/customer/dashboard', icon: LayoutDashboard },
     { name: 'My Profile', href: '/customer/profile', icon: User },
     { name: 'My Orders', href: '/customer/orders', icon: ShoppingBag },
+    { name: 'Design Requests', href: '/design-requests', icon: Palette },
     { name: 'Support Center', href: '/customer/support', icon: HeadphonesIcon },
     { name: 'Settings', href: '/customer/settings', icon: Settings },
   ];
@@ -147,6 +149,7 @@ export default function CustomerLayoutClient({
       case 'refund_completed': return <CreditCard className="w-4 h-4" />;
       case 'support_reply': return <MessageSquare className="w-4 h-4" />;
       case 'account': return <ShieldCheck className="w-4 h-4" />;
+      case 'design': return <Palette className="w-4 h-4" />;
       default: return <Bell className="w-4 h-4" />;
     }
   };
@@ -162,6 +165,7 @@ export default function CustomerLayoutClient({
       case 'return_rejected': return 'bg-red-500';
       case 'refund_completed': return 'bg-purple-500';
       case 'support_reply': return 'bg-sky-500';
+      case 'design': return 'bg-purple-500';
       default: return 'bg-slate-500';
     }
   };

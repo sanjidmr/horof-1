@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, TrendingUp, Package, Users, BarChart3, ShoppingCart, DollarSign, Truck, Megaphone, Shield, Globe } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Package, Users, BarChart3, ShoppingCart, Boxes, Wallet, ReceiptText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -12,12 +12,9 @@ const TABS = [
   { label: 'Customers', href: '/admin/reports/customers', icon: Users },
   { label: 'P&L', href: '/admin/reports/profit-loss', icon: BarChart3 },
   { label: 'Orders', href: '/admin/reports/orders', icon: ShoppingCart },
-  { label: 'Inventory', href: '/admin/reports/inventory', icon: Package },
-  { label: 'Finance', href: '/admin/reports/finance', icon: DollarSign },
-  { label: 'Shipping', href: '/admin/reports/shipping', icon: Truck },
-  { label: 'Marketing', href: '/admin/reports/marketing', icon: Megaphone },
-  { label: 'Team', href: '/admin/reports/employees', icon: Shield },
-  { label: 'Analytics', href: '/admin/reports/analytics', icon: Globe },
+  { label: 'Inventory', href: '/admin/reports/inventory', icon: Boxes },
+  { label: 'Expenses', href: '/admin/reports/expenses', icon: ReceiptText },
+  { label: 'Payments', href: '/admin/reports/payments', icon: Wallet },
 ];
 
 export function ReportNavigation() {

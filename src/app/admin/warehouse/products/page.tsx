@@ -260,7 +260,7 @@ export default function WarehouseProductsPage() {
                     <td className="px-4 py-3 text-xs text-slate-500 font-mono">{p.sku || '-'}</td>
                     <td className="px-4 py-3 text-center">
                       {isEditing ? (
-                        <input type="number" value={editStock} onChange={e => setEditStock(Number(e.target.value))}
+                        <input type="number" value={editStock || ''} onChange={e => setEditStock(Number(e.target.value))}
                           className="w-20 text-center px-2 py-1 border border-[#1a4731]/30 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
                       ) : (
                         <span className={`text-xs font-bold ${p.stock === 0 ? 'text-red-600' : p.stock <= (p.min_stock_level || 0) ? 'text-orange-600' : 'text-slate-700'}`}>
@@ -280,7 +280,7 @@ export default function WarehouseProductsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {isEditing ? (
-                        <input type="number" value={editPrice} onChange={e => setEditPrice(Number(e.target.value))}
+                        <input type="number" value={editPrice || ''} onChange={e => setEditPrice(Number(e.target.value))}
                           className="w-24 text-right px-2 py-1 border border-[#1a4731]/30 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30" />
                       ) : (
                         <span className="text-xs font-bold text-slate-700">৳{p.price.toLocaleString()}</span>

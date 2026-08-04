@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Palette, ChevronRight, Clock, FileText } from 'lucide-react';
+import { Palette, ChevronRight, Clock, FileText, Flag, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -32,6 +32,13 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
 };
 
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-slate-50 text-slate-600 border-slate-200',
+  normal: 'bg-blue-50 text-blue-700 border-blue-200',
+  high: 'bg-amber-50 text-amber-700 border-amber-200',
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+};
+
 export default function MyDesignRequestsPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
@@ -45,7 +52,7 @@ export default function MyDesignRequestsPage() {
     try {
       const { data, error } = await supabase
         .from('design_requests')
-        .select('*, files:design_request_files(count)')
+        .select('*, files:design_request_files(count), messages:design_request_messages(count)')
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -69,10 +76,43 @@ export default function MyDesignRequestsPage() {
     }
   }, [authLoading, isAuthenticated, user, fetchRequests]);
 
+  // Realtime subscription for design requests
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`dr-list-${user.id}-${Date.now()}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'design_requests',
+        filter: `customer_id=eq.${user.id}`,
+      }, () => {
+        fetchRequests();
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'design_request_messages',
+      }, () => {
+        fetchRequests();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, supabase, fetchRequests]);
+
   const getFileCount = (files: any): number => {
     if (!files) return 0;
     if (Array.isArray(files)) return files.length;
     if (typeof files === 'object' && files.count !== undefined) return files.count;
+    return 0;
+  };
+
+  const getMessageCount = (messages: any): number => {
+    if (!messages) return 0;
+    if (Array.isArray(messages)) return messages.length;
+    if (typeof messages === 'object' && messages.count !== undefined) return messages.count;
     return 0;
   };
 
@@ -109,7 +149,7 @@ export default function MyDesignRequestsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-4xl mx-auto px-4 py-8 md:py-12 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 pt-32 pb-16 md:pb-24 space-y-8">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-2xl bg-[#E6F0EB] text-[#1a4731] flex items-center justify-center shrink-0">
             <Palette className="h-6 w-6" />
@@ -191,18 +231,33 @@ export default function MyDesignRequestsPage() {
                         <FileText className="w-3.5 h-3.5" />
                         {getFileCount(req.files)} file{getFileCount(req.files) !== 1 ? 's' : ''}
                       </span>
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        {getMessageCount(req.messages)} message{getMessageCount(req.messages) !== 1 ? 's' : ''}
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex flex-col items-end gap-3 shrink-0">
-                    <span
-                      className={cn(
-                        'inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap',
-                        STATUS_COLORS[req.status] || 'bg-slate-50 text-slate-700 border-slate-200'
-                      )}
-                    >
-                      {STATUS_LABELS[req.status] || req.status.replace(/_/g, ' ')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          'inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap',
+                          STATUS_COLORS[req.status] || 'bg-slate-50 text-slate-700 border-slate-200'
+                        )}
+                      >
+                        {STATUS_LABELS[req.status] || req.status.replace(/_/g, ' ')}
+                      </span>
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border whitespace-nowrap',
+                          PRIORITY_COLORS[req.priority] || 'bg-slate-50 text-slate-700 border-slate-200'
+                        )}
+                      >
+                        <Flag className="w-3 h-3" />
+                        {req.priority?.toUpperCase() || 'NORMAL'}
+                      </span>
+                    </div>
                     <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-[#1a4731] group-hover:translate-x-0.5 transition-all" />
                   </div>
                 </div>

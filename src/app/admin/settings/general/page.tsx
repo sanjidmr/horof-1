@@ -1,12 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card';
+import { getAppSettings } from '@/lib/actions/app-settings';
+import { GeneralSettingsClient } from './GeneralSettingsClient';
 
-export default function AdminSettingsGeneralPage() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>General</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-slate-600">Use key <code className="font-mono text-xs">general</code> in site_settings.</CardContent>
-    </Card>
-  );
+export const metadata = { title: 'General Settings | Admin' };
+
+export default async function AdminSettingsGeneralPage() {
+  const settings = await getAppSettings();
+  return <GeneralSettingsClient initial={settings.general} />;
 }

@@ -422,7 +422,7 @@ export default function AdminCategoriesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Sort Order</label>
-                <input type="number" value={subFormData.sort_order}
+                <input type="number" value={subFormData.sort_order || ''}
                   onChange={e => setSubFormData({ ...subFormData, sort_order: parseInt(e.target.value) || 0 })}
                   className="w-full border border-slate-300 rounded-lg p-2 outline-none focus:border-[#2D6A4F] focus:ring-1 focus:ring-[#2D6A4F]" />
               </div>

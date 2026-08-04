@@ -7,10 +7,20 @@ export async function getCustomerFull(id: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
 
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.view');
+  } catch {
+    return null;
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', id)
+    .eq('user_type', 'customer')
+    .eq('role', 'customer')
+    .eq('is_warehouse_staff', false)
     .single();
 
   if (!profile) return null;
@@ -42,6 +52,12 @@ export async function getCustomerFull(id: string) {
 export async function getCustomerOrdersOnly(id: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.view');
+  } catch {
+    return [];
+  }
   const { data } = await supabase.from('orders').select('*').eq('user_id', id).order('created_at', { ascending: false });
   return (data || []).map(o => ({ ...o, is_request: false }));
 }
@@ -49,6 +65,12 @@ export async function getCustomerOrdersOnly(id: string) {
 export async function getAllTags() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.view');
+  } catch {
+    return [];
+  }
   const { data } = await supabase.from('customer_tags').select('*').order('name');
   return data || [];
 }
@@ -56,6 +78,13 @@ export async function getAllTags() {
 export async function assignTag(customerId: string, tagId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.edit');
+  } catch {
+    return { error: 'Forbidden' };
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -75,6 +104,13 @@ export async function removeTag(customerId: string, tagId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.edit');
+  } catch {
+    return { error: 'Forbidden' };
+  }
+
   const { error } = await supabase
     .from('customer_tag_assignments')
     .delete()
@@ -90,6 +126,13 @@ export async function createTag(name: string, color: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated', tag: null };
 
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.edit');
+  } catch {
+    return { error: 'Forbidden', tag: null };
+  }
+
   const { data, error } = await supabase.from('customer_tags').insert({ name, color }).select().single();
   if (error) return { error: error.message, tag: null };
   return { error: null, tag: data };
@@ -98,6 +141,13 @@ export async function createTag(name: string, color: string) {
 export async function addCustomerTimelineNote(customerId: string, description: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.edit');
+  } catch {
+    return { error: 'Forbidden' };
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -117,6 +167,12 @@ export async function addCustomerTimelineNote(customerId: string, description: s
 export async function getCustomerInvoices(customerId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  try {
+    const { requirePermission } = await import('./security');
+    await requirePermission('customers.view');
+  } catch {
+    return [];
+  }
   const { data } = await supabase
     .from('customer_invoices')
     .select('*, order:order_id(order_number)')

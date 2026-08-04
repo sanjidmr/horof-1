@@ -16,6 +16,7 @@ import { placeOrder } from '@/lib/actions/place-order';
 import { validateCoupon } from '@/lib/actions/validate-coupon';
 import { findBestBundleDiscount } from '@/lib/actions/bundle-offers';
 import { checkFreeShippingEligibility } from '@/lib/actions/free-shipping';
+import { usePublicSettings } from '@/hooks/usePublicSettings';
 type AppliedCoupon = { discount: number; couponId: string; code: string; label: string; type: string };
 type BundleInfo = { discount: number; offerName: string; offerId: string; description: string };
 type FreeShippingInfo = { eligible: boolean; offerName: string; offerId: string; description: string | null };
@@ -134,6 +135,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<CheckoutItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const { settings } = usePublicSettings();
+  const { inside_mymensingh_charge, outside_mymensingh_charge, office_charge } = settings.shipping;
 
   // Delivery Method state: 'online' (Home/Online Delivery) or 'office' (Office Pickup)
   const [deliveryMethod, setDeliveryMethod] = useState<'online' | 'office'>('online');
@@ -171,13 +174,19 @@ export default function CheckoutPage() {
 
   // Derived values (must be before effects that reference them)
   const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const thresholdFreeShipping =
+    settings.shipping.free_shipping_enabled &&
+    subtotal > 0 &&
+    subtotal >= settings.shipping.free_shipping_threshold;
   const deliveryCharge = deliveryMethod === 'office'
-    ? 0
+    ? office_charge
     : appliedCoupon?.type === 'free_shipping'
       ? 0
       : freeShippingInfo?.eligible
         ? 0
-        : (deliveryType === 'inside_mymensingh' ? 60 : deliveryType === 'outside_mymensingh' ? 120 : 0);
+        : thresholdFreeShipping
+          ? 0
+          : (deliveryType === 'inside_mymensingh' ? inside_mymensingh_charge : deliveryType === 'outside_mymensingh' ? outside_mymensingh_charge : 0);
   const couponDiscount = appliedCoupon?.discount || 0;
   const bundleDiscount = bundleInfo?.discount || 0;
   const total = subtotal + deliveryCharge - couponDiscount - bundleDiscount;
@@ -310,7 +319,7 @@ export default function CheckoutPage() {
       ? `Office Pickup - Customer will collect from Studio/Office (Dhopakhola More, Mymensingh). Note: ${formData.note}`
       : `${formData.address}, ${finalArea}, ${formData.thana}, ${formData.district}. Note: ${formData.note}`;
 
-    const charge = deliveryMethod === 'office' ? 0 : deliveryCharge;
+    const charge = deliveryMethod === 'office' ? office_charge : deliveryCharge;
     const finalDeliveryType = deliveryMethod === 'office' ? 'office_pickup' : (deliveryType || 'inside_mymensingh');
     const finalDiscount = (appliedCoupon?.discount || 0) + (bundleInfo?.discount || 0);
     const finalTotal = subtotal + charge - finalDiscount;
@@ -438,7 +447,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500">Charge: ৳60 / ৳120</span>
+                      <span className="text-xs font-semibold text-slate-500">Charge: ৳{inside_mymensingh_charge} / ৳{outside_mymensingh_charge}</span>
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                         deliveryMethod === 'online' ? 'border-[#1a4731]' : 'border-slate-300'
                       }`}>
@@ -470,7 +479,7 @@ export default function CheckoutPage() {
                       </div>
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-emerald-600">Charge: Free (৳0)</span>
+                      <span className="text-xs font-semibold text-emerald-600">{office_charge === 0 ? 'Charge: Free (৳0)' : `Charge: ৳${office_charge}`}</span>
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                         deliveryMethod === 'office' ? 'border-[#1a4731]' : 'border-slate-300'
                       }`}>
@@ -672,7 +681,7 @@ export default function CheckoutPage() {
                               <h4 className={`font-bold transition-colors ${deliveryType === 'inside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Inside Mymensingh</h4>
                               <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Local</span>
                             </div>
-                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳60</span></p>
+                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳{inside_mymensingh_charge}</span></p>
                           </div>
                         </div>
                       </div>
@@ -689,7 +698,7 @@ export default function CheckoutPage() {
                               <h4 className={`font-bold transition-colors ${deliveryType === 'outside_mymensingh' ? 'text-[#1a4731]' : 'text-slate-700'}`}>Outside Mymensingh</h4>
                               <span className="px-2 py-0.5 bg-[#1a4731]/10 text-[#1a4731] text-[9px] font-bold rounded uppercase">Courier</span>
                             </div>
-                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳120</span></p>
+                            <p className="text-sm text-slate-500 mt-1">Delivery Charge: <span className="font-extrabold text-slate-800">৳{outside_mymensingh_charge}</span></p>
                           </div>
                         </div>
                       </div>
@@ -779,12 +788,12 @@ export default function CheckoutPage() {
 
           {/* Mobile: Order Summary + Confirm (below form) */}
           <div className="block lg:hidden w-full">
-            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} />
+            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} thresholdFreeShipping={thresholdFreeShipping} freeShippingThreshold={settings.shipping.free_shipping_threshold} />
           </div>
 
           {/* Desktop: Order Summary sidebar */}
           <div className="hidden lg:block w-full lg:w-5/12">
-            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} sticky={true} />
+            <OrderSummaryCard items={items} subtotal={subtotal} couponDiscount={couponDiscount} bundleDiscount={bundleDiscount} bundleInfo={bundleInfo} checkingBundle={checkingBundle} deliveryCharge={deliveryCharge} deliveryMethod={deliveryMethod} freeShippingInfo={freeShippingInfo} total={total} couponCode={couponCode} couponError={couponError} appliedCoupon={appliedCoupon} validatingCoupon={validatingCoupon} handleApplyCoupon={handleApplyCoupon} handleRemoveCoupon={handleRemoveCoupon} handleCouponInputChange={handleCouponInputChange} loading={loading} deliveryType={deliveryType} thresholdFreeShipping={thresholdFreeShipping} freeShippingThreshold={settings.shipping.free_shipping_threshold} sticky={true} />
           </div>
           
         </div>
@@ -815,6 +824,8 @@ interface OrderSummaryCardProps {
   handleRemoveCoupon: () => void;
   loading: boolean;
   deliveryType: 'inside_mymensingh' | 'outside_mymensingh' | null;
+  thresholdFreeShipping: boolean;
+  freeShippingThreshold: number;
   sticky?: boolean;
 }
 
@@ -822,7 +833,7 @@ function OrderSummaryCard({
   items, subtotal, couponDiscount, bundleDiscount, bundleInfo, checkingBundle,
   deliveryCharge, deliveryMethod, freeShippingInfo, total,
   couponCode, handleCouponInputChange, couponError, appliedCoupon, validatingCoupon,
-  handleApplyCoupon, handleRemoveCoupon, loading, deliveryType, sticky,
+  handleApplyCoupon, handleRemoveCoupon, loading, deliveryType, thresholdFreeShipping, freeShippingThreshold, sticky,
 }: OrderSummaryCardProps) {
   return (
     <div className={`bg-white rounded-3xl shadow-xl shadow-[#1a4731]/5 border border-slate-100 p-6 md:p-8 overflow-hidden relative ${sticky ? 'lg:sticky lg:top-8' : ''}`}>
@@ -982,7 +993,9 @@ function OrderSummaryCard({
               ? '৳ 0 (Pickup)'
               : freeShippingInfo?.eligible
                 ? <span className="text-emerald-600 flex items-center gap-1">FREE <span className="text-[10px] font-normal">({freeShippingInfo.offerName})</span></span>
-                : deliveryType ? `৳ ${deliveryCharge}` : '—'}
+                : thresholdFreeShipping
+                  ? <span className="text-emerald-600 flex items-center gap-1">FREE <span className="text-[10px] font-normal">(Over ৳{freeShippingThreshold})</span></span>
+                  : deliveryType ? `৳ ${deliveryCharge}` : '—'}
           </span>
         </div>
         <div className="flex justify-between text-xl font-display font-black text-[#1a4731] pt-4 border-t border-slate-100 mt-2">

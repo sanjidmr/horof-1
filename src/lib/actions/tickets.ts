@@ -1,6 +1,7 @@
 'use server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 import { revalidatePath } from 'next/cache';
 import { createNotification } from './notifications';
 
@@ -96,7 +97,7 @@ export async function addTicketReply(ticketId: string, message: string, isIntern
   if (!user) return { error: 'Not authenticated' };
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  const senderRole = profile?.role === 'admin' ? 'admin' : 'customer';
+  const senderRole = isInternalAdminRole(profile?.role) ? 'admin' : 'customer';
 
   const { error } = await supabase
     .from('ticket_replies')

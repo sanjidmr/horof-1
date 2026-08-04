@@ -29,7 +29,6 @@ export type PopupCampaignRow = {
   show_to_returning_visitors: boolean;
   show_to_logged_in: boolean;
   show_to_guests: boolean;
-  restricted_countries: string[];
   date_start: string | null;
   date_end: string | null;
   ab_test_enabled: boolean;

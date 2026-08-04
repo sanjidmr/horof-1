@@ -42,27 +42,27 @@ export default async function HomePage() {
     supabase.from('categories').select('*, products(count)').eq('is_active', true),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name)')
+      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
       .eq('is_active', true)
       .eq('section', 'best_selling')
       .order('created_at', { ascending: false })
       .limit(8),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name)')
+      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
       .eq('is_active', true)
       .eq('section', 'new_arrival')
       .order('created_at', { ascending: false })
       .limit(4),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name)')
+      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
       .eq('is_active', true)
       .eq('section', 'product_of_the_day')
       .limit(4),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name)')
+      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(8),
@@ -97,22 +97,27 @@ export default async function HomePage() {
     }))
     : [];
 
-  const mapProduct = (p: any): Product => ({
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    description: p.description || '',
-    price: Number(p.price),
-    discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
-    images: extractProductImages(p.product_images),
-    category: p.categories?.name || 'Uncategorized',
-    rating: 4.5,
-    reviewCount: 12,
-    stock: p.stock || 0,
-    tags: [],
-    isNew: p.section === 'new_arrival',
-    isFeatured: p.section === 'best_selling',
-  });
+  const mapProduct = (p: any): Product => {
+    const reviews = (p.reviews ?? []).filter((r: any) => r.rating >= 1);
+    const reviewCount = reviews.length;
+    const rating = reviewCount > 0 ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount : 0;
+    return {
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      description: p.description || '',
+      price: Number(p.price),
+      discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
+      images: extractProductImages(p.product_images),
+      category: p.categories?.name || 'Uncategorized',
+      rating,
+      reviewCount,
+      stock: p.stock || 0,
+      tags: [],
+      isNew: p.section === 'new_arrival',
+      isFeatured: p.section === 'best_selling',
+    };
+  };
 
   const featuredProducts = bestSellingData ? bestSellingData.map(mapProduct) : [];
   const newArrivals = newArrivalsData ? newArrivalsData.map(mapProduct) : [];

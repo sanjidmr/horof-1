@@ -5,7 +5,7 @@ import type { CouponRow } from '@/lib/actions/coupons';
 export default async function AdminCouponsPage() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
-  const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
+  const { data } = await supabase.from('coupons').select('*').order('updated_at', { ascending: false });
 
   return (
     <div className="space-y-6">

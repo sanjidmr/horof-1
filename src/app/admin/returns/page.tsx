@@ -52,7 +52,7 @@ export default function AdminReturnsPage() {
   const handleApprove = async (orderId: string) => {
     setActionLoading(true);
     try {
-      await handleReturnAction(Number(orderId), true, approveNote || 'Return approved', 'Admin');
+      await handleReturnAction(String(orderId), true, approveNote || 'Return approved', 'Admin');
       toast.success('Return approved — stock restored');
       setDetailId(null);
       setApproveNote('');
@@ -67,7 +67,7 @@ export default function AdminReturnsPage() {
   const handleReject = async (orderId: string) => {
     setActionLoading(true);
     try {
-      await handleReturnAction(Number(orderId), false, approveNote || 'Return rejected', 'Admin');
+      await handleReturnAction(String(orderId), false, approveNote || 'Return rejected', 'Admin');
       toast.success('Return rejected');
       setDetailId(null);
       setApproveNote('');

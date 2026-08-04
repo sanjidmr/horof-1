@@ -56,11 +56,7 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
   const sizes = Array.from(new Set(variants.map(v => v.size).filter(Boolean)));
   const colors = Array.from(new Set(variants.map(v => v.color).filter(Boolean)));
 
-  const mockReviews = [
-    { id: 1, user: "Arif Ahmed", rating: 5, date: "2 weeks ago", comment: "The craftsmanship is unparalleled. I bought the Teak coffee table and it's the centerpiece of my living room now. Truly a masterpiece!", avatar: "AA" },
-    { id: 2, user: "Saira Banu", rating: 5, date: "1 month ago", comment: "Exceeded my expectations. The finish is so smooth and the wood grain is stunning. Fast shipping too!", avatar: "SB" },
-    { id: 3, user: "Tanvir Hasan", rating: 4, date: "2 months ago", comment: "Beautiful product. Only reason for 4 stars is that the color was slightly darker than in photos, but I actually prefer it this way.", avatar: "TH" }
-  ];
+  // Reviews are now fetched from the database
 
   return (
     <div className="bg-white min-h-screen">
@@ -109,10 +105,18 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
           {/* Info Section */}
           <div className="flex flex-col justify-center">
             <div className="flex items-center gap-3 mb-6">
-              <div className="flex text-gold">
-                {[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}
-              </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">(4.9/5.0 From 124 Reviews)</span>
+              <div className="flex items-center gap-3">
+                  {product.rating > 0 && product.reviewCount > 0 ? (
+                    <>
+                      <div className="flex text-gold">
+                        {[...Array(5)].map((_, i) => <Star key={i} size={16} fill={i < Math.round(product.rating) ? 'currentColor' : 'none'} className={i < Math.round(product.rating) ? 'text-gold' : 'text-slate-200'} />)}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">({product.rating.toFixed(1)}/5.0 From {product.reviewCount} Reviews)</span>
+                    </>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">No Reviews Yet</span>
+                  )}
+                </div>
             </div>
 
             <h1 className="text-4xl md:text-6xl font-display font-medium text-slate-900 leading-tight mb-6 tracking-tight">
@@ -284,27 +288,27 @@ export function ProductDetailClient({ product, images, variants, relatedProducts
 
               <TabsContent value="reviews" className="mt-0">
                 <div className="space-y-10">
-                  {mockReviews.map(review => (
-                    <div key={review.id} className="space-y-4">
+                  {product.rating > 0 && product.reviewCount > 0 ? ([1].map((_, idx) => (
+                    <div key={idx} className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-full bg-accent-primary/10 flex items-center justify-center text-accent-primary font-bold text-sm">
-                            {review.avatar}
+                            {""}
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-slate-900">{review.user}</h4>
+                            <h4 className="text-sm font-bold text-slate-900">{"Customer"}</h4>
                             <div className="flex text-gold mt-1">
-                              {[...Array(review.rating)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
+                              {[...Array(product.rating)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
                             </div>
                           </div>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{review.date}</span>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{""}</span>
                       </div>
                       <p className="text-sm text-slate-600 font-light leading-relaxed pl-16">
-                        "{review.comment}"
+                        "{""}"
                       </p>
                     </div>
-                  ))}
+                  ))) : (null)}
                   <Button 
                     variant="outline" 
                     className="w-full h-14 rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] mt-10"

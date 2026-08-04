@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import AdminLayoutClient from './AdminLayoutClient';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const supabase = await createSupabaseServerClient();
@@ -16,7 +17,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const appMeta = user.app_metadata || {};
 
   const isWarehouseStaffMeta = meta.is_warehouse_staff === true || appMeta.is_warehouse_staff === true;
-  const isAdminMeta = meta.role === 'admin' || appMeta.role === 'admin';
+  const isAdminMeta = isInternalAdminRole(meta.role) || isInternalAdminRole(appMeta.role);
 
   let profile: any = null;
   try {
@@ -31,7 +32,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   const isWarehouseStaff = isWarehouseStaffMeta || profile?.is_warehouse_staff === true || profile?.role === 'warehouse_staff';
-  const isAdmin = isAdminMeta || profile?.role === 'admin';
+  const isAdmin = isAdminMeta || isInternalAdminRole(profile?.role);
   const isAllowed = isAdmin || isWarehouseStaff;
 
   if (!isAllowed) redirect('/login?error=forbidden');

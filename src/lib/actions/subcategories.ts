@@ -22,6 +22,13 @@ export async function upsertSubcategory(data: SubcategoryFormData) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (profile?.role !== 'admin') return { ok: false, message: 'Admin only' } as const;
 
+  const { requirePermission } = await import('./security');
+  try {
+    await requirePermission(data.id ? 'subcategories.edit' : 'subcategories.create');
+  } catch {
+    return { ok: false, message: 'Permission denied' } as const;
+  }
+
   if (data.id) {
     const { error } = await supabase.from('subcategories').update({
       category_id: data.category_id,
@@ -66,6 +73,13 @@ export async function deleteSubcategory(id: string) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (profile?.role !== 'admin') return { ok: false, message: 'Admin only' } as const;
 
+  const { requirePermission } = await import('./security');
+  try {
+    await requirePermission('subcategories.delete');
+  } catch {
+    return { ok: false, message: 'Permission denied' } as const;
+  }
+
   const { error } = await supabase.from('subcategories').delete().eq('id', id);
   if (error) return { ok: false, message: error.message } as const;
 
@@ -84,6 +98,13 @@ export async function reorderSubcategories(items: { id: string; sort_order: numb
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
   if (profile?.role !== 'admin') return { ok: false, message: 'Admin only' } as const;
+
+  const { requirePermission } = await import('./security');
+  try {
+    await requirePermission('subcategories.edit');
+  } catch {
+    return { ok: false, message: 'Permission denied' } as const;
+  }
 
   for (const item of items) {
     const { error } = await supabase.from('subcategories').update({ sort_order: item.sort_order }).eq('id', item.id);

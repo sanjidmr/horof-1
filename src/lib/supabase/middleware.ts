@@ -67,7 +67,7 @@ export async function updateSession(request: NextRequest) {
   const isAdminFromMeta = (u: typeof user): boolean => {
     const meta = u?.user_metadata || {};
     const appMeta = u?.app_metadata || {};
-    return meta.role === 'admin' || appMeta.role === 'admin';
+    return meta.role === 'admin' || appMeta.role === 'admin' || meta.role === 'super_admin' || meta.role === 'manager' || meta.role === 'staff';
   };
 
   // If already logged in and hitting login/signup, redirect based on role
@@ -83,14 +83,14 @@ export async function updateSession(request: NextRequest) {
     // Fallback to DB profile
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_warehouse_staff')
+      .select('role, is_warehouse_staff, user_type')
       .eq('id', user.id)
       .single()
 
     if (profile?.is_warehouse_staff || profile?.role === 'warehouse_staff') {
       return NextResponse.redirect(new URL('/admin/warehouse/orders', request.url))
     }
-    if (profile?.role === 'admin') {
+    if (profile?.user_type === 'internal' && (profile?.role === 'admin' || profile?.role === 'super_admin' || profile?.role === 'manager' || profile?.role === 'staff')) {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
 
@@ -102,7 +102,7 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_banned, is_warehouse_staff')
+      .select('role, is_banned, is_warehouse_staff, user_type')
       .eq('id', user.id)
       .single()
 
@@ -121,15 +121,15 @@ export async function updateSession(request: NextRequest) {
       }
 
       const isWarehouseStaff = isWarehouseStaffFromMeta(user) || profile?.is_warehouse_staff === true || profile?.role === 'warehouse_staff';
-      const isAdmin = isAdminFromMeta(user) || profile?.role === 'admin';
+      const isAdmin = isAdminFromMeta(user) || (profile?.user_type === 'internal' && (profile?.role === 'admin' || profile?.role === 'super_admin' || profile?.role === 'manager' || profile?.role === 'staff'));
 
       if (!isAdmin && !isWarehouseStaff) {
         return NextResponse.redirect(new URL('/customer/dashboard', request.url))
       }
 
-      // Warehouse staff: only allow /admin/warehouse/* and /admin/dashboard
+      // Warehouse staff: only allow /admin/warehouse/* (deny access to admin dashboard)
       if (isWarehouseStaff && !isAdmin) {
-        const isAllowed = pathname.startsWith('/admin/warehouse') || pathname.startsWith('/admin/dashboard');
+        const isAllowed = pathname.startsWith('/admin/warehouse');
         if (!isAllowed) {
           return NextResponse.redirect(new URL('/admin/warehouse/orders', request.url))
         }

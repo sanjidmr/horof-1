@@ -1,6 +1,9 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Shield } from 'lucide-react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 type Section = {
   id: string;
@@ -10,6 +13,8 @@ type Section = {
 };
 
 type LegalPageData = {
+  id?: string;
+  page_type?: string;
   title: string;
   subtitle: string;
   content: Section[];
@@ -19,8 +24,37 @@ type LegalPageData = {
   meta_description: string;
 };
 
-export function LegalPageContent({ data }: { data: LegalPageData }) {
-  const sorted = [...(data.content || [])].sort((a, b) => a.order - b.order);
+export function LegalPageContent({ data, pageType }: { data: LegalPageData; pageType?: string }) {
+  const [content, setContent] = useState<LegalPageData>(data);
+
+  // Live-update open tabs when the admin saves a change.
+  useEffect(() => {
+    setContent(data);
+  }, [data]);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`legal-pages-${pageType || data.page_type || 'all'}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'legal_pages', filter: pageType ? `page_type=eq.${pageType}` : undefined },
+        async () => {
+          const { data: fresh } = await supabase
+            .from('legal_pages')
+            .select('*')
+            .eq('page_type', pageType || data.page_type || 'terms')
+            .maybeSingle();
+          if (fresh) setContent(fresh as LegalPageData);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pageType, data.page_type]);
+
+  const sorted = [...(content.content || [])].sort((a, b) => a.order - b.order);
 
   return (
     <div className="min-h-svh bg-white">
@@ -35,16 +69,16 @@ export function LegalPageContent({ data }: { data: LegalPageData }) {
             </div>
           </div>
           <h1 className="text-4xl md:text-5xl font-display font-bold text-slate-900 tracking-tight mb-4">
-            {data.title}
+            {content.title}
           </h1>
-          {data.subtitle && (
+          {content.subtitle && (
             <p className="text-lg text-slate-500 max-w-2xl leading-relaxed">
-              {data.subtitle}
+              {content.subtitle}
             </p>
           )}
-          {data.last_updated && (
+          {content.last_updated && (
             <p className="text-sm text-slate-400 mt-4 font-medium">
-              Last updated: {new Date(data.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+              Last updated: {new Date(content.last_updated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           )}
         </div>
@@ -72,12 +106,12 @@ export function LegalPageContent({ data }: { data: LegalPageData }) {
           ))}
         </div>
 
-        {data.contact_info && (
+        {content.contact_info && (
           <div className="mt-16 p-8 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
             <h3 className="text-lg font-bold text-slate-900 mb-3">Questions?</h3>
             <div
               className="prose prose-slate max-w-none prose-p:text-slate-600"
-              dangerouslySetInnerHTML={{ __html: data.contact_info }}
+              dangerouslySetInnerHTML={{ __html: content.contact_info }}
             />
             <Link
               href="/contact"

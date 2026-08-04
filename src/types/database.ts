@@ -2,7 +2,8 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type UserRole = 'admin' | 'customer';
+export type UserRole = 'admin' | 'customer' | 'super_admin' | 'staff' | 'warehouse_staff' | 'manager';
+export type UserType = 'customer' | 'internal';
 export type ProductSection =
   | 'best_selling'
   | 'new_arrival'
@@ -36,7 +37,10 @@ export interface Database {
           full_name: string | null;
           phone: string | null;
           role: UserRole;
+          user_type: UserType;
           is_banned: boolean;
+          is_warehouse_staff: boolean;
+          assigned_warehouse_id: string | null;
           notes: string | null;
           avatar_url: string | null;
           created_at: string;
@@ -47,7 +51,10 @@ export interface Database {
           full_name?: string | null;
           phone?: string | null;
           role?: UserRole;
+          user_type?: UserType;
           is_banned?: boolean;
+          is_warehouse_staff?: boolean;
+          assigned_warehouse_id?: string | null;
           notes?: string | null;
           avatar_url?: string | null;
           created_at?: string;
@@ -252,6 +259,135 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['warehouses']['Insert']>;
+      };
+      warehouse_assignments: {
+        Row: {
+          id: string;
+          entity_type: 'order';
+          entity_id: string;
+          warehouse_id: string;
+          assigned_by: string | null;
+          assigned_by_name: string | null;
+          priority: 'low' | 'normal' | 'high' | 'urgent';
+          status: 'assigned' | 'accepted' | 'rejected' | 'processing' | 'packed' | 'ready_for_dispatch' | 'completed' | 'cancelled';
+          admin_approval: 'pending' | 'approved' | 'rejected' | 'override';
+          admin_approval_by: string | null;
+          admin_approval_at: string | null;
+          admin_approval_notes: string | null;
+          processing_status: 'not_started' | 'in_progress' | 'paused' | 'completed' | null;
+          packing_status: 'not_started' | 'in_progress' | 'packed' | 'verified' | null;
+          shipping_ready: boolean;
+          notes: string | null;
+          assigned_notes: string | null;
+          scheduled_at: string | null;
+          assigned_at: string;
+          accepted_at: string | null;
+          packed_at: string | null;
+          ready_for_dispatch_at: string | null;
+          completed_at: string | null;
+          cancelled_at: string | null;
+          cancelled_by: string | null;
+          cancel_reason: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_type?: 'order';
+          entity_id: string;
+          warehouse_id: string;
+          assigned_by?: string | null;
+          assigned_by_name?: string | null;
+          priority?: 'low' | 'normal' | 'high' | 'urgent';
+          status?: 'assigned' | 'accepted' | 'rejected' | 'processing' | 'packed' | 'ready_for_dispatch' | 'completed' | 'cancelled';
+          admin_approval?: 'pending' | 'approved' | 'rejected' | 'override';
+          admin_approval_by?: string | null;
+          admin_approval_at?: string | null;
+          admin_approval_notes?: string | null;
+          processing_status?: 'not_started' | 'in_progress' | 'paused' | 'completed' | null;
+          packing_status?: 'not_started' | 'in_progress' | 'packed' | 'verified' | null;
+          shipping_ready?: boolean;
+          notes?: string | null;
+          assigned_notes?: string | null;
+          scheduled_at?: string | null;
+          assigned_at?: string;
+          accepted_at?: string | null;
+          packed_at?: string | null;
+          ready_for_dispatch_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+          cancelled_by?: string | null;
+          cancel_reason?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['warehouse_assignments']['Insert']>;
+      };
+      warehouse_activity_logs: {
+        Row: {
+          id: string;
+          assignment_id: string | null;
+          entity_type: 'order';
+          entity_id: string;
+          warehouse_id: string | null;
+          action: string;
+          actor_id: string | null;
+          actor_name: string | null;
+          actor_role: 'admin' | 'warehouse_staff' | 'system';
+          old_value: Json | null;
+          new_value: Json | null;
+          notes: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          assignment_id?: string | null;
+          entity_type?: 'order';
+          entity_id: string;
+          warehouse_id?: string | null;
+          action: string;
+          actor_id?: string | null;
+          actor_name?: string | null;
+          actor_role?: 'admin' | 'warehouse_staff' | 'system';
+          old_value?: Json | null;
+          new_value?: Json | null;
+          notes?: string | null;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['warehouse_activity_logs']['Insert']>;
+      };
+      warehouse_packing_files: {
+        Row: {
+          id: string;
+          assignment_id: string | null;
+          entity_type: 'order';
+          entity_id: string;
+          warehouse_id: string | null;
+          file_url: string;
+          file_name: string;
+          mime_type: string | null;
+          file_size: number | null;
+          note: string | null;
+          uploaded_by: string | null;
+          uploaded_by_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          assignment_id?: string | null;
+          entity_type?: 'order';
+          entity_id: string;
+          warehouse_id?: string | null;
+          file_url: string;
+          file_name: string;
+          mime_type?: string | null;
+          file_size?: number | null;
+          note?: string | null;
+          uploaded_by?: string | null;
+          uploaded_by_name?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['warehouse_packing_files']['Insert']>;
       };
       suppliers: {
         Row: {
@@ -814,6 +950,9 @@ export interface Database {
           title: string | null;
           body: string | null;
           is_approved: boolean;
+          admin_reply: string | null;
+          admin_reply_at: string | null;
+          variant_info: Json;
           created_at: string;
           updated_at: string;
         };
@@ -826,6 +965,9 @@ export interface Database {
           title?: string | null;
           body?: string | null;
           is_approved?: boolean;
+          admin_reply?: string | null;
+          admin_reply_at?: string | null;
+          variant_info?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -970,37 +1112,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['free_shipping_offers']['Insert']>;
       };
-      subscribers: {
-        Row: {
-          id: string;
-          email: string;
-          full_name: string | null;
-          phone: string | null;
-          source: string;
-          tags: string[];
-          is_active: boolean;
-          subscribed_at: string;
-          unsubscribed_at: string | null;
-          unsubscribe_token: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          email: string;
-          full_name?: string | null;
-          phone?: string | null;
-          source?: string;
-          tags?: string[];
-          is_active?: boolean;
-          subscribed_at?: string;
-          unsubscribed_at?: string | null;
-          unsubscribe_token?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database['public']['Tables']['subscribers']['Insert']>;
-      };
       email_templates: {
         Row: {
           id: string;
@@ -1105,7 +1216,6 @@ export interface Database {
         Row: {
           id: string;
           campaign_id: string | null;
-          subscriber_id: string | null;
           recipient_email: string;
           recipient_name: string | null;
           subject: string;
@@ -1121,7 +1231,6 @@ export interface Database {
         Insert: {
           id?: string;
           campaign_id?: string | null;
-          subscriber_id?: string | null;
           recipient_email: string;
           recipient_name?: string | null;
           subject: string;
@@ -1162,7 +1271,6 @@ export interface Database {
           show_to_returning_visitors: boolean;
           show_to_logged_in: boolean;
           show_to_guests: boolean;
-          restricted_countries: string[];
           date_start: string | null;
           date_end: string | null;
           ab_test_enabled: boolean;
@@ -1202,7 +1310,6 @@ export interface Database {
           show_to_returning_visitors?: boolean;
           show_to_logged_in?: boolean;
           show_to_guests?: boolean;
-          restricted_countries?: string[];
           date_start?: string | null;
           date_end?: string | null;
           ab_test_enabled?: boolean;
@@ -1218,6 +1325,195 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['popup_campaigns']['Insert']>;
+      };
+      design_requests: {
+        Row: {
+          id: string;
+          customer_id: string | null;
+          full_name: string;
+          phone_number: string;
+          email: string;
+          product_name: string | null;
+          description: string;
+          status: string;
+          priority: string;
+          admin_notes: string | null;
+          estimated_quantity: number | null;
+          estimated_price: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          customer_id?: string | null;
+          full_name: string;
+          phone_number: string;
+          email: string;
+          product_name?: string | null;
+          description: string;
+          status?: string;
+          priority?: string;
+          admin_notes?: string | null;
+          estimated_quantity?: number | null;
+          estimated_price?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_requests']['Insert']>;
+      };
+      design_request_files: {
+        Row: {
+          id: string;
+          request_id: string;
+          uploaded_by: string | null;
+          file_url: string;
+          file_name: string;
+          file_size: number | null;
+          mime_type: string | null;
+          file_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          uploaded_by?: string | null;
+          file_url: string;
+          file_name: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          file_type?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_request_files']['Insert']>;
+      };
+      design_request_comments: {
+        Row: {
+          id: string;
+          request_id: string;
+          user_id: string | null;
+          comment: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          user_id?: string | null;
+          comment: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_request_comments']['Insert']>;
+      };
+      design_request_status_history: {
+        Row: {
+          id: string;
+          request_id: string;
+          from_status: string | null;
+          to_status: string;
+          changed_by: string | null;
+          comment: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          from_status?: string | null;
+          to_status: string;
+          changed_by?: string | null;
+          comment?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_request_status_history']['Insert']>;
+      };
+      design_request_messages: {
+        Row: {
+          id: string;
+          request_id: string;
+          sender_id: string | null;
+          sender_role: string;
+          message: string | null;
+          message_type: string;
+          is_read: boolean;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          sender_id?: string | null;
+          sender_role: string;
+          message?: string | null;
+          message_type?: string;
+          is_read?: boolean;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_request_messages']['Insert']>;
+      };
+      design_request_message_files: {
+        Row: {
+          id: string;
+          message_id: string;
+          request_id: string;
+          uploaded_by: string | null;
+          file_url: string;
+          file_name: string;
+          file_size: number | null;
+          mime_type: string | null;
+          file_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          request_id: string;
+          uploaded_by?: string | null;
+          file_url: string;
+          file_name: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          file_type?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['design_request_message_files']['Insert']>;
+      };
+      notifications: {
+        Row: {
+          id: string;
+          title: string;
+          message: string;
+          type: string;
+          is_read: boolean;
+          user_id: string | null;
+          order_id: string | null;
+          order_request_id: string | null;
+          action_url: string | null;
+          is_deleted: boolean;
+          design_request_id: string | null;
+          warehouse_id: string | null;
+          warehouse_assignment_id: string | null;
+          entity_type: string | null;
+          entity_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          message: string;
+          type?: string;
+          is_read?: boolean;
+          user_id?: string | null;
+          order_id?: string | null;
+          order_request_id?: string | null;
+          action_url?: string | null;
+          is_deleted?: boolean;
+          design_request_id?: string | null;
+          warehouse_id?: string | null;
+          warehouse_assignment_id?: string | null;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
       };
     };
     Views: Record<string, never>;

@@ -34,6 +34,7 @@ import {
   getConversationMessages,
   uploadChatFile,
   getOnlineAgents,
+  markConversationRead,
 } from '@/lib/actions/chat';
 
 type Message = {
@@ -261,6 +262,9 @@ export const ChatWidget = () => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          if (newMsg.sender_role === 'admin') {
+            markConversationRead(activeConversationId, 'customer');
+          }
         }
       )
       .subscribe((status) => {

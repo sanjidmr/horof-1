@@ -1,6 +1,7 @@
 'use server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 import { revalidatePath } from 'next/cache';
 import { createNotification } from './notifications';
 
@@ -39,7 +40,7 @@ export async function sendMessage(conversationId: string, message: string, messa
   if (!user) return { error: 'Not authenticated' };
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  const senderRole = profile?.role === 'admin' ? 'admin' : 'customer';
+  const senderRole = isInternalAdminRole(profile?.role) ? 'admin' : 'customer';
 
   const { data, error } = await supabase
     .from('chat_messages')
@@ -59,8 +60,6 @@ export async function sendMessage(conversationId: string, message: string, messa
     .single();
 
   if (error) return { error: error.message };
-
-  await supabase.rpc('update_conversation_last_message');
 
   if (senderRole === 'customer') {
     await createNotification({
@@ -259,7 +258,7 @@ export async function updateAgentPresence(isOnline: boolean) {
   if (!user) return;
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'admin') return;
+  if (!isInternalAdminRole(profile?.role)) return;
 
   const updateData: any = { is_online: isOnline, last_seen_at: new Date().toISOString() };
   if (!isOnline) updateData.is_available = false;

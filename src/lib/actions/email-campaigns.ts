@@ -162,8 +162,8 @@ export async function sendTestCampaign(id: string, testEmail: string): Promise<{
 export async function getAudienceCount(segmentType: string): Promise<number> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return 0;
-  if (segmentType === 'all' || segmentType === 'subscribers') {
-    const { count } = await supabase.from('subscribers').select('*', { count: 'exact', head: true }).eq('is_active', true);
+  if (segmentType === 'all' || segmentType === 'customers') {
+    const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'customer');
     return count || 0;
   }
   if (segmentType === 'customers') {

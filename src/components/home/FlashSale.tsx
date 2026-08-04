@@ -20,9 +20,18 @@ export const FlashSale: React.FC = () => {
   useEffect(() => {
     async function fetchFlashSale() {
       const { data } = await supabase.from('flash_sales').select('*').limit(1).maybeSingle();
-      if (data) setFlashSale(data);
+      setFlashSale(data || null);
     }
     fetchFlashSale();
+
+    const channel = supabase
+      .channel('home-flash-sale')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'flash_sales' }, fetchFlashSale)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [supabase]);
 
   useEffect(() => {

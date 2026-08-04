@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { createSupabaseBrowserClient } from '../../lib/supabase/client';
+import { isPasswordResetEnabled } from '../../lib/actions/app-settings';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -26,6 +27,11 @@ export default function ForgotPasswordPage() {
 
     setIsLoading(true);
     try {
+      const enabled = await isPasswordResetEnabled();
+      if (!enabled) {
+        throw new Error('Password reset has been disabled. Please contact support for help.');
+      }
+
       const supabase = createSupabaseBrowserClient();
       if (!supabase) {
         throw new Error(

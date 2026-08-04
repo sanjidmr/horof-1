@@ -12,7 +12,7 @@ export default async function MarketingSeoPage() {
       .in('key', [
         'seo_default_title', 'seo_default_description', 'seo_default_keywords',
         'seo_canonical_url', 'seo_og_image', 'seo_robots_txt',
-        'seo_organization_schema', 'twitter_handle', 'twitter_card_type',
+        'seo_organization_schema',
       ]);
 
     (data || []).forEach((row: any) => {

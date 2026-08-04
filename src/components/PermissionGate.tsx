@@ -3,6 +3,7 @@
 import { usePermissions } from '@/context/PermissionContext';
 import { AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 
 interface PermissionGateProps {
   permission?: string;
@@ -63,6 +64,8 @@ export function DenyButton({ permission, children, ...props }: { permission?: st
 }
 
 export function AccessDenied({ message }: { message?: string }) {
+  const { isAdmin, isWarehouseStaff } = useAuth();
+  const dashboardHref = isWarehouseStaff ? '/admin/warehouse/orders' : (isAdmin ? '/admin/dashboard' : '/customer/dashboard');
   return (
     <div className="min-h-[60vh] flex items-center justify-center">
       <div className="text-center space-y-6 max-w-md mx-auto px-6">
@@ -76,7 +79,7 @@ export function AccessDenied({ message }: { message?: string }) {
           </p>
         </div>
         <Link
-          href="/admin/dashboard"
+          href={dashboardHref}
           className="inline-flex items-center gap-2 px-6 py-3 bg-[#1a4731] text-white rounded-xl text-sm font-bold hover:bg-[#0e2f20] transition-colors"
         >
           Back to Dashboard

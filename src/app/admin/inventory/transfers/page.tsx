@@ -70,7 +70,7 @@ export default function StockTransfersPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <input placeholder="Product ID *" value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })} className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
             <input placeholder="Variant ID (optional)" value={form.variant_id} onChange={e => setForm({ ...form, variant_id: e.target.value })} className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
-            <input type="number" placeholder="Quantity *" value={form.quantity} onChange={e => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+            <input type="number" placeholder="Quantity *" value={form.quantity || ''} onChange={e => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
             <select value={form.from_warehouse_id} onChange={e => setForm({ ...form, from_warehouse_id: e.target.value })} className="px-3 py-2.5 border border-slate-200 rounded-xl text-sm">
               <option value="">From Warehouse *</option>
               {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}

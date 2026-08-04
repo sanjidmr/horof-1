@@ -85,7 +85,7 @@ export async function validateCoupon(
       .eq('coupon_id', coupon.id)
       .eq('user_id', userId);
 
-    if (usageCount !== null && usageCount >= coupon.per_user_limit) {
+    if (usageCount !== null && usageCount >= (coupon.per_user_limit ?? 1)) {
       return {
         valid: false,
         message: `You have already used this coupon ${usageCount} time(s). Limit: ${coupon.per_user_limit} per customer`,

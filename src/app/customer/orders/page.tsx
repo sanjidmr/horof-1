@@ -257,17 +257,18 @@ function ReturnRequestModal({
   onSuccess: () => void;
 }) {
   const [reason, setReason] = useState('');
+  const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      toast.error('Please provide a reason for the return');
+      toast.error('Please select a reason for the return');
       return;
     }
     setSubmitting(true);
     try {
-      await requestOrderReturnAction(Number(order.id), reason.trim());
+      await requestOrderReturnAction(String(order.id), reason.trim(), details.trim());
       toast.success('Return request submitted successfully');
       onSuccess();
       onClose();
@@ -340,8 +341,8 @@ function ReturnRequestModal({
               Additional Details (optional)
             </label>
             <textarea
-              value={reason}
-              onChange={e => setReason(e.target.value)}
+              value={details}
+              onChange={e => setDetails(e.target.value)}
               placeholder="Describe the issue in more detail..."
               rows={4}
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-[#2D6A4F] focus:ring-2 focus:ring-[#E6F0EB] transition-all placeholder:text-slate-300 resize-none"

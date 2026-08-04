@@ -5,6 +5,7 @@ import { parseProductDetails, buildProductDetails } from '@/lib/utils/order-help
 import { revalidatePath } from 'next/cache';
 import { sendOrderStatusEmail } from './send-order-email';
 import { logSystemTransaction } from './accounting';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 
 async function requireAdmin() {
   const supabase = await createSupabaseServerClient();
@@ -12,7 +13,7 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') throw new Error('Forbidden');
+  if (!profile || !isInternalAdminRole(profile.role)) throw new Error('Forbidden');
   return { supabase, user };
 }
 
@@ -28,7 +29,7 @@ async function requireAuth() {
  * 1. Update Order Status (Pending, Confirmed, Processing, Packed, Ready for Pickup, Shipped, In Transit, Out for Delivery, Delivered, Cancelled, Returned, Refunded)
  */
 export async function updateOrderStatusAction(
-  orderId: number,
+  orderId: string,
   newStatus: string,
   note?: string,
   adminName?: string,
@@ -164,6 +165,7 @@ export async function updateOrderStatusAction(
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
   revalidatePath('/orders');
   revalidatePath('/track-order');
   revalidatePath('/customer/orders');
@@ -176,7 +178,7 @@ export async function updateOrderStatusAction(
  * 2. Update Payment Status (Pending, Paid, Failed, Refund Pending, Refunded, Partially Refunded)
  */
 export async function updateOrderPaymentStatusAction(
-  orderId: number,
+  orderId: string,
   newPaymentStatus: string,
   adminName?: string
 ) {
@@ -207,6 +209,7 @@ export async function updateOrderPaymentStatusAction(
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
   return { success: true, paymentStatus: newPaymentStatus.toLowerCase() };
 }
 
@@ -214,7 +217,7 @@ export async function updateOrderPaymentStatusAction(
  * 3. Assign Courier / Tracking details
  */
 export async function assignCourierAction(
-  orderId: number,
+  orderId: string,
   courierName: string,
   trackingNumber: string,
   estimatedDelivery?: string,
@@ -283,6 +286,7 @@ export async function assignCourierAction(
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
   revalidatePath('/track-order');
   revalidatePath('/customer/orders');
   revalidatePath('/customer/dashboard');
@@ -293,7 +297,7 @@ export async function assignCourierAction(
  * 4. Update Internal or Customer Notes
  */
 export async function updateOrderNotesAction(
-  orderId: number,
+  orderId: string,
   type: 'internal' | 'customer',
   notesText: string,
   adminName?: string
@@ -358,6 +362,7 @@ export async function updateOrderNotesAction(
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
   revalidatePath('/customer/orders');
   revalidatePath('/customer/dashboard');
   return { success: true };
@@ -365,8 +370,17 @@ export async function updateOrderNotesAction(
 
 /**
  * 5. Request Return (Customer)
+ *
+ * Accepts a predefined `reason` (e.g. "defective") and optional free-text
+ * `details` that the customer types into the notes textarea. Both are
+ * persisted in the order's product_details metadata and surfaced in the
+ * Admin Panel.
  */
-export async function requestOrderReturnAction(orderId: number, reason: string) {
+export async function requestOrderReturnAction(
+  orderId: string,
+  reason: string,
+  details?: string
+) {
   const { supabase, user } = await requireAuth();
 
   const { data: order, error: fetchErr } = await supabase
@@ -384,9 +398,15 @@ export async function requestOrderReturnAction(orderId: number, reason: string) 
     throw new Error('Returns can only be requested for delivered orders');
   }
 
+  // Prevent duplicate return requests
   const { items, metadata } = parseProductDetails(order.product_details);
+  if (metadata.return_status && metadata.return_status !== 'None' && metadata.return_status !== 'Rejected') {
+    throw new Error('A return request has already been submitted for this order');
+  }
+
   metadata.return_status = 'Requested';
   metadata.return_reason = reason;
+  metadata.return_notes = details || '';
 
   const updatedProductDetails = buildProductDetails(items, metadata);
 
@@ -398,22 +418,41 @@ export async function requestOrderReturnAction(orderId: number, reason: string) 
   if (updateErr) throw new Error('Failed to request return: ' + updateErr.message);
 
   // Log timeline
+  const timelineNote = `Return requested by customer. Reason: ${reason}${details ? `. Details: ${details}` : ''}`;
   await supabase.from('order_timeline').insert({
     order_id: orderId,
     status: order.status,
-    note: `Return requested by customer. Reason: ${reason}`
+    note: timelineNote
   });
 
+  // ── Admin DB Notification ──
+  const orderNum = order.order_number || `#${orderId}`;
+  await supabase.from('notifications').insert({
+    title: 'New Return Request',
+    message: `Customer ${order.customer_name || 'Unknown'} has requested a return for order ${orderNum}. Reason: ${reason}${details ? `. ${details}` : ''}`,
+    type: 'order',
+    order_id: orderId,
+    action_url: `/admin/orders/${orderId}`,
+  }).then(({ error }) => { if (error) console.error('[Notification] return request notif error:', error); });
+
+  revalidatePath('/admin/orders');
+  revalidatePath('/admin/returns');
   revalidatePath('/orders');
   revalidatePath('/track-order');
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
 /**
  * 6. Approve or Reject Return (Admin)
+ *
+ * Saves the admin note to `return_admin_note` in metadata, restores stock
+ * when approved, sends a customer notification + email, and revalidates
+ * all relevant paths.
  */
 export async function handleReturnAction(
-  orderId: number,
+  orderId: string,
   approve: boolean,
   note?: string,
   adminName?: string
@@ -430,6 +469,9 @@ export async function handleReturnAction(
 
   const { items, metadata } = parseProductDetails(order.product_details);
   metadata.return_status = approve ? 'Approved' : 'Rejected';
+  if (note) {
+    metadata.return_admin_note = note;
+  }
 
   const updatedProductDetails = buildProductDetails(items, metadata);
 
@@ -459,23 +501,39 @@ export async function handleReturnAction(
     await adjustStock(supabase, orderId, items, 'add');
   }
 
-  // Notify customer
+  // ── Customer DB Notification ──
+  const orderNum = order.order_number || `#${orderId}`;
   if (order.user_id) {
-    const orderNum = orderId.toString().slice(0, 8).toUpperCase();
     await supabase.from('notifications').insert({
       title: approve ? 'Return Approved' : 'Return Rejected',
       message: approve
-        ? `Your return request for order #${orderNum} has been approved. Please follow the return instructions.`
-        : `Your return request for order #${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
+        ? `Your return request for order ${orderNum} has been approved. Please follow the return instructions.${note ? ` Note: ${note}` : ''}`
+        : `Your return request for order ${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
       type: 'order',
       user_id: order.user_id,
       order_id: orderId,
       action_url: '/orders',
-    });
+    }).then(({ error }) => { if (error) console.error('[Notification] return notif error:', error); });
+  }
+
+  // ── Send Email to Customer ──
+  if (order.customer_email) {
+    sendOrderStatusEmail({
+      to: order.customer_email,
+      customerName: order.customer_name || 'Customer',
+      orderNumber: orderNum,
+      status: approve ? 'returned' : order.status,
+      note: note || undefined,
+    }).catch(err => console.error('[Email] Failed to send return email:', err));
   }
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
+  revalidatePath('/orders');
+  revalidatePath('/track-order');
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
@@ -483,7 +541,7 @@ export async function handleReturnAction(
  * 7. Approve or Reject Refund (Admin)
  */
 export async function handleRefundAction(
-  orderId: number,
+  orderId: string,
   approve: boolean,
   note?: string,
   adminName?: string
@@ -500,6 +558,9 @@ export async function handleRefundAction(
 
   const { items, metadata } = parseProductDetails(order.product_details);
   metadata.refund_status = approve ? 'Approved' : 'Rejected';
+  if (note) {
+    metadata.refund_reason = note;
+  }
 
   const updatedProductDetails = buildProductDetails(items, metadata);
 
@@ -538,23 +599,39 @@ export async function handleRefundAction(
     note: timelineNote
   });
 
+  const orderNum = order.order_number || `#${orderId}`;
   // Notify customer
   if (order.user_id) {
-    const orderNum = orderId.toString().slice(0, 8).toUpperCase();
     await supabase.from('notifications').insert({
       title: approve ? 'Refund Approved' : 'Refund Rejected',
       message: approve
-        ? `Your refund for order #${orderNum} has been approved. The amount will be processed shortly.`
-        : `Your refund request for order #${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
+        ? `Your refund for order ${orderNum} has been approved. The amount will be processed shortly.${note ? ` Note: ${note}` : ''}`
+        : `Your refund request for order ${orderNum} has been rejected.${note ? ` Reason: ${note}` : ''}`,
       type: 'order',
       user_id: order.user_id,
       order_id: orderId,
       action_url: '/orders',
-    });
+    }).then(({ error }) => { if (error) console.error('[Notification] refund notif error:', error); });
+  }
+
+  // ── Send Email to Customer ──
+  if (order.customer_email) {
+    sendOrderStatusEmail({
+      to: order.customer_email,
+      customerName: order.customer_name || 'Customer',
+      orderNumber: orderNum,
+      status: approve ? 'refunded' : order.status,
+      note: note || undefined,
+    }).catch(err => console.error('[Email] Failed to send refund email:', err));
   }
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
+  revalidatePath('/orders');
+  revalidatePath('/track-order');
+  revalidatePath('/customer/orders');
+  revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
@@ -599,7 +676,7 @@ export async function getOrderTrackingData(identifier: string, email: string) {
           *,
           products (
             name,
-            images
+            product_images(url,sort_order)
           )
         )
       `)
@@ -640,7 +717,7 @@ export async function getOrderTrackingData(identifier: string, email: string) {
 }
 
 export async function cancelOrderAction(
-  orderId: number,
+  orderId: string,
   reason?: string,
   userRole: 'customer' | 'admin' = 'customer',
   adminName?: string
@@ -722,17 +799,18 @@ export async function cancelOrderAction(
     }).catch(err => console.error('[Email] Failed to send cancel email:', err));
   }
 
-  revalidatePath('/orders');
-  revalidatePath('/track-order');
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
+  revalidatePath('/orders');
+  revalidatePath('/track-order');
   revalidatePath('/customer/orders');
   revalidatePath('/customer/dashboard');
   return { success: true };
 }
 
 // Private helper to adjust stock
-async function adjustStock(supabase: any, orderId: number, items: any[], type: 'add' | 'deduct') {
+async function adjustStock(supabase: any, orderId: string, items: any[], type: 'add' | 'deduct') {
   try {
     // Try using order_items first
     const { data: dbItems } = await supabase
@@ -800,6 +878,8 @@ export async function getReturnRequests(statusFilter?: string) {
       updated_at: order.updated_at,
       return_status: metadata.return_status || 'None',
       return_reason: metadata.return_reason || '',
+      return_notes: metadata.return_notes || '',
+      return_admin_note: metadata.return_admin_note || '',
       refund_status: metadata.refund_status || 'None',
       refund_reason: metadata.refund_reason || '',
       items: items.map((item: any) => ({
@@ -830,7 +910,7 @@ export async function getReturnRequestDetail(orderId: string) {
   const { data: order, error } = await supabase
     .from('orders')
     .select(`
-      *, order_items(*, products(name, image, stock, sku))
+      *, order_items(*, products(name, product_images(url,sort_order), stock, sku))
     `)
     .eq('id', orderId)
     .single();

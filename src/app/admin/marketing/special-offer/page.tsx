@@ -2,13 +2,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { UploadCloud, Save, Tag, Package, Image as ImageIcon } from 'lucide-react';
+import { Save, Trash2, Tag, Package, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/shadcn/alert-dialog';
 
 export default function SpecialOfferPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [existingId, setExistingId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [data, setData] = useState({
     image_url: '',
@@ -23,6 +36,7 @@ export default function SpecialOfferPage() {
       // Fetch existing special offer
       const { data: offerData } = await supabase.from('special_offers').select('*').limit(1).maybeSingle();
       if (offerData) {
+        setExistingId(offerData.id);
         setData({
           image_url: offerData.image_url,
           title: offerData.title,
@@ -34,7 +48,7 @@ export default function SpecialOfferPage() {
       // Fetch products for dropdown
       const { data: prodData } = await supabase.from('products').select('id, name').eq('is_active', true);
       if (prodData) setProducts(prodData);
-      
+
       setLoading(false);
     }
     fetchData();
@@ -73,12 +87,15 @@ export default function SpecialOfferPage() {
 
       // We only ever want ONE special offer record for now
       const { data: existing } = await supabase.from('special_offers').select('id').limit(1).maybeSingle();
-      
+
       let error;
       if (existing) {
         ({ error } = await supabase.from('special_offers').update(payload).eq('id', existing.id));
+        setExistingId(existing.id);
       } else {
-        ({ error } = await supabase.from('special_offers').insert([payload]));
+        const { data: inserted, error: insertErr } = await supabase.from('special_offers').insert([payload]).select('id').single();
+        error = insertErr;
+        if (inserted) setExistingId(inserted.id);
       }
 
       if (error) throw error;
@@ -90,13 +107,58 @@ export default function SpecialOfferPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!existingId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('special_offers').delete().eq('id', existingId);
+      if (error) throw error;
+      setExistingId(null);
+      setData({ image_url: '', title: '', discount_percent: '', product_id: '' });
+      toast.success('Special Offer deleted');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="p-10 text-center">Loading Special Offer data...</div>;
 
   return (
     <div className="max-w-4xl space-y-8 pb-20">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-slate-900">Special Offer Management</h1>
-        <p className="text-slate-500">Configure the highlighted discount banner on the homepage.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-slate-900">Special Offer Management</h1>
+          <p className="text-slate-500">Configure the highlighted discount banner on the homepage.</p>
+        </div>
+        {existingId && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-2xl px-6 h-12 font-bold flex items-center gap-2">
+                <Trash2 className="h-4 w-4" /> Delete Special Offer
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Special Offer?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently remove the special offer from the homepage. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
@@ -128,12 +190,12 @@ export default function SpecialOfferPage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Tag className="h-3 w-3" /> Offer Heading
               </label>
-              <input 
-                required 
-                type="text" 
-                value={data.title} 
-                onChange={e => setData({...data, title: e.target.value})} 
-                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none" 
+              <input
+                required
+                type="text"
+                value={data.title}
+                onChange={e => setData({...data, title: e.target.value})}
+                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
                 placeholder="e.g. Handmade Wood Vases"
               />
             </div>
@@ -141,12 +203,12 @@ export default function SpecialOfferPage() {
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Discount Percentage (%)</label>
               <div className="relative">
-                <input 
-                  required 
-                  type="number" 
-                  value={data.discount_percent} 
-                  onChange={e => setData({...data, discount_percent: e.target.value})} 
-                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none font-bold text-forest" 
+                <input
+                  required
+                  type="number"
+                  value={data.discount_percent}
+                  onChange={e => setData({...data, discount_percent: e.target.value})}
+                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none font-bold text-forest"
                   placeholder="e.g. 25"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">% OFF</span>
@@ -157,9 +219,9 @@ export default function SpecialOfferPage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Package className="h-3 w-3" /> Link to Product
               </label>
-              <select 
-                value={data.product_id} 
-                onChange={e => setData({...data, product_id: e.target.value})} 
+              <select
+                value={data.product_id}
+                onChange={e => setData({...data, product_id: e.target.value})}
                 className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
               >
                 <option value="">Select a product</option>
@@ -172,8 +234,8 @@ export default function SpecialOfferPage() {
         </div>
 
         <div className="pt-8 border-t border-slate-50 flex justify-end">
-          <Button 
-            disabled={saving || !data.image_url} 
+          <Button
+            disabled={saving || !data.image_url}
             className="bg-forest hover:bg-forest/90 text-gray-800 rounded-2xl px-10 h-14 font-bold shadow-xl shadow-forest/20 flex items-center gap-3"
           >
             {saving ? (
@@ -181,7 +243,7 @@ export default function SpecialOfferPage() {
             ) : (
               <Save className="h-5 w-5" />
             )}
-            {saving ? 'Saving...' : 'Save Special Offer'}
+            {saving ? 'Saving...' : existingId ? 'Save Special Offer' : 'Publish Special Offer'}
           </Button>
         </div>
       </form>

@@ -1,249 +1,163 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { Package, AlertTriangle, DollarSign, Warehouse, TrendingUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { KPICard } from '@/components/reports/KPICard';
-import { ChartCard } from '@/components/reports/ChartCard';
-import { DateRangePicker } from '@/components/reports/DateRangePicker';
-import { ExportButton } from '@/components/reports/ExportButton';
-import { formatPrice } from '@/lib/utils';
+import { Boxes, Layers, PackageCheck, AlertTriangle, PackageX, RotateCcw, Wallet, Package, AlertCircle } from 'lucide-react';
+import { getReportInventory } from '@/lib/actions/reports';
+import { useReportRange } from '@/components/admin/reports/useReportRange';
+import { useReportData } from '@/components/admin/reports/useReportData';
+import { ReportFilters } from '@/components/admin/reports/ReportFilters';
+import { StatCard } from '@/components/admin/reports/StatCard';
+import { ReportCard } from '@/components/admin/reports/ReportCard';
+import { ReportTable } from '@/components/admin/reports/ReportTable';
+import { BarTrendChart, ComposedTrendChart, ChartLegend } from '@/components/admin/reports/charts';
+import { ReportGridSkeleton } from '@/components/admin/reports/Skeletons';
+import { EmptyState } from '@/components/admin/reports/EmptyState';
+import { formatCurrency, formatNumber, formatDateTime, titleCase } from '@/lib/reports/format';
+import { exportCSV, exportExcel, openPrintable, buildPrintBlock, safeFilename, type PrintBlock } from '@/lib/reports/export';
+import type { InventoryReportData, ProductPerformanceRow, ReportColumn } from '@/lib/reports/types';
+import type { ExportFormat } from '@/components/admin/reports/ExportMenu';
 
-const COLORS = ['#1a4731', '#2d6a4f', '#52b788', '#95d5b2', '#b7e4c7', '#d8f3dc'];
-const STATUS_COLORS: Record<string, string> = { in_stock: '#16a34a', low_stock: '#ca8a04', out_of_stock: '#dc2626' };
+const movementColumns: ReportColumn<any>[] = [
+  { key: 'createdAt', label: 'Date', render: (r) => formatDateTime(r.createdAt) },
+  { key: 'productName', label: 'Product', render: (r) => <span className="font-semibold text-slate-700">{r.productName}</span> },
+  { key: 'movementType', label: 'Type', render: (r) => titleCase(r.movementType) },
+  { key: 'quantityChange', label: 'Change', align: 'right', render: (r) => <span className={r.quantityChange >= 0 ? 'font-bold text-emerald-600' : 'font-bold text-red-500'}>{r.quantityChange >= 0 ? '+' : ''}{formatNumber(r.quantityChange)}</span> },
+  { key: 'stockAfter', label: 'Stock After', align: 'right' },
+  { key: 'referenceType', label: 'Reference', render: (r) => titleCase(r.referenceType) || '—' },
+];
 
-export function InventoryReportClient({ data, currentRange }: { data: any; currentRange: string }) {
-  const router = useRouter();
+const warehouseColumns: ReportColumn<any>[] = [
+  { key: 'name', label: 'Warehouse', render: (r) => <span className="font-semibold text-slate-700">{r.name}</span> },
+  { key: 'isActive', label: 'Status', render: (r) => <span className={r.isActive ? 'inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-600' : 'inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500'}>{r.isActive ? 'Active' : 'Inactive'}</span> },
+  { key: 'movementsIn', label: 'Stock In', align: 'right' },
+  { key: 'movementsOut', label: 'Stock Out', align: 'right' },
+  { key: 'netUnits', label: 'Net Units', align: 'right', render: (r) => <span className={r.netUnits >= 0 ? 'font-bold text-emerald-600' : 'font-bold text-red-500'}>{r.netUnits >= 0 ? '+' : ''}{formatNumber(r.netUnits)}</span> },
+];
 
-  const handleRangeChange = (range: string) => {
-    router.push(`/admin/reports/inventory?range=${encodeURIComponent(range)}`);
+const stockColumns: ReportColumn<ProductPerformanceRow>[] = [
+  { key: 'name', label: 'Product', render: (r) => <span className="font-semibold text-slate-700">{r.name}</span> },
+  { key: 'sku', label: 'SKU' },
+  { key: 'stock', label: 'Stock', align: 'right', render: (r) => <span className={r.stock <= 0 ? 'font-bold text-red-500' : 'font-bold text-amber-600'}>{formatNumber(r.stock)}</span> },
+];
+
+export function InventoryReportClient() {
+  const { preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, search, setSearch, range, key } = useReportRange('this_month');
+  const { data, loading, error, reload } = useReportData<InventoryReportData>(getReportInventory, range, key);
+
+  if (loading || (!data && !error)) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading exportDisabled />
+        <ReportGridSkeleton />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} />
+        <ReportCard>
+          <EmptyState icon={AlertTriangle} title="Unable to load inventory report" message={error || 'Something went wrong. Please refresh and try again.'} />
+        </ReportCard>
+      </div>
+    );
+  }
+
+  const k = data.kpis;
+
+  const handleExport = (fmt: ExportFormat) => {
+    const name = safeFilename('inventory-report', range.label);
+    if (fmt === 'csv') {
+      exportCSV(`${name}.csv`, movementColumns, data.movements);
+      return;
+    }
+    if (fmt === 'excel') {
+      exportExcel(`${name}.xlsx`, movementColumns, data.movements);
+      return;
+    }
+    const blocks: PrintBlock[] = [
+      buildPrintBlock('Stock Movements', movementColumns, data.movements),
+      buildPrintBlock('Warehouse Summary', warehouseColumns, data.byWarehouse),
+      buildPrintBlock('Low Stock Products', stockColumns, data.lowStock),
+      buildPrintBlock('Out of Stock Products', stockColumns, data.outOfStock),
+    ];
+    openPrintable('Inventory Report', `Period: ${range.label}`, blocks);
   };
-
-  const summary = data.summary ?? {};
-  const totalProducts = summary.total_products ?? 0;
-  const totalStockUnits = summary.total_stock_units ?? 0;
-  const stockValue = summary.total_stock_value ?? 0;
-  const lowStockCount = summary.low_stock_count ?? 0;
-  const outOfStockCount = summary.out_of_stock_count ?? 0;
-  const avgStock = summary.avg_stock ?? 0;
-  const inStockCount = summary.in_stock_count ?? 0;
-
-  const stockPie = [
-    { name: 'In Stock', value: inStockCount },
-    { name: 'Low Stock', value: lowStockCount },
-    { name: 'Out of Stock', value: outOfStockCount },
-  ];
-
-  const valuationData = (data.valuation ?? []).map((v: any) => ({
-    category: v.category || 'Uncategorized',
-    value: Number(v.total_value ?? v.value ?? 0),
-    units: Number(v.total_units ?? v.units ?? 0),
-  }));
-
-  const stockInOutData = (data.stockInOut ?? []).map((s: any) => ({
-    date: s.date ?? s.period ?? '',
-    stock_in: Number(s.stock_in ?? 0),
-    stock_out: Number(s.stock_out ?? 0),
-  }));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DateRangePicker value={currentRange} onChange={handleRangeChange} />
-        <ExportButton data={data.movements} filename="inventory-movements" columns={[
-          { key: 'product_name', label: 'Product' },
-          { key: 'sku', label: 'SKU' },
-          { key: 'movement_type', label: 'Type' },
-          { key: 'quantity', label: 'Quantity' },
-          { key: 'reference', label: 'Reference' },
-          { key: 'created_at', label: 'Date' },
-        ]} />
+      <ReportFilters preset={preset} onPresetChange={setPreset} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} search={search} setSearch={setSearch} rangeLabel={range.label} onRefresh={reload} loading={loading} onExport={handleExport} exportDisabled={data.movements.length === 0} />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="Total Products" value={formatNumber(k.totalProducts)} icon={<Package className="h-5 w-5" />} accent="slate" />
+        <StatCard label="Stock Units" value={formatNumber(k.totalStockUnits)} icon={<Boxes className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Stock Value" value={formatCurrency(k.totalStockValue)} icon={<Wallet className="h-5 w-5" />} accent="green" />
+        <StatCard label="Avg Stock/Product" value={formatNumber(k.avgStockPerProduct)} icon={<Layers className="h-5 w-5" />} accent="violet" />
+        <StatCard label="COGS" value={formatCurrency(k.cogs)} icon={<RotateCcw className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Turnover Ratio" value={k.turnoverRatio.toFixed(2)} icon={<RotateCcw className="h-5 w-5" />} accent="blue" sub="COGS / stock value" />
+        <StatCard label="In Stock" value={formatNumber(k.inStockCount)} icon={<PackageCheck className="h-5 w-5" />} accent="green" />
+        <StatCard label="Low Stock" value={formatNumber(k.lowStockCount)} icon={<AlertCircle className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Out of Stock" value={formatNumber(k.outOfStockCount)} icon={<PackageX className="h-5 w-5" />} accent="red" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KPICard label="Total Products" value={String(totalProducts)} icon={Package} color="bg-blue-50 text-blue-600" />
-        <KPICard label="Total Stock Units" value={String(totalStockUnits)} icon={Package} color="bg-indigo-50 text-indigo-600" />
-        <KPICard label="Stock Value" value={formatPrice(stockValue)} icon={DollarSign} color="bg-emerald-50 text-emerald-600" />
-        <KPICard label="Low Stock" value={String(lowStockCount)} icon={AlertTriangle} color="bg-amber-50 text-amber-600" />
-        <KPICard label="Out of Stock" value={String(outOfStockCount)} icon={AlertTriangle} color="bg-red-50 text-red-600" />
-        <KPICard label="Avg Stock / Product" value={Number(avgStock).toFixed(1)} icon={TrendingUp} color="bg-purple-50 text-purple-600" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Inventory Valuation by Category" subtitle="Stock value per category">
-          <div className="h-72">
-            {valuationData.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-20">No valuation data available</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={valuationData} layout="vertical">
-                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                  <YAxis type="category" dataKey="category" tick={{ fontSize: 9 }} width={120} />
-                  <Tooltip formatter={(v: number) => formatPrice(v)} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                    {valuationData.map((_: any, i: number) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Stock Status Distribution" subtitle="Inventory health overview">
-          <div className="h-72">
-            {stockPie.every((s) => s.value === 0) ? (
-              <p className="text-sm text-slate-400 text-center py-20">No stock data available</p>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stockPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }: any) => `${name}: ${value}`}>
-                    {stockPie.map((_, i) => (
-                      <Cell key={i} fill={['#16a34a', '#ca8a04', '#dc2626'][i]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </ChartCard>
-      </div>
-
-      <ChartCard title="Stock In / Out" subtitle="Inventory movement trends">
-        <div className="h-72">
-          {stockInOutData.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-20">No movement data available</p>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Stock Movement Trend" subtitle="Units in vs units out">
+          {data.stockInOut.length === 0 ? (
+            <EmptyState title="No movements" message="Stock movements within this period will appear here." />
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stockInOutData}>
-                <XAxis dataKey="date" tick={{ fontSize: 9 }} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="stock_in" fill="#16a34a" name="Stock In" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="stock_out" fill="#dc2626" name="Stock Out" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <>
+              <ComposedTrendChart
+                data={data.stockInOut}
+                xKey="label"
+                series={[
+                  { key: 'stockIn', label: 'Stock In', color: '#10b981', kind: 'bar' },
+                  { key: 'stockOut', label: 'Stock Out', color: '#ef4444', kind: 'bar' },
+                ]}
+              />
+              <ChartLegend
+                items={[
+                  { label: 'Stock In', color: '#10b981' },
+                  { label: 'Stock Out', color: '#ef4444' },
+                ]}
+              />
+            </>
           )}
-        </div>
-      </ChartCard>
+        </ReportCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Warehouse Inventory" subtitle="Stock levels by warehouse">
-          <div className="overflow-x-auto max-h-80">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-100">
-                  <th className="py-2.5 px-3 font-bold">Warehouse</th>
-                  <th className="py-2.5 px-3 font-bold">Products</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Total Units</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.warehouses ?? []).length === 0 && (
-                  <tr><td colSpan={4} className="py-10 text-center text-slate-400">No warehouse data available</td></tr>
-                )}
-                {(data.warehouses ?? []).map((w: any, i: number) => (
-                  <tr key={w.warehouse_id || w.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="py-2.5 px-3 font-medium text-slate-800 flex items-center gap-2">
-                      <Warehouse className="w-3.5 h-3.5 text-slate-400" />
-                      {w.warehouse_name ?? w.name ?? 'Unknown'}
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-600">{w.product_count ?? w.total_products ?? 0}</td>
-                    <td className="py-2.5 px-3 text-right font-medium text-slate-800">{w.total_units ?? w.stock_units ?? 0}</td>
-                    <td className="py-2.5 px-3 text-right font-medium text-emerald-600">{formatPrice(w.total_value ?? w.stock_value ?? 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Low Stock / Reorder Report" subtitle="Products below minimum stock level">
-          <div className="overflow-x-auto max-h-80">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-slate-400 border-b border-slate-100">
-                  <th className="py-2.5 px-3 font-bold">Product</th>
-                  <th className="py-2.5 px-3 font-bold">SKU</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Current</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Min Level</th>
-                  <th className="py-2.5 px-3 font-bold text-right">Reorder Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.lowStock ?? []).length === 0 && (
-                  <tr><td colSpan={5} className="py-10 text-center text-slate-400">All products are well-stocked</td></tr>
-                )}
-                {(data.lowStock ?? []).map((p: any, i: number) => (
-                  <tr key={p.product_id || p.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="py-2.5 px-3 font-medium text-slate-800 max-w-[180px] truncate">{p.name ?? p.product_name}</td>
-                    <td className="py-2.5 px-3 text-slate-500">{p.sku || '-'}</td>
-                    <td className="py-2.5 px-3 text-right">
-                      <span className={`font-bold ${p.stock === 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                        {p.stock ?? p.current_stock ?? 0}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right text-slate-500">{p.min_stock_level ?? p.min_level ?? 5}</td>
-                    <td className="py-2.5 px-3 text-right">
-                      <span className="font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-                        {Math.max(0, (p.reorder_quantity ?? (p.min_stock_level ?? 5) - (p.stock ?? 0)))}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </ChartCard>
+        <ReportCard title="Warehouse Summary" subtitle="Movement totals per warehouse">
+          {data.byWarehouse.length === 0 ? (
+            <EmptyState title="No warehouses" />
+          ) : (
+            <ReportTable<any> columns={warehouseColumns} rows={data.byWarehouse} rowKey={(r) => r.id} pageSize={8} searchText={search} searchKeys={(r) => r.name} />
+          )}
+        </ReportCard>
       </div>
 
-      <ChartCard title="Recent Stock Movements" subtitle="Latest inventory transactions">
-        <div className="overflow-x-auto max-h-96">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-100">
-                <th className="py-2.5 px-3 font-bold">Product</th>
-                <th className="py-2.5 px-3 font-bold">SKU</th>
-                <th className="py-2.5 px-3 font-bold">Type</th>
-                <th className="py-2.5 px-3 font-bold text-right">Quantity</th>
-                <th className="py-2.5 px-3 font-bold">Reference</th>
-                <th className="py-2.5 px-3 font-bold text-right">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.movements ?? []).length === 0 && (
-                <tr><td colSpan={6} className="py-10 text-center text-slate-400">No stock movements recorded</td></tr>
-              )}
-              {(data.movements ?? []).map((m: any, i: number) => (
-                <tr key={m.id || i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 font-medium text-slate-800 max-w-[180px] truncate">{m.product_name ?? m.name}</td>
-                  <td className="py-2.5 px-3 text-slate-500">{m.sku || '-'}</td>
-                  <td className="py-2.5 px-3">
-                    <span className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full text-[10px] ${
-                      m.movement_type === 'in' || m.movement_type === 'stock_in' ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'
-                    }`}>
-                      {m.movement_type === 'in' || m.movement_type === 'stock_in' ? (
-                        <ArrowDownCircle className="w-3 h-3" />
-                      ) : (
-                        <ArrowUpCircle className="w-3 h-3" />
-                      )}
-                      {m.movement_type === 'in' || m.movement_type === 'stock_in' ? 'In' : 'Out'}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-medium">{m.quantity}</td>
-                  <td className="py-2.5 px-3 text-slate-500">{m.reference || '-'}</td>
-                  <td className="py-2.5 px-3 text-right text-slate-500">
-                    {m.created_at ? new Date(m.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
+      <ReportCard title="Stock Movements" subtitle="Detailed movement history">
+        {data.movements.length === 0 ? (
+          <EmptyState title="No movements recorded" />
+        ) : (
+          <ReportTable<any> columns={movementColumns} rows={data.movements} rowKey={(r) => r.id} pageSize={10} searchText={search} searchKeys={(r) => `${r.productName} ${r.movementType} ${r.referenceType}`} />
+        )}
+      </ReportCard>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Low Stock" subtitle="At or below minimum stock level">
+          {data.lowStock.length === 0 ? (
+            <EmptyState title="All good" message="No products below minimum stock level." />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={stockColumns} rows={data.lowStock} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
+
+        <ReportCard title="Out of Stock" subtitle="Products with zero stock">
+          {data.outOfStock.length === 0 ? (
+            <EmptyState title="No out-of-stock products" />
+          ) : (
+            <ReportTable<ProductPerformanceRow> columns={stockColumns} rows={data.outOfStock} rowKey={(r) => r.productId} pageSize={8} searchText={search} searchKeys={(r) => `${r.name} ${r.sku}`} />
+          )}
+        </ReportCard>
+      </div>
     </div>
   );
 }

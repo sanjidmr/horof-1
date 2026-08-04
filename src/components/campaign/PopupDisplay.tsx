@@ -3,8 +3,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { subscribe } from '@/lib/actions/subscribers';
-import { toast } from 'react-hot-toast';
 
 type Popup = {
   id: string; name: string; title: string | null; description: string | null;
@@ -19,7 +17,6 @@ type Popup = {
 export function PopupDisplay() {
   const [popup, setPopup] = useState<Popup | null>(null);
   const [visible, setVisible] = useState(false);
-  const [email, setEmail] = useState('');
   const hasShownRef = useRef(false);
   const dismissedRef = useRef(false);
 
@@ -43,24 +40,9 @@ export function PopupDisplay() {
 
   const handleConversion = useCallback(async () => {
     if (!popup) return;
-    if (email && popup.popup_type === 'newsletter_signup') {
-      try {
-        const res = await subscribe(email, 'popup');
-        if (res.ok) {
-          toast.success('Subscribed successfully!');
-          recordAction(popup.id, 'conversion');
-          setVisible(false);
-        } else {
-          toast.error(res.error || 'Failed to subscribe');
-        }
-      } catch {
-        toast.error('Failed to subscribe');
-      }
-    } else {
-      recordAction(popup.id, 'conversion');
-      setVisible(false);
-    }
-  }, [popup, email, recordAction]);
+    recordAction(popup.id, 'conversion');
+    setVisible(false);
+  }, [popup, recordAction]);
 
   useEffect(() => {
     const fetchPopup = async () => {
@@ -182,32 +164,18 @@ export function PopupDisplay() {
           )}
 
           {popup.popup_type === 'newsletter_signup' && (
-            <div className="flex gap-2 mb-4">
-              <input
-                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-3 rounded-xl border text-sm outline-none focus:ring-2 transition-all"
-                style={{ borderColor: popup.text_color + '30', color: popup.text_color, backgroundColor: popup.background_color }}
-              />
-              <button
-                onClick={handleConversion}
-                className="px-6 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-90"
-                style={{ backgroundColor: popup.button_color, color: popup.button_text_color }}
-              >
-                {popup.button_text || 'Subscribe'}
-              </button>
-            </div>
+            <p className="text-sm mb-4 opacity-80" style={{ color: popup.text_color }}>
+              Join our newsletter to receive updates and exclusive offers.
+            </p>
           )}
 
-          {popup.popup_type !== 'newsletter_signup' && (
-            <button
-              onClick={handleConversion}
-              className="w-full px-6 py-3.5 rounded-xl font-bold text-sm transition-all hover:opacity-90"
-              style={{ backgroundColor: popup.button_color, color: popup.button_text_color }}
-            >
-              {popup.button_text || 'Get Offer'}
-            </button>
-          )}
+          <button
+            onClick={handleConversion}
+            className="w-full px-6 py-3.5 rounded-xl font-bold text-sm transition-all hover:opacity-90"
+            style={{ backgroundColor: popup.button_color, color: popup.button_text_color }}
+          >
+            {popup.button_text || (popup.popup_type === 'newsletter_signup' ? 'Subscribe' : 'Get Offer')}
+          </button>
 
           <button onClick={handleDismiss} className="mt-4 text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: popup.text_color }}>
             No thanks, I&apos;ll browse

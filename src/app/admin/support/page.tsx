@@ -17,6 +17,8 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { isInternalAdminRole, INTERNAL_ADMIN_ROLES } from '@/lib/auth/roles';
+import { uploadChatFile } from '@/lib/actions/chat';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Legend
@@ -294,7 +296,7 @@ export default function AdminSupportPage() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'admin') return;
+    if (!currentUser || !isInternalAdminRole(currentUser.role)) return;
     if (hasSetupPresence.current) return;
     hasSetupPresence.current = true;
 
@@ -464,7 +466,7 @@ export default function AdminSupportPage() {
     const { data } = await supabase
       .from('profiles')
       .select('*')
-      .eq('role', 'admin');
+      .in('role', [...INTERNAL_ADMIN_ROLES]);
     return (data || []) as Profile[];
   };
 
@@ -604,7 +606,6 @@ export default function AdminSupportPage() {
 
       if (error) { toast.error(error.message); return; }
 
-      await supabase.rpc('update_conversation_last_message');
       setConversationMessages(prev => [...prev, data as unknown as ChatMessage]);
       setChatMessageInput('');
     } catch (err: any) {
@@ -626,8 +627,7 @@ export default function AdminSupportPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/chat/upload', { method: 'POST', body: formData });
-      const result = await res.json();
+      const result = await uploadChatFile(formData);
       if (result.error) { toast.error(result.error); return; }
 
       const { data, error } = await supabase

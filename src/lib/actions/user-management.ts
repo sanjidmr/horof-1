@@ -100,9 +100,14 @@ export async function getCurrentUserRoles(): Promise<Role[]> {
 // USER MANAGEMENT
 // ============================================================
 
+/**
+ * Create a new internal system user.
+ * The entered phone number automatically becomes the user's initial login password.
+ * The password is securely hashed by Supabase Auth before saving.
+ * The phone number itself is still stored normally in the profile.
+ */
 export async function createUser(params: {
   email: string;
-  password: string;
   full_name: string;
   phone?: string;
   role: string;
@@ -113,23 +118,77 @@ export async function createUser(params: {
   const { requirePermission } = await import('./security');
   await requirePermission('users.create');
 
+  // Validate required fields
+  if (!params.email || !params.email.trim()) {
+    throw new Error('Email is required');
+  }
+  if (!params.full_name || !params.full_name.trim()) {
+    throw new Error('Full name is required');
+  }
+  if (!params.phone || !params.phone.trim()) {
+    throw new Error('Phone number is required — it will be used as the initial login password');
+  }
+
+  // Validate email format
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(params.email.trim())) {
+    throw new Error('Please enter a valid email address');
+  }
+
+  // Validate phone format (basic: 10-15 digits, may include +, -, spaces)
+  const phoneRegex = /^\+?[0-9\s\-()]{10,15}$/;
+  if (!phoneRegex.test(params.phone.trim())) {
+    throw new Error('Please enter a valid phone number (10-15 digits)');
+  }
+
+  // Validate RBAC role requirement
   if ((params.role === 'admin' || (!params.is_warehouse_staff && params.role === 'customer')) && !params.roleId) {
     throw new Error('RBAC role is required for admin and customer users');
   }
+
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
+  // Check for duplicate email
+  const { data: existingEmail } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .ilike('email', params.email.trim())
+    .maybeSingle();
+
+  if (existingEmail) {
+    throw new Error('An account with this email already exists');
+  }
+
+  // Check for duplicate phone
+  if (params.phone) {
+    const { data: existingPhone } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('phone', params.phone.trim())
+      .maybeSingle();
+
+    if (existingPhone) {
+      throw new Error('An account with this phone number already exists');
+    }
+  }
+
+  // The phone number becomes the initial password
+  const initialPassword = params.phone.trim();
+
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: params.email,
-    password: params.password,
+    email: params.email.trim(),
+    password: initialPassword, // Phone number as initial password (hashed by Supabase)
     email_confirm: true,
     user_metadata: {
-      full_name: params.full_name,
+      full_name: params.full_name.trim(),
       is_warehouse_staff: params.is_warehouse_staff || params.role === 'warehouse_staff' || false,
       assigned_warehouse_id: params.assigned_warehouse_id || null,
+      role: params.role,
+      user_type: 'internal',
     },
   });
 
@@ -143,16 +202,18 @@ export async function createUser(params: {
 
   const profileData: any = {
     id: authData.user.id,
-    email: params.email,
-    full_name: params.full_name,
-    phone: params.phone || null,
+    email: params.email.trim(),
+    full_name: params.full_name.trim(),
+    phone: params.phone.trim(),
     role: params.role,
+    user_type: 'internal', // Always internal for users created via Create New User
     is_banned: false,
   };
 
   if (params.role === 'warehouse_staff' || params.is_warehouse_staff) {
     profileData.is_warehouse_staff = true;
     profileData.assigned_warehouse_id = params.assigned_warehouse_id || null;
+    profileData.role = 'warehouse_staff';
   }
 
   const { error: profileErr } = await supabaseAdmin.from('profiles').upsert(profileData, { onConflict: 'id' });
@@ -171,9 +232,12 @@ export async function createUser(params: {
   }
 
   revalidatePath('/admin/users');
-  return { user: authData.user };
+  return { user: authData.user, initialPassword };
 }
 
+/**
+ * Get internal system users only (never customers).
+ */
 export async function getUsers(page: number = 1, perPage: number = 20, filters?: {
   search?: string;
   role?: string;
@@ -181,14 +245,23 @@ export async function getUsers(page: number = 1, perPage: number = 20, filters?:
 }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.view');
 
-  let query = supabase.from('profiles').select('*, user_roles:user_roles!user_id(role:role_id(*))', { count: 'exact' });
+  let query = supabase
+    .from('profiles')
+    .select('*, user_roles:user_roles!user_id(role:role_id(*))', { count: 'exact' })
+    .eq('user_type', 'internal'); // ONLY internal users
 
   if (filters?.search) {
     query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
   }
   if (filters?.role) {
-    query = query.eq('role', filters.role);
+    if (filters.role === 'warehouse_staff') {
+      query = query.eq('is_warehouse_staff', true);
+    } else {
+      query = query.eq('role', filters.role);
+    }
   }
   if (filters?.isBanned !== undefined) {
     query = query.eq('is_banned', filters.isBanned);
@@ -205,9 +278,48 @@ export async function getUsers(page: number = 1, perPage: number = 20, filters?:
   return { data: data || [], total: count || 0 };
 }
 
+/**
+ * Get real customers only (never internal users).
+ */
+export async function getCustomers(page: number = 1, perPage: number = 20, filters?: {
+  search?: string;
+  isBanned?: boolean;
+}) {
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return { data: [], total: 0 };
+  const { requirePermission } = await import('./security');
+  await requirePermission('customers.view');
+
+  let query = supabase
+    .from('profiles')
+    .select('*, user_roles:user_roles!user_id(role:role_id(*))', { count: 'exact' })
+    .eq('user_type', 'customer') // ONLY real customers
+    .eq('role', 'customer')
+    .eq('is_warehouse_staff', false);
+
+  if (filters?.search) {
+    query = query.or(`full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+  }
+  if (filters?.isBanned !== undefined) {
+    query = query.eq('is_banned', filters.isBanned);
+  }
+
+  const from = (page - 1) * perPage;
+  const to = from + perPage - 1;
+
+  const { data, count, error } = await query.order('created_at', { ascending: false }).range(from, to);
+  if (error) {
+    console.error('getCustomers error:', error);
+    return { data: [], total: 0 };
+  }
+  return { data: data || [], total: count || 0 };
+}
+
 export async function getUserById(userId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.view');
 
   const { data, error } = await supabase
     .from('profiles')
@@ -239,6 +351,34 @@ export async function updateUserProfile(userId: string, data: {
 }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.edit');
+
+  // Check for duplicate phone if phone is being changed
+  if (data.phone) {
+    const { data: existingPhone } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('phone', data.phone)
+      .neq('id', userId)
+      .maybeSingle();
+    if (existingPhone) {
+      return { error: 'An account with this phone number already exists' };
+    }
+  }
+
+  // Check for duplicate email if email is being changed
+  if (data.email) {
+    const { data: existingEmail } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', data.email)
+      .neq('id', userId)
+      .maybeSingle();
+    if (existingEmail) {
+      return { error: 'An account with this email already exists' };
+    }
+  }
 
   const { error } = await supabase.from('profiles').update(data).eq('id', userId);
   if (error) return { error: error.message };
@@ -275,7 +415,7 @@ export async function updateUserProfile(userId: string, data: {
 
 export async function toggleUserBan(userId: string, banned: boolean) {
   const { requirePermission } = await import('./security');
-  await requirePermission('users.suspend');
+  await requirePermission('users.manage_status');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -309,7 +449,7 @@ export async function deleteUser(userId: string) {
 
 export async function assignUserRole(userId: string, roleId: string) {
   const { requirePermission } = await import('./security');
-  await requirePermission('users.manage_roles');
+  await requirePermission('users.assign');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -321,6 +461,9 @@ export async function assignUserRole(userId: string, roleId: string) {
     .upsert({ user_id: userId, role_id: roleId, assigned_by: user.id }, { onConflict: 'user_id,role_id' });
   if (error) return { error: error.message };
 
+  // When a role is assigned, ensure the user is marked as internal
+  await supabase.from('profiles').update({ user_type: 'internal' }).eq('id', userId);
+
   const { logAudit } = await import('./security');
   const { data: role } = await supabase.from('roles').select('name').eq('id', roleId).single();
   await logAudit('assign_role', 'user_roles', userId, `Assigned role: ${role?.name}`);
@@ -330,7 +473,7 @@ export async function assignUserRole(userId: string, roleId: string) {
 
 export async function removeUserRole(userId: string, roleId: string) {
   const { requirePermission } = await import('./security');
-  await requirePermission('users.manage_roles');
+  await requirePermission('users.assign');
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
 
@@ -350,6 +493,8 @@ export async function removeUserRole(userId: string, roleId: string) {
 export async function setUserPermission(userId: string, permissionId: string, granted: boolean, notes?: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_settings');
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -375,6 +520,8 @@ export async function setUserPermission(userId: string, permissionId: string, gr
 export async function removeUserPermission(userId: string, permissionId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_settings');
 
   const { error } = await supabase
     .from('user_permissions')
@@ -397,6 +544,8 @@ export async function removeUserPermission(userId: string, permissionId: string)
 export async function createRole(name: string, description?: string, color?: string, icon?: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.create');
 
   const { data, error } = await supabase
     .from('roles')
@@ -414,6 +563,8 @@ export async function createRole(name: string, description?: string, color?: str
 export async function updateRole(id: string, data: { name?: string; description?: string; priority?: number; color?: string; icon?: string; is_default?: boolean }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.edit');
 
   const { error } = await supabase.from('roles').update(data).eq('id', id);
   if (error) return { error: error.message };
@@ -427,6 +578,8 @@ export async function updateRole(id: string, data: { name?: string; description?
 export async function deleteRole(id: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.delete');
 
   const { data: role } = await supabase.from('roles').select('name, is_system').eq('id', id).single();
   if (role?.is_system) return { error: 'Cannot delete system roles' };
@@ -443,6 +596,8 @@ export async function deleteRole(id: string) {
 export async function cloneRole(sourceRoleId: string, newName: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.create');
 
   const { data: sourceRole } = await supabase.from('roles').select('*').eq('id', sourceRoleId).single();
   if (!sourceRole) return { error: 'Source role not found' };
@@ -487,6 +642,8 @@ export async function cloneRole(sourceRoleId: string, newName: string) {
 export async function getAllRoles(): Promise<Role[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.view');
 
   const { data } = await supabase.from('roles').select('*').order('priority', { ascending: false });
   return (data || []) as Role[];
@@ -495,6 +652,8 @@ export async function getAllRoles(): Promise<Role[]> {
 export async function getAllPermissions(): Promise<Permission[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  const { requirePermission } = await import('./security');
+  await requirePermission('permissions.view');
 
   const { data } = await supabase.from('permissions').select('*').order('module').order('name');
   return (data || []) as Permission[];
@@ -503,6 +662,8 @@ export async function getAllPermissions(): Promise<Permission[]> {
 export async function getRolePermissions(roleId: string): Promise<string[]> {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  const { requirePermission } = await import('./security');
+  await requirePermission('roles.view');
 
   const { data } = await supabase
     .from('role_permissions')
@@ -517,6 +678,8 @@ export async function getRolePermissions(roleId: string): Promise<string[]> {
 export async function updateRolePermission(roleId: string, permissionCode: string, granted: boolean) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('permissions.manage_settings');
 
   const { data: perm } = await supabase.from('permissions').select('id').eq('code', permissionCode).single();
   if (!perm) return { error: 'Permission not found' };
@@ -548,6 +711,8 @@ export async function updateRolePermission(roleId: string, permissionCode: strin
 export async function getUserSessions(userId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.view');
 
   const { data } = await supabase
     .from('user_sessions')
@@ -561,6 +726,8 @@ export async function getUserSessions(userId: string) {
 export async function terminateSession(sessionId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_status');
 
   const { error } = await supabase.from('user_sessions').update({ is_active: false }).eq('id', sessionId);
   if (error) return { error: error.message };
@@ -574,6 +741,8 @@ export async function terminateSession(sessionId: string) {
 export async function terminateAllUserSessions(userId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  const { requirePermission } = await import('./security');
+  await requirePermission('users.manage_status');
 
   const { error } = await supabase
     .from('user_sessions')

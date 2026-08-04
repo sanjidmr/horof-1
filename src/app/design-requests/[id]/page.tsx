@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useState, useEffect, useCallback } from 'react';
-import { getDesignRequest, customerRespond, addDesignComment } from '@/lib/actions/design-requests';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getDesignRequest, customerRespond, sendDesignRequestMessage, markDesignRequestMessagesRead } from '@/lib/actions/design-requests';
 import { useAuth } from '@/context/AuthContext';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -11,8 +11,10 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, CheckCircle, XCircle, RefreshCw, Download,
   Clock, User, FileText, MessageCircle, ThumbsUp,
-  AlertTriangle, RotateCcw, Send
+  AlertTriangle, RotateCcw, Send, Paperclip,
+  CheckCheck, Loader2,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -38,7 +40,52 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
 };
 
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-slate-50 text-slate-600 border-slate-200',
+  normal: 'bg-blue-50 text-blue-700 border-blue-200',
+  high: 'bg-amber-50 text-amber-700 border-amber-200',
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+};
+
 type ActionType = 'approved' | 'revision_requested' | 'rejected';
+
+const ACCEPTED_TYPES = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.pdf', '.ai', '.psd', '.eps', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.7z', '.rar', '.tif', '.tiff', '.bmp', '.ico'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+function formatTime(ts: string) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatFileSize(bytes: number | null | undefined) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageFile(file: any): boolean {
+  const mime = file?.mime_type || '';
+  const name = file?.file_name || '';
+  return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|bmp|ico|tif|tiff)$/i.test(name);
+}
 
 export default function DesignRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +93,7 @@ export default function DesignRequestDetailPage() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [request, setRequest] = useState<any>(null);
   const [files, setFiles] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,8 +102,12 @@ export default function DesignRequestDetailPage() {
   const [actionComment, setActionComment] = useState('');
   const [confirmAction, setConfirmAction] = useState<ActionType | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const [submittingComment, setSubmittingComment] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [submittingMessage, setSubmittingMessage] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const supabase = createSupabaseBrowserClient();
 
   const fetchData = useCallback(async () => {
     if (!id || !user) return;
@@ -73,8 +125,12 @@ export default function DesignRequestDetailPage() {
       }
       setRequest(result.request);
       setFiles(result.files || []);
+      setMessages(result.messages || []);
       setComments(result.comments || []);
       setHistory(result.history || []);
+
+      // Mark messages as read
+      await markDesignRequestMessagesRead(id);
     } catch (err: any) {
       setError(err.message || 'Failed to load request');
     } finally {
@@ -90,6 +146,61 @@ export default function DesignRequestDetailPage() {
       setError('Please log in to view this request.');
     }
   }, [authLoading, isAuthenticated, user, id, fetchData]);
+
+  // Realtime subscription for messages
+  useEffect(() => {
+    if (!id || !user) return;
+
+    const channel = supabase
+      .channel(`dr-messages-${id}-${Date.now()}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'design_request_messages',
+        filter: `request_id=eq.${id}`,
+      }, async (payload) => {
+        const newMsg = payload.new as any;
+        setMessages(prev => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+        // Mark as read if not from self
+        if (newMsg.sender_id !== user.id) {
+          await markDesignRequestMessagesRead(id);
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'design_request_message_files',
+        filter: `request_id=eq.${id}`,
+      }, async (payload) => {
+        const newFile = payload.new as any;
+        setMessages(prev => prev.map(m => {
+          if (m.id === newFile.message_id) {
+            return { ...m, files: [...(m.files || []), newFile] };
+          }
+          return m;
+        }));
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'design_requests',
+        filter: `id=eq.${id}`,
+      }, (payload) => {
+        const updated = payload.new as any;
+        setRequest(prev => prev ? { ...prev, ...updated } : prev);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user, supabase]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleAction = async (action: ActionType) => {
     setSubmitting(true);
@@ -112,22 +223,45 @@ export default function DesignRequestDetailPage() {
     }
   };
 
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    setSubmittingComment(true);
+  const handleAddFiles = (incoming: FileList | File[]) => {
+    const newFiles: File[] = [];
+    for (const file of Array.from(incoming)) {
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!ACCEPTED_TYPES.includes(ext)) {
+        toast.error(`${file.name}: Unsupported file type`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name}: Exceeds 50MB limit`);
+        continue;
+      }
+      newFiles.push(file);
+    }
+    if (newFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() && selectedFiles.length === 0) return;
+    setSubmittingMessage(true);
     try {
-      const result = await addDesignComment(id, newComment.trim());
+      const result = await sendDesignRequestMessage(id, newMessage.trim(), selectedFiles.length > 0 ? selectedFiles : undefined);
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      toast.success('Comment added');
-      setNewComment('');
+      if (result.uploadErrors && result.uploadErrors.length > 0) {
+        result.uploadErrors.forEach(err => toast.error(err));
+      }
+      toast.success('Message sent');
+      setNewMessage('');
+      setSelectedFiles([]);
       await fetchData();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to add comment');
+      toast.error(err.message || 'Failed to send message');
     } finally {
-      setSubmittingComment(false);
+      setSubmittingMessage(false);
     }
   };
 
@@ -233,7 +367,7 @@ export default function DesignRequestDetailPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-4xl mx-auto px-4 py-8 md:py-12 space-y-8">
+      <div className="max-w-5xl mx-auto px-4 pt-32 pb-16 md:pb-24 space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
@@ -253,57 +387,48 @@ export default function DesignRequestDetailPage() {
             >
               {STATUS_LABELS[request.status] || request.status.replace(/_/g, ' ')}
             </span>
+            <span
+              className={cn(
+                'inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold border',
+                PRIORITY_COLORS[request.priority] || 'bg-slate-50 text-slate-700 border-slate-200'
+              )}
+            >
+              {request.priority?.toUpperCase() || 'NORMAL'}
+            </span>
             <span className="font-mono font-bold text-sm text-slate-400 tracking-wider">
               #{id.slice(0, 8).toUpperCase()}
             </span>
           </div>
         </div>
 
-        {/* Customer Info */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-            <User className="h-4 w-4" />
-            Customer Information
-          </h2>
+        {/* Request Info Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Name</p>
-              <p className="text-sm font-bold text-slate-800">{request.full_name}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Product</p>
+              <p className="text-sm font-bold text-slate-800">{request.product_name || 'Custom Design'}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Email</p>
-              <p className="text-sm text-slate-700">{request.email}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Submitted</p>
+              <p className="text-sm text-slate-700">
+                {new Date(request.created_at).toLocaleDateString('en-US', {
+                  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                })}
+              </p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Phone</p>
-              <p className="text-sm text-slate-700">{request.phone_number || '—'}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Description</p>
+              <p className="text-sm text-slate-700 line-clamp-2">{request.description}</p>
             </div>
           </div>
         </div>
 
-        {/* Description */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Design Description
-          </h2>
-          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-            {request.description}
-          </p>
-          {request.product_name && (
-            <div className="mt-4 pt-4 border-t border-slate-100">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Product Name</p>
-              <p className="text-sm font-bold text-slate-800">{request.product_name}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Files */}
+        {/* Files Section */}
         {files.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Files Uploaded
+              Files ({files.length})
             </h2>
             <div className="space-y-6">
               {Object.entries(groupedFiles).map(([type, typeFiles]) => (
@@ -311,29 +436,40 @@ export default function DesignRequestDetailPage() {
                   <p className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">
                     {fileTypeLabels[type] || type.replace(/_/g, ' ')}
                   </p>
-                  <div className="space-y-2">
-                    {typeFiles.map((file) => (
-                      <a
-                        key={file.id}
-                        href={file.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group"
-                      >
-                        <div className="h-9 w-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-[#1a4731] shrink-0">
-                          <FileText className="h-4 w-4" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {typeFiles.map((file) => {
+                      const isImage = isImageFile(file);
+                      return (
+                        <div key={file.id} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group">
+                          {isImage ? (
+                            <div className="h-12 w-12 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0">
+                              <img src={file.file_url} alt={file.file_name} className="h-full w-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="h-12 w-12 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-[#1a4731] shrink-0">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-700 truncate group-hover:text-[#1a4731] transition-colors">
+                              {file.file_name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-medium">
+                              {formatFileSize(file.file_size)}
+                            </p>
+                          </div>
+                          <a
+                            href={file.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg text-slate-400 hover:text-[#1a4731] hover:bg-white transition-colors shrink-0"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-700 truncate group-hover:text-[#1a4731] transition-colors">
-                            {file.file_name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            {file.file_size ? `${(file.file_size / 1024).toFixed(0)} KB` : ''}
-                          </p>
-                        </div>
-                        <Download className="h-4 w-4 text-slate-400 group-hover:text-[#1a4731] shrink-0" />
-                      </a>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -341,9 +477,211 @@ export default function DesignRequestDetailPage() {
           </div>
         )}
 
+        {/* Chat / Conversation Section */}
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          {/* Chat Header */}
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-[#1a4731] to-[#2D6A4F]">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                <MessageCircle className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Design Request Conversation</h3>
+                <p className="text-[11px] text-white/70">Chat with our design team</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { fetchData(); }}
+              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Messages Area */}
+          <div className="h-[500px] overflow-y-auto p-6 bg-slate-50/50">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="h-16 w-16 bg-white border border-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
+                  <MessageCircle className="h-8 w-8" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-700">No messages yet</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                  Start the conversation with our design team. Send a message or upload files.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((msg) => {
+                  const isOwn = msg.sender_id === user?.id;
+                  const isSystem = msg.message_type === 'system';
+                  const msgFiles = msg.files || [];
+
+                  if (isSystem) {
+                    return (
+                      <div key={msg.id} className="flex justify-center">
+                        <div className="bg-slate-100 border border-slate-200 rounded-full px-4 py-1.5 text-[11px] text-slate-500 font-medium">
+                          {msg.message}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cn('flex gap-3', isOwn ? 'justify-end' : 'justify-start')}
+                    >
+                      {!isOwn && (
+                        <div className="h-8 w-8 rounded-full bg-[#1a4731] flex items-center justify-center shrink-0 mt-1">
+                          <span className="text-xs font-bold text-white">A</span>
+                        </div>
+                      )}
+                      <div className={cn('max-w-[75%]', isOwn ? 'items-end' : 'items-start')}>
+                        <div
+                          className={cn(
+                            'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                            isOwn
+                              ? 'bg-[#1a4731] text-white rounded-br-md'
+                              : 'bg-white border border-slate-200 text-slate-700 rounded-bl-md shadow-sm'
+                          )}
+                        >
+                          {msg.message && <p className="whitespace-pre-wrap">{msg.message}</p>}
+
+                          {msgFiles.length > 0 && (
+                            <div className={cn('mt-2 space-y-2', msg.message && 'pt-2 border-t', isOwn ? 'border-white/20' : 'border-slate-100')}>
+                              {msgFiles.map((file: any) => {
+                                const isImg = isImageFile(file);
+                                return (
+                                  <div key={file.id} className="flex items-center gap-2">
+                                    {isImg ? (
+                                      <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="block">
+                                        <img
+                                          src={file.file_url}
+                                          alt={file.file_name}
+                                          className="max-h-40 rounded-lg object-cover border border-black/10"
+                                        />
+                                      </a>
+                                    ) : (
+                                      <a
+                                        href={file.file_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={cn(
+                                          'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                                          isOwn ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                        )}
+                                      >
+                                        <FileText className="h-4 w-4 shrink-0" />
+                                        <span className="truncate max-w-[150px]">{file.file_name}</span>
+                                        <Download className="h-3.5 w-3.5 shrink-0" />
+                                      </a>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className={cn('flex items-center gap-1.5 mt-1 px-1', isOwn ? 'justify-end' : 'justify-start')}>
+                          <span className="text-[10px] text-slate-400 font-medium">{formatTime(msg.created_at)}</span>
+                          {isOwn && (
+                            <CheckCheck className={cn('h-3 w-3', msg.is_read ? 'text-emerald-500' : 'text-slate-300')} />
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Selected Files Preview */}
+          {selectedFiles.length > 0 && (
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex flex-wrap gap-2">
+                {selectedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+                    {file.type.startsWith('image/') ? (
+                      <img src={URL.createObjectURL(file)} alt="" className="h-6 w-6 rounded object-cover" />
+                    ) : (
+                      <FileText className="h-4 w-4 text-slate-400" />
+                    )}
+                    <span className="text-slate-600 font-medium max-w-[120px] truncate">{file.name}</span>
+                    <span className="text-slate-400">{formatFileSize(file.size)}</span>
+                    <button
+                      onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Message Input */}
+          <div className="px-6 py-4 border-t border-slate-100 bg-white">
+            <div className="flex items-end gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={ACCEPTED_TYPES.join(',')}
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) handleAddFiles(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-[#1a4731] hover:border-[#1a4731]/30 hover:bg-[#1a4731]/5 transition-all shrink-0"
+                title="Attach files"
+              >
+                <Paperclip className="h-5 w-5" />
+              </button>
+              <textarea
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Type your message..."
+                rows={1}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:bg-white resize-none min-h-[44px] max-h-[120px]"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={submittingMessage || (!newMessage.trim() && selectedFiles.length === 0)}
+                className="p-2.5 bg-[#1a4731] text-white rounded-xl hover:bg-[#2D6A4F] transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                title="Send message"
+              >
+                {submittingMessage ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-2">
+              JPG, PNG, PDF, AI, PSD, SVG, ZIP, DOCX, XLSX (max 50MB each)
+            </p>
+          </div>
+        </div>
+
         {/* Status Timeline */}
         {history.length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
               <Clock className="h-4 w-4" />
               Status Timeline
@@ -380,11 +718,7 @@ export default function DesignRequestDetailPage() {
                       </span>
                       <span className="text-[10px] text-slate-400 font-medium">
                         {new Date(entry.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
+                          year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                         })}
                       </span>
                     </div>
@@ -398,74 +732,9 @@ export default function DesignRequestDetailPage() {
           </div>
         )}
 
-        {/* Comments */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-            <MessageCircle className="h-4 w-4" />
-            Comments
-          </h2>
-
-          {comments.length === 0 ? (
-            <p className="text-sm text-slate-400 italic">No comments yet.</p>
-          ) : (
-            <div className="space-y-4 mb-6">
-              {comments.map((c) => (
-                <div key={c.id} className="flex gap-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="h-8 w-8 rounded-full bg-[#1a4731] flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-white">
-                      {(c.user?.full_name || c.user?.name || '?')[0].toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800">
-                        {c.user?.full_name || c.user?.name || 'Unknown'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {new Date(c.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600 mt-1 leading-relaxed">{c.comment}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAddComment();
-                }
-              }}
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={submittingComment || !newComment.trim()}
-              className="px-4 py-2.5 bg-[#1a4731] text-white rounded-xl font-bold text-xs hover:bg-[#2D6A4F] transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
-            >
-              <Send className="h-4 w-4" />
-              Send
-            </button>
-          </div>
-        </div>
-
         {/* Approval Actions */}
         {request.status === 'waiting_approval' && (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8">
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
               <CheckCircle className="h-4 w-4" />
               Your Response

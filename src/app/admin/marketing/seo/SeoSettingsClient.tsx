@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { saveMarketingSettingsBulk, saveMarketingSetting } from '@/lib/actions/marketing-settings';
+import { saveMarketingSettingsBulk } from '@/lib/actions/marketing-settings';
 import { Card, CardContent } from '@/components/shadcn/card';
 import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 import {
-  Search, Globe, Code, Eye, Save, Loader2, Plus,
-  FileText, ExternalLink, AlertTriangle, CheckCircle,
+  Search, Globe, Code, Eye, Save, Loader2,
+  FileText, AlertTriangle,
 } from 'lucide-react';
 
 type Tab = 'meta' | 'social' | 'schema' | 'pages';
@@ -20,7 +20,6 @@ export function SeoSettingsClient({ initialSettings, initialPages }: {
   const [pages, setPages] = useState<any[]>(initialPages);
   const [activeTab, setActiveTab] = useState<Tab>('meta');
   const [saving, setSaving] = useState(false);
-  const [previewData, setPreviewData] = useState({ title: '', description: '' });
 
   const update = (key: string, value: any) => setSettings(prev => ({ ...prev, [key]: value }));
 
@@ -135,16 +134,6 @@ export function SeoSettingsClient({ initialSettings, initialPages }: {
             <div className="space-y-5">
               <Input label="Canonical URL" settingKey="seo_canonical_url" placeholder="https://horof.com" />
               <Input label="Default OG Image URL" settingKey="seo_og_image" placeholder="https://horof.com/og-default.jpg" />
-              <Input label="Twitter/X Handle" settingKey="twitter_handle" placeholder="@horof" />
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Twitter Card Type</label>
-                <select value={settings.twitter_card_type || 'summary_large_image'}
-                  onChange={e => update('twitter_card_type', e.target.value)}
-                  className="w-full h-11 border border-slate-200 rounded-xl px-4 text-sm bg-slate-50 focus:border-[#1a4731] outline-none">
-                  <option value="summary_large_image">Summary Large Image</option>
-                  <option value="summary">Summary</option>
-                </select>
-              </div>
 
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <p className="text-xs font-bold text-slate-700 uppercase">Social Preview</p>
@@ -163,7 +152,7 @@ export function SeoSettingsClient({ initialSettings, initialPages }: {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={() => saveTab(['seo_canonical_url', 'seo_og_image', 'twitter_handle', 'twitter_card_type'])}
+                <Button onClick={() => saveTab(['seo_canonical_url', 'seo_og_image'])}
                   disabled={saving} variant="primary" className="rounded-xl">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                   Save Social Settings

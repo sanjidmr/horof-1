@@ -198,7 +198,7 @@ export default function ProductDetailsPage({ params }: PageProps) {
         // Fetch related products
         const { data: relatedData } = await supabase
           .from('products')
-          .select('*, product_images(url,sort_order), categories(name), subcategories(name)')
+          .select('*, product_images(url,sort_order), categories(name), subcategories(name), reviews(rating)')
           .eq('category_id', data.category_id)
           .neq('id', data.id)
           .eq('is_active', true)
@@ -217,8 +217,10 @@ export default function ProductDetailsPage({ params }: PageProps) {
               .map((i: any) => i.url)
               .filter(Boolean),
             category: p.categories?.name || 'Uncategorized',
-            rating: 4.5,
-            reviewCount: 12,
+            rating: (p.reviews ?? []).filter((r) => r.rating >= 1).length > 0
+              ? (p.reviews ?? []).filter((r) => r.rating >= 1).reduce((sum, r) => sum + r.rating, 0) / (p.reviews ?? []).filter((r) => r.rating >= 1).length
+              : 0,
+            reviewCount: (p.reviews ?? []).filter((r) => r.rating >= 1).length,
             stock: p.stock || 0,
             tags: [],
             isNew: p.section === 'new_arrival',
@@ -232,27 +234,14 @@ export default function ProductDetailsPage({ params }: PageProps) {
 
       if (reviewsRes.data && !reviewsRes.error) {
         const dbReviews = reviewsRes.data;
-        let localRevs: any[] = [];
-        try {
-          const stored = localStorage.getItem(`local_reviews_${id}`);
-          if (stored) {
-            localRevs = JSON.parse(stored);
-          }
-        } catch (e) {
-          console.error('[localStorage load reviews]', e);
-        }
-        
-        // Merge local reviews and database reviews (avoid duplicate ids)
-        const dbIds = new Set(dbReviews.map((r: any) => r.id));
-        const uniqueLocalRevs = localRevs.filter((r: any) => !dbIds.has(r.id));
-        const combined = [...uniqueLocalRevs, ...dbReviews];
-        
-        setReviews(combined);
 
-        // Calculate stats
+        // Only use database reviews (no localStorage merging)
+        setReviews(dbReviews);
+
+        // Calculate stats from approved reviews only
         const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
         let sum = 0;
-        combined.forEach((r: any) => {
+        dbReviews.forEach((r: any) => {
           const star = r.rating as 5|4|3|2|1;
           if (dist[star] !== undefined) {
             dist[star]++;
@@ -261,8 +250,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
         });
 
         setReviewStats({
-          average: combined.length ? Math.round((sum / combined.length) * 10) / 10 : 0,
-          total: combined.length,
+          average: dbReviews.length ? Math.round((sum / dbReviews.length) * 10) / 10 : 0,
+          total: dbReviews.length,
           distribution: dist
         });
       }
@@ -328,6 +317,55 @@ export default function ProductDetailsPage({ params }: PageProps) {
       fetchProfileAndOrders();
     }
   }, [user, id, supabase]);
+
+  // Real-time subscription for product reviews
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel('product-reviews-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'product_reviews',
+          filter: `product_id=eq.${id}`,
+        },
+        async (payload) => {
+          // Refresh reviews and stats when a review is created, updated, or deleted
+          const { data: refreshedReviews } = await supabase
+            .from('product_reviews')
+            .select('*, profiles(full_name, avatar_url)')
+            .eq('product_id', id)
+            .eq('is_approved', true)
+            .order('created_at', { ascending: false });
+
+          if (refreshedReviews) {
+            setReviews(refreshedReviews);
+            const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+            let sum = 0;
+            refreshedReviews.forEach((r) => {
+              const star = r.rating;
+              if (dist[star] !== undefined) {
+                dist[star]++;
+              }
+              sum += r.rating;
+            });
+            setReviewStats({
+              average: refreshedReviews.length ? Math.round((sum / refreshedReviews.length) * 10) / 10 : 0,
+              total: refreshedReviews.length,
+              distribution: dist
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, supabase]);
 
   // Flash Sale Timer Effect
   useEffect(() => {
@@ -480,39 +518,37 @@ export default function ProductDetailsPage({ params }: PageProps) {
   }, [product]);
 
   // Callback when a review is submitted (either guest or db)
-  const handleReviewSubmitted = (newReview: any) => {
-    // 1. Add to reviews state (at the top of the list)
-    const updatedReviews = [newReview, ...reviews];
-    setReviews(updatedReviews);
+  const handleReviewSubmitted = () => {
+    // Refresh reviews from database after a review is submitted
+    // The review is pending approval, so it won't appear immediately
+    // Real-time subscription will handle updates when admin approves
+    const refreshReviews = async () => {
+      const { data: refreshedReviews } = await supabase
+        .from('product_reviews')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('product_id', id)
+        .eq('is_approved', true)
+        .order('created_at', { ascending: false });
 
-    // 2. Save local reviews to localStorage so they persist for this user
-    if (newReview.id.startsWith('local-')) {
-      try {
-        const stored = localStorage.getItem(`local_reviews_${id}`);
-        const localRevs = stored ? JSON.parse(stored) : [];
-        localRevs.unshift(newReview);
-        localStorage.setItem(`local_reviews_${id}`, JSON.stringify(localRevs));
-      } catch (e) {
-        console.error('Failed to save local review', e);
+      if (refreshedReviews) {
+        setReviews(refreshedReviews);
+        const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+        let sum = 0;
+        refreshedReviews.forEach((r: any) => {
+          const star = r.rating as 5|4|3|2|1;
+          if (dist[star] !== undefined) {
+            dist[star]++;
+          }
+          sum += r.rating;
+        });
+        setReviewStats({
+          average: refreshedReviews.length ? Math.round((sum / refreshedReviews.length) * 10) / 10 : 0,
+          total: refreshedReviews.length,
+          distribution: dist
+        });
       }
-    }
-
-    // 3. Recalculate stats
-    const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-    let sum = 0;
-    updatedReviews.forEach((r: any) => {
-      const star = r.rating as 5|4|3|2|1;
-      if (dist[star] !== undefined) {
-        dist[star]++;
-      }
-      sum += r.rating;
-    });
-
-    setReviewStats({
-      average: updatedReviews.length ? Math.round((sum / updatedReviews.length) * 10) / 10 : 0,
-      total: updatedReviews.length,
-      distribution: dist
-    });
+    };
+    refreshReviews();
   };
 
   const renderDescriptionAndPerfectFor = () => {

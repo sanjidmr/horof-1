@@ -110,11 +110,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{product.category}</span>
-            {product.rating > 0 && product.reviewCount > 0 && (
+            {product.rating > 0 && product.reviewCount > 0 ? (
               <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
                 <StarRating rating={product.rating} />
                 <span className="text-[9px] sm:text-[10px] text-slate-700 font-bold ml-0.5">
                   {product.rating.toFixed(1)} <span className="text-slate-400 font-normal">({product.reviewCount} Reviews)</span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-slate-100">
+                <StarRating rating={0} />
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-normal ml-0.5">
+                  No Reviews Yet
                 </span>
               </div>
             )}

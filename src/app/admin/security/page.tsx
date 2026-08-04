@@ -19,8 +19,6 @@ import {
   getAdminUsers, assignUserRole, removeUserRole,
   getBackups, createBackup, getRestoreHistory, getBackupSchedules,
   createBackupSchedule, updateBackupSchedule,
-  getFraudEvents, resolveFraudEvent, getBlacklist, addToBlacklist,
-  removeFromBlacklist, getWhitelist, addToWhitelist, removeFromWhitelist,
   getFraudRules, logAudit
 } from '@/lib/actions/security';
 import { Button } from '@/components/shadcn/button';
@@ -70,22 +68,6 @@ interface BackupSchedule {
   next_run_at: string; created_at: string;
 }
 
-interface FraudEvent {
-  id: string; event_type: string; user_id?: string; ip_address?: string;
-  is_resolved: boolean; notes?: string; created_at: string;
-  resolved_at?: string; resolved_by?: string;
-}
-
-interface BlacklistItem {
-  id: string; type: string; value: string; reason?: string;
-  risk_score?: number; created_at: string;
-}
-
-interface WhitelistItem {
-  id: string; type: string; value: string; reason?: string;
-  created_at: string;
-}
-
 interface FraudRule {
   id: string; name: string; rule_type: string; config?: any;
   priority: number; score: number; is_active: boolean;
@@ -93,10 +75,9 @@ interface FraudRule {
 
 interface DashboardStats {
   totalAuditLogs: number; activeSessions: number;
-  unresolvedSecurityEvents: number; openFraudEvents: number;
+  unresolvedSecurityEvents: number;
   totalBackups: number; totalRoles: number;
   totalAdminUsers: number; failedLogins24h: number;
-  blacklistedItems: number;
   recentActivity: AuditLog[];
   loginHistory: any[];
 }
@@ -169,24 +150,7 @@ export default function SecurityPage() {
   const [creatingSchedule, setCreatingSchedule] = useState(false);
 
   // Fraud
-  const [fraudEvents, setFraudEvents] = useState<FraudEvent[]>([]);
-  const [fraudTotal, setFraudTotal] = useState(0);
-  const [fraudPage, setFraudPage] = useState(1);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [fraudResolveNotes, setFraudResolveNotes] = useState('');
-  const [showResolveModal, setShowResolveModal] = useState(false);
-  const [fraudToResolve, setFraudToResolve] = useState<string | null>(null);
-  const [blacklist, setBlacklist] = useState<BlacklistItem[]>([]);
-  const [whitelist, setWhitelist] = useState<WhitelistItem[]>([]);
   const [fraudRules, setFraudRules] = useState<FraudRule[]>([]);
-  const [blacklistType, setBlacklistType] = useState('ip');
-  const [blacklistValue, setBlacklistValue] = useState('');
-  const [blacklistReason, setBlacklistReason] = useState('');
-  const [addingBlacklist, setAddingBlacklist] = useState(false);
-  const [whitelistType, setWhitelistType] = useState('ip');
-  const [whitelistValue, setWhitelistValue] = useState('');
-  const [whitelistReason, setWhitelistReason] = useState('');
-  const [addingWhitelist, setAddingWhitelist] = useState(false);
 
   const perPage = 25;
 
@@ -226,14 +190,9 @@ export default function SecurityPage() {
   }, [backupPage]);
 
   const fetchFraud = useCallback(async () => {
-    const { data, total } = await getFraudEvents(fraudPage, perPage);
-    setFraudEvents(data);
-    setFraudTotal(total);
-    const [bl, wl, fr] = await Promise.all([getBlacklist(), getWhitelist(), getFraudRules()]);
-    setBlacklist(bl);
-    setWhitelist(wl);
+    const fr = await getFraudRules();
     setFraudRules(fr);
-  }, [fraudPage]);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -249,7 +208,7 @@ export default function SecurityPage() {
 
   useEffect(() => { if (activeTab === 'audit-logs') fetchAuditLogs(); }, [auditPage, auditFilters, auditSearchUser]);
   useEffect(() => { if (activeTab === 'backup') fetchBackups(); }, [backupPage]);
-  useEffect(() => { if (activeTab === 'fraud') fetchFraud(); }, [fraudPage]);
+  useEffect(() => { if (activeTab === 'fraud') fetchFraud(); }, []);
 
   const handleClearLogs = async () => {
     setClearingLogs(true);
@@ -342,44 +301,6 @@ export default function SecurityPage() {
     else { toast.success(isActive ? 'Schedule activated' : 'Schedule deactivated'); fetchBackups(); }
   };
 
-  const handleResolveFraud = async () => {
-    if (!fraudToResolve) return;
-    setResolvingId(fraudToResolve);
-    const { error } = await resolveFraudEvent(fraudToResolve, fraudResolveNotes || undefined);
-    if (error) toast.error(error);
-    else { toast.success('Fraud event resolved'); setShowResolveModal(false); setFraudToResolve(null); setFraudResolveNotes(''); fetchFraud(); }
-    setResolvingId(null);
-  };
-
-  const handleAddBlacklist = async () => {
-    if (!blacklistValue.trim()) return;
-    setAddingBlacklist(true);
-    const { error } = await addToBlacklist(blacklistType, blacklistValue.trim(), blacklistReason.trim() || undefined);
-    if (error) toast.error(error);
-    else { toast.success('Added to blacklist'); setBlacklistValue(''); setBlacklistReason(''); fetchFraud(); }
-    setAddingBlacklist(false);
-  };
-
-  const handleRemoveBlacklist = async (id: string) => {
-    const { error } = await removeFromBlacklist(id);
-    if (error) toast.error(error);
-    else { toast.success('Removed from blacklist'); fetchFraud(); }
-  };
-
-  const handleAddWhitelist = async () => {
-    if (!whitelistValue.trim()) return;
-    setAddingWhitelist(true);
-    const { error } = await addToWhitelist(whitelistType, whitelistValue.trim(), whitelistReason.trim() || undefined);
-    if (error) toast.error(error);
-    else { toast.success('Added to whitelist'); setWhitelistValue(''); setWhitelistReason(''); fetchFraud(); }
-    setAddingWhitelist(false);
-  };
-
-  const handleRemoveWhitelist = async (id: string) => {
-    const { error } = await removeFromWhitelist(id);
-    if (error) toast.error(error);
-    else { toast.success('Removed from whitelist'); fetchFraud(); }
-  };
 
   const renderSeverityBadge = (severity: string) => (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border ${severityColors[severity] || severityColors.info}`}>
@@ -455,9 +376,7 @@ export default function SecurityPage() {
               { label: 'Total Audit Logs', value: stats?.totalAuditLogs ?? 0, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
               { label: 'Active Sessions', value: stats?.activeSessions ?? 0, icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
               { label: 'Unresolved Security Events', value: stats?.unresolvedSecurityEvents ?? 0, icon: AlertTriangle, color: 'text-orange-600', bg: 'bg-orange-50' },
-              { label: 'Open Fraud Events', value: stats?.openFraudEvents ?? 0, icon: Ban, color: 'text-red-600', bg: 'bg-red-50' },
               { label: 'Completed Backups', value: stats?.totalBackups ?? 0, icon: Database, color: 'text-green-600', bg: 'bg-green-50' },
-              { label: 'Blacklisted Items', value: stats?.blacklistedItems ?? 0, icon: XCircle, color: 'text-purple-600', bg: 'bg-purple-50' },
               { label: 'Failed Logins (24h)', value: stats?.failedLogins24h ?? 0, icon: Lock, color: 'text-rose-600', bg: 'bg-rose-50' },
               { label: 'Admin Users', value: stats?.totalAdminUsers ?? 0, icon: Users, color: 'text-cyan-600', bg: 'bg-cyan-50' },
               { label: 'Total Roles', value: stats?.totalRoles ?? 0, icon: Key, color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -1109,7 +1028,7 @@ export default function SecurityPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Retention (days)</label>
-                    <input type="number" value={newSchedule.retentionDays} onChange={e => setNewSchedule(s => ({ ...s, retentionDays: parseInt(e.target.value) || 30 }))} min={1} className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]" />
+                    <input type="number" value={newSchedule.retentionDays || ''} onChange={e => setNewSchedule(s => ({ ...s, retentionDays: parseInt(e.target.value) || 30 }))} min={1} className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]" />
                   </div>
                   <div className="flex gap-3 justify-end pt-2">
                     <Button variant="outline" onClick={() => setScheduleModalOpen(false)}>Cancel</Button>
@@ -1131,9 +1050,6 @@ export default function SecurityPage() {
           {/* Fraud Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Open Fraud Events', value: fraudEvents.filter(f => !f.is_resolved).length, icon: Ban, color: 'text-red-600', bg: 'bg-red-50' },
-              { label: 'Blacklisted Items', value: blacklist.length, icon: XCircle, color: 'text-purple-600', bg: 'bg-purple-50' },
-              { label: 'Whitelisted Items', value: whitelist.length, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
               { label: 'Active Rules', value: fraudRules.length, icon: Zap, color: 'text-orange-600', bg: 'bg-orange-50' },
             ].map((stat, i) => (
               <div key={i} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
@@ -1144,221 +1060,6 @@ export default function SecurityPage() {
                 <p className="text-2xl font-display font-bold text-slate-900">{stat.value}</p>
               </div>
             ))}
-          </div>
-
-          {/* Fraud Events Table */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">Fraud Events</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50/50">
-                  <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-50">
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4">User/IP</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Notes</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {fraudEvents.length > 0 ? fraudEvents.map(f => (
-                    <tr key={f.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-medium text-slate-900 capitalize">{f.event_type.replace(/_/g, ' ')}</span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{f.user_id?.slice(0, 8) || f.ip_address || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${f.is_resolved ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                          {f.is_resolved ? 'Resolved' : 'Open'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 max-w-[200px] truncate">{f.notes || '-'}</td>
-                      <td className="px-6 py-4 text-xs text-slate-500 whitespace-nowrap">{formatDate(f.created_at)}</td>
-                      <td className="px-6 py-4">
-                        {!f.is_resolved && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => { setFraudToResolve(f.id); setShowResolveModal(true); }}
-                            className="text-[#1a4731] border-[#1a4731]/30"
-                          >
-                            <CheckCircle className="h-3 w-3 mr-1" /> Resolve
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400 text-sm">No fraud events found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex items-center justify-between p-4 border-t border-slate-100">
-              <p className="text-xs text-slate-500">{fraudTotal} total events</p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={fraudPage <= 1} onClick={() => setFraudPage(p => Math.max(1, p - 1))}>
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-slate-600 px-3">Page {fraudPage}</span>
-                <Button variant="outline" size="sm" disabled={fraudPage >= Math.ceil(fraudTotal / perPage)} onClick={() => setFraudPage(p => p + 1)}>
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Blacklist Management */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">Blacklist Management</h3>
-            </div>
-            <div className="p-6 border-b border-slate-50">
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Type</label>
-                  <Select value={blacklistType} onValueChange={setBlacklistType}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ip"><Globe className="h-3 w-3 mr-1 inline" /> IP</SelectItem>
-                      <SelectItem value="email"><Mail className="h-3 w-3 mr-1 inline" /> Email</SelectItem>
-                      <SelectItem value="domain"><Globe className="h-3 w-3 mr-1 inline" /> Domain</SelectItem>
-                      <SelectItem value="phone"><Phone className="h-3 w-3 mr-1 inline" /> Phone</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Value</label>
-                  <input
-                    type="text"
-                    value={blacklistValue}
-                    onChange={e => setBlacklistValue(e.target.value)}
-                    placeholder="e.g., 192.168.1.1 or user@example.com"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]"
-                  />
-                </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reason (optional)</label>
-                  <input
-                    type="text"
-                    value={blacklistReason}
-                    onChange={e => setBlacklistReason(e.target.value)}
-                    placeholder="Why is this blacklisted?"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]"
-                  />
-                </div>
-                <Button onClick={handleAddBlacklist} disabled={addingBlacklist || !blacklistValue.trim()} className="bg-red-600 hover:bg-red-700 text-white">
-                  {addingBlacklist ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Ban className="h-4 w-4 mr-1" />}
-                  Add to Blacklist
-                </Button>
-              </div>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {blacklist.length > 0 ? blacklist.map(item => (
-                <div key={item.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-1.5 rounded-lg ${
-                      item.type === 'ip' ? 'bg-blue-50' : item.type === 'email' ? 'bg-purple-50' : item.type === 'domain' ? 'bg-orange-50' : 'bg-cyan-50'
-                    }`}>
-                      {item.type === 'ip' ? <Globe className="h-4 w-4 text-blue-600" /> :
-                       item.type === 'email' ? <Mail className="h-4 w-4 text-purple-600" /> :
-                       item.type === 'domain' ? <Globe className="h-4 w-4 text-orange-600" /> :
-                       <Phone className="h-4 w-4 text-cyan-600" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{item.value}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.type}</span>
-                        {item.reason && <span className="text-[10px] text-slate-500">&middot; {item.reason}</span>}
-                        {item.risk_score && <span className="text-[10px] text-red-500 font-bold">Risk: {item.risk_score}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleRemoveBlacklist(item.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )) : (
-                <div className="p-8 text-center text-slate-400 text-sm">Blacklist is empty.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Whitelist Management */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900">Whitelist Management</h3>
-            </div>
-            <div className="p-6 border-b border-slate-50">
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Type</label>
-                  <Select value={whitelistType} onValueChange={setWhitelistType}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ip"><Globe className="h-3 w-3 mr-1 inline" /> IP</SelectItem>
-                      <SelectItem value="email"><Mail className="h-3 w-3 mr-1 inline" /> Email</SelectItem>
-                      <SelectItem value="domain"><Globe className="h-3 w-3 mr-1 inline" /> Domain</SelectItem>
-                      <SelectItem value="phone"><Phone className="h-3 w-3 mr-1 inline" /> Phone</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Value</label>
-                  <input
-                    type="text"
-                    value={whitelistValue}
-                    onChange={e => setWhitelistValue(e.target.value)}
-                    placeholder="e.g., trusted@partner.com"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]"
-                  />
-                </div>
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Reason (optional)</label>
-                  <input
-                    type="text"
-                    value={whitelistReason}
-                    onChange={e => setWhitelistReason(e.target.value)}
-                    placeholder="Why is this whitelisted?"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731]"
-                  />
-                </div>
-                <Button onClick={handleAddWhitelist} disabled={addingWhitelist || !whitelistValue.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                  {addingWhitelist ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                  Add to Whitelist
-                </Button>
-              </div>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {whitelist.length > 0 ? whitelist.map(item => (
-                <div key={item.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-1.5 rounded-lg ${
-                      item.type === 'ip' ? 'bg-blue-50' : item.type === 'email' ? 'bg-purple-50' : item.type === 'domain' ? 'bg-orange-50' : 'bg-cyan-50'
-                    }`}>
-                      {item.type === 'ip' ? <Globe className="h-4 w-4 text-blue-600" /> :
-                       item.type === 'email' ? <Mail className="h-4 w-4 text-purple-600" /> :
-                       item.type === 'domain' ? <Globe className="h-4 w-4 text-orange-600" /> :
-                       <Phone className="h-4 w-4 text-cyan-600" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{item.value}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{item.type}</span>
-                        {item.reason && <span className="text-[10px] text-slate-500">&middot; {item.reason}</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => handleRemoveWhitelist(item.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )) : (
-                <div className="p-8 text-center text-slate-400 text-sm">Whitelist is empty.</div>
-              )}
-            </div>
           </div>
 
           {/* Fraud Rules */}
@@ -1383,34 +1084,6 @@ export default function SecurityPage() {
               )}
             </div>
           </div>
-
-          {/* Resolve Fraud Modal */}
-          {showResolveModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">Resolve Fraud Event</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Resolution Notes</label>
-                    <textarea
-                      value={fraudResolveNotes}
-                      onChange={e => setFraudResolveNotes(e.target.value)}
-                      placeholder="Explain how this was resolved..."
-                      rows={3}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#1a4731] resize-none"
-                    />
-                  </div>
-                  <div className="flex gap-3 justify-end pt-2">
-                    <Button variant="outline" onClick={() => { setShowResolveModal(false); setFraudToResolve(null); }}>Cancel</Button>
-                    <Button onClick={handleResolveFraud} disabled={resolvingId === fraudToResolve} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                      {resolvingId === fraudToResolve ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                      Resolve
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          )}
         </motion.div>
       )}
     </div>

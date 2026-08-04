@@ -6,8 +6,8 @@ import { Card, CardContent } from '@/components/shadcn/card';
 import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 import {
-  Settings, Search, Globe, Code, Mail, Eye, EyeOff,
-  Save, Loader2, CheckCircle, BarChart3,
+  Search, Globe, Code, Mail, Eye, EyeOff,
+  Save, Loader2, BarChart3,
 } from 'lucide-react';
 
 type Tab = 'tracking' | 'seo' | 'social' | 'scripts' | 'email';
@@ -191,8 +191,6 @@ export function MarketingSettingsClient({ initialSettings }: { initialSettings: 
                 <Input label="Microsoft Clarity" settingKey="microsoft_clarity" placeholder="Project ID" />
                 <Input label="Hotjar Site ID" settingKey="hotjar_id" placeholder="Site ID" />
                 <Input label="TikTok Pixel ID" settingKey="tiktok_pixel" placeholder="Pixel ID" />
-                <Input label="LinkedIn Insight Tag" settingKey="linkedin_insight" placeholder="Partner ID" />
-                <Input label="Snapchat Pixel" settingKey="snapchat_pixel" placeholder="Pixel ID" />
               </div>
             </div>
           )}
@@ -211,11 +209,6 @@ export function MarketingSettingsClient({ initialSettings }: { initialSettings: 
 
           {activeTab === 'social' && (
             <div className="space-y-4">
-              <Input label="Twitter/X Handle" settingKey="twitter_handle" placeholder="@horof" />
-              <Select label="Twitter Card Type" settingKey="twitter_card_type" options={[
-                { value: 'summary_large_image', label: 'Summary Large Image' },
-                { value: 'summary', label: 'Summary' },
-              ]} />
               <Input label="Pinterest Domain Verification" settingKey="pinterest_verification" placeholder="Verification code" />
               <Input label="Facebook Domain Verification" settingKey="meta_domain_verification" placeholder="Domain verification code" />
             </div>
@@ -262,9 +255,9 @@ export function MarketingSettingsClient({ initialSettings }: { initialSettings: 
             <Button
               onClick={() => {
                 const keysByTab: Record<Tab, string[]> = {
-                  tracking: ['enable_meta_pixel', 'meta_pixel', 'meta_capi_token', 'meta_domain_verification', 'enable_ga4', 'google_analytics', 'enable_gtm', 'google_tag_manager', 'google_ads_id', 'microsoft_clarity', 'hotjar_id', 'tiktok_pixel', 'linkedin_insight', 'snapchat_pixel'],
+                  tracking: ['enable_meta_pixel', 'meta_pixel', 'meta_capi_token', 'meta_domain_verification', 'enable_ga4', 'google_analytics', 'enable_gtm', 'google_tag_manager', 'google_ads_id', 'microsoft_clarity', 'hotjar_id', 'tiktok_pixel'],
                   seo: ['seo_default_title', 'seo_default_description', 'seo_default_keywords', 'seo_canonical_url', 'seo_og_image', 'seo_robots_txt'],
-                  social: ['twitter_handle', 'twitter_card_type', 'pinterest_verification', 'meta_domain_verification'],
+                  social: ['pinterest_verification', 'meta_domain_verification'],
                   scripts: ['enable_custom_scripts', 'custom_header_script', 'custom_footer_script'],
                   email: ['smtp_provider', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from_email', 'smtp_from_name'],
                 };

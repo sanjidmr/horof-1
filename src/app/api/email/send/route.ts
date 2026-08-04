@@ -1,19 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
+import nodemailer from 'nodemailer';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { DEFAULT_EMAIL, type EmailSettings } from '@/lib/settings/types';
 
-/** Lightweight email send endpoint.
- *  Integrates with Resend, Brevo, SendGrid, SES, or Mailchimp.
- *  Currently logs to console. Configure env vars and provider logic for production.
- */
+async function loadEmailSettings(): Promise<EmailSettings> {
+  try {
+    const admin = createSupabaseAdminClient();
+    if (!admin) return DEFAULT_EMAIL;
+    const { data } = await admin
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'email')
+      .maybeSingle();
+    return { ...DEFAULT_EMAIL, ...((data?.value as Partial<EmailSettings>) || {}) };
+  } catch {
+    return DEFAULT_EMAIL;
+  }
+}
+
+/** Send via a custom SMTP server using nodemailer. */
+async function sendCustomSmtp(settings: EmailSettings, opts: {
+  to: string;
+  subject: string;
+  html: string;
+  fromName: string;
+  fromEmail: string;
+}) {
+  const transporter = nodemailer.createTransport({
+    host: settings.smtp_host,
+    port: settings.smtp_port,
+    secure: settings.smtp_secure,
+    auth: settings.smtp_user && settings.smtp_pass
+      ? { user: settings.smtp_user, pass: settings.smtp_pass }
+      : undefined,
+  });
+  await transporter.sendMail({
+    from: { name: opts.fromName, address: opts.fromEmail },
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { to, subject, html, provider } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { to, subject, html, provider } = body || {};
     if (!to || !subject || !html) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const settings = await loadEmailSettings();
+    const senderName = body?.from?.name || settings.sender_name || 'Horof';
+    const senderEmail = body?.from?.email || settings.sender_email || process.env.EMAIL_FROM || 'noreply@horof.com';
+
+    // 1. Custom SMTP configured in Settings Center
+    const wantCustom = settings.smtp_enabled && (provider === 'custom' || !provider);
+    if (wantCustom && settings.smtp_host && settings.smtp_user && settings.smtp_pass) {
+      try {
+        await sendCustomSmtp(settings, { to, subject, html, fromName: senderName, fromEmail: senderEmail });
+        return NextResponse.json({ ok: true, provider: 'custom-smtp' });
+      } catch (err: any) {
+        return NextResponse.json({ error: `SMTP error: ${err.message}` }, { status: 500 });
+      }
+    }
+
     console.log(`[Email] Sending via ${provider || 'resend'} to ${to}: ${subject.substring(0, 60)}`);
 
-    if (process.env.RESEND_API_KEY) {
+    // 2. Resend
+    if (process.env.RESEND_API_KEY && (provider === 'resend' || !provider)) {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -21,7 +76,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'noreply@horof.com',
+          from: `${senderName} <${senderEmail}>`,
           to,
           subject,
           html,
@@ -35,6 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, id: data.id });
     }
 
+    // 3. Brevo
     if (process.env.BREVO_API_KEY) {
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -43,7 +99,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          sender: { email: process.env.EMAIL_FROM || 'noreply@horof.com', name: 'Horof' },
+          sender: { email: senderEmail, name: senderName },
           to: [{ email: to }],
           subject,
           htmlContent: html,
@@ -56,6 +112,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // 4. SendGrid
     if (process.env.SENDGRID_API_KEY) {
       const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
         method: 'POST',
@@ -65,7 +122,7 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           personalizations: [{ to: [{ email: to }] }],
-          from: { email: process.env.EMAIL_FROM || 'noreply@horof.com' },
+          from: { email: senderEmail, name: senderName },
           subject,
           content: [{ type: 'text/html', value: html }],
         }),
@@ -77,9 +134,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // 5. No provider configured — log for the console mailer
+    console.log(`[Email][logged-only] to=${to} subject=${subject}`);
     return NextResponse.json({
       ok: true,
-      note: 'No email provider configured. Email logged to console. Set RESEND_API_KEY, BREVO_API_KEY, or SENDGRID_API_KEY in env.'
+      note: 'No email provider configured. Email logged to console. Set custom SMTP in Settings Center or configure RESEND_API_KEY/BREVO_API_KEY/SENDGRID_API_KEY in env.'
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

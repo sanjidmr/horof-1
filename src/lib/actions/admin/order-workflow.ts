@@ -9,6 +9,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') throw new Error('Forbidden');
+  if (!profile || !isInternalAdminRole(profile.role)) throw new Error('Forbidden');
   return { supabase, user };
 }
 
@@ -26,7 +27,7 @@ async function requireWarehouseStaff() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
   const { data: profile } = await supabase.from('profiles')
-    .select('role, is_warehouse_staff, assigned_warehouse_id')
+    .select('role, is_warehouse_staff, assigned_warehouse_id, full_name')
     .eq('id', user.id).single();
   if (!profile || (!profile.is_warehouse_staff && profile.role !== 'admin')) throw new Error('Forbidden — warehouse staff only');
   return { supabase, user, profile };
@@ -363,8 +364,73 @@ export async function assignWarehouseToOrder(
     `Assigned to warehouse.`,
     user.id, adminProfile?.full_name || 'Admin', 'admin');
 
+  // Also create a warehouse_assignment entry so the new system tracks it
+  try {
+    const { data: existingAssignment } = await supabase
+      .from('warehouse_assignments')
+      .select('id')
+      .eq('entity_type', 'order')
+      .eq('entity_id', orderId)
+      .eq('warehouse_id', warehouseId)
+      .maybeSingle();
+
+    if (!existingAssignment) {
+      const adminFullName = adminProfile?.full_name || 'Admin';
+      await supabase.from('warehouse_assignments').insert({
+        entity_type: 'order',
+        entity_id: orderId,
+        warehouse_id: warehouseId,
+        assigned_by: user.id,
+        assigned_by_name: adminFullName,
+        priority: 'normal',
+        status: 'assigned',
+        admin_approval: 'pending',
+        processing_status: 'not_started',
+        packing_status: 'not_started',
+        shipping_ready: false,
+        assigned_notes: warehouseNotesOrStaff || null,
+        assigned_at: new Date().toISOString(),
+      });
+
+      // Activity log
+      await supabase.from('warehouse_activity_logs').insert({
+        entity_type: 'order',
+        entity_id: orderId,
+        warehouse_id: warehouseId,
+        action: 'assignment_created',
+        actor_id: user.id,
+        actor_name: adminFullName,
+        actor_role: 'admin',
+        new_value: { status: 'assigned', priority: 'normal' },
+        notes: warehouseNotesOrStaff || null,
+      });
+
+      // Notify warehouse staff
+      await sendNotification(
+        supabase,
+        'New Warehouse Assignment',
+        `Order ${order.order_number || `#${orderId.substring(0, 8)}`} has been assigned to your warehouse.`,
+        null, orderId, null,
+        `/admin/warehouse/orders`, 'order'
+      );
+      // Also insert with warehouse_id for proper routing
+      await supabase.from('notifications').insert({
+        title: 'New Warehouse Assignment',
+        message: `Order ${order.order_number || `#${orderId.substring(0, 8)}`} has been assigned to your warehouse.`,
+        type: 'warehouse',
+        warehouse_id: warehouseId,
+        entity_type: 'order',
+        entity_id: orderId,
+        action_url: '/admin/warehouse/orders',
+      });
+    }
+  } catch (assignErr) {
+    console.error('Failed to sync warehouse assignment (non-fatal):', assignErr);
+  }
+
   revalidatePath('/admin/orders');
   revalidatePath('/admin/orders/[id]');
+  revalidatePath('/admin/warehouse/activity');
   return { success: true };
 }
 
@@ -386,7 +452,38 @@ export async function warehouseAcceptOrder(orderId: string) {
     warehouse_status: 'accepted',
     warehouse_staff_id: user.id,
     status: 'warehouse_reviewing',
+    packing_status: 'not_started',
   }).eq('id', orderId);
+
+  // Sync warehouse assignment
+  try {
+    const { data: assignment } = await supabase
+      .from('warehouse_assignments')
+      .select('id')
+      .eq('entity_type', 'order')
+      .eq('entity_id', orderId)
+      .eq('warehouse_id', order.warehouse_id)
+      .maybeSingle();
+    if (assignment) {
+      await supabase.from('warehouse_assignments').update({
+        status: 'accepted',
+        accepted_at: new Date().toISOString(),
+      }).eq('id', assignment.id);
+      await supabase.from('warehouse_activity_logs').insert({
+        assignment_id: assignment.id,
+        entity_type: 'order',
+        entity_id: orderId,
+        warehouse_id: order.warehouse_id,
+        action: 'status_accepted',
+        actor_id: user.id,
+        actor_name: profile.full_name || 'Warehouse Staff',
+        actor_role: 'warehouse_staff',
+        new_value: { status: 'accepted' },
+      });
+    }
+  } catch (syncErr) {
+    console.error('Failed to sync assignment (non-fatal):', syncErr);
+  }
 
   const { data: staffProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
   await addTimeline(supabase, orderId, 'warehouse_accepted',
@@ -415,6 +512,37 @@ export async function warehouseRejectOrder(orderId: string, reason: string) {
     status: 'warehouse_rejected',
   }).eq('id', orderId);
 
+  // Sync warehouse assignment
+  try {
+    const { data: assignment } = await supabase
+      .from('warehouse_assignments')
+      .select('id')
+      .eq('entity_type', 'order')
+      .eq('entity_id', orderId)
+      .eq('warehouse_id', order.warehouse_id)
+      .maybeSingle();
+    if (assignment) {
+      await supabase.from('warehouse_assignments').update({
+        status: 'rejected',
+        notes: reason,
+      }).eq('id', assignment.id);
+      await supabase.from('warehouse_activity_logs').insert({
+        assignment_id: assignment.id,
+        entity_type: 'order',
+        entity_id: orderId,
+        warehouse_id: order.warehouse_id,
+        action: 'status_rejected',
+        actor_id: user.id,
+        actor_name: profile.full_name || 'Warehouse Staff',
+        actor_role: 'warehouse_staff',
+        new_value: { status: 'rejected' },
+        notes: reason,
+      });
+    }
+  } catch (syncErr) {
+    console.error('Failed to sync assignment (non-fatal):', syncErr);
+  }
+
   const { data: staffProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
   await addTimeline(supabase, orderId, 'warehouse_rejected',
     `Order rejected by warehouse. Reason: ${reason}`, user.id, staffProfile?.full_name || 'Warehouse Staff', 'warehouse');
@@ -433,16 +561,66 @@ export async function warehouseRejectOrder(orderId: string, reason: string) {
 }
 
 export async function warehouseMarkPreparing(orderId: string) {
-  const { supabase, user } = await requireWarehouseStaff();
+  const { supabase, user, profile } = await requireWarehouseStaff();
+
+  // Verify warehouse ownership — CRITICAL security check
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .select('warehouse_id, warehouse_status')
+    .eq('id', orderId)
+    .single();
+  if (orderErr || !order) throw new Error('Order not found');
+  if (profile.role !== 'admin') {
+    const isAssigned = order.warehouse_id === profile.assigned_warehouse_id;
+    if (!isAssigned) {
+      const { data: assignment } = await supabase
+        .from('warehouse_assignments')
+        .select('id')
+        .eq('entity_type', 'order')
+        .eq('entity_id', orderId)
+        .eq('warehouse_id', profile.assigned_warehouse_id)
+        .eq('status', 'accepted')
+        .maybeSingle();
+      if (!assignment) throw new Error('This order is not assigned to your warehouse');
+    }
+  }
 
   await supabase.from('orders').update({
     warehouse_status: 'preparing',
     status: 'processing',
+    packing_status: 'in_progress',
   }).eq('id', orderId);
 
-  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+  // Sync warehouse assignment if one exists
+  const { data: assignment } = await supabase
+    .from('warehouse_assignments')
+    .select('id')
+    .eq('entity_type', 'order')
+    .eq('entity_id', orderId)
+    .eq('warehouse_id', order.warehouse_id)
+    .eq('status', 'accepted')
+    .maybeSingle();
+  if (assignment) {
+    await supabase.from('warehouse_assignments').update({
+      status: 'processing',
+      processing_status: 'in_progress',
+      packing_status: 'in_progress',
+    }).eq('id', assignment.id);
+  }
+
+  const { data: staffProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
   await addTimeline(supabase, orderId, 'preparing',
-    'Product preparation started', user.id, profile?.full_name || 'Warehouse Staff', 'warehouse');
+    'Product preparation started', user.id, staffProfile?.full_name || 'Warehouse Staff', 'warehouse');
+
+  // Notify admin
+  const { data: orderMeta } = await supabase.from('orders').select('order_number').eq('id', orderId).single();
+  await sendNotification(
+    supabase,
+    'Warehouse Started Processing',
+    `Order ${orderMeta?.order_number || orderId.substring(0, 8)} is now being prepared by warehouse.`,
+    null, orderId, null,
+    `/admin/orders/${orderId}`, 'order'
+  );
 
   revalidatePath('/admin/warehouse/orders');
   revalidatePath('/admin/orders/[id]');
@@ -454,28 +632,71 @@ export async function warehouseMarkReady(
   estimatedDispatch: string | null,
   internalNotes: string | null
 ) {
-  const { supabase, user } = await requireWarehouseStaff();
+  const { supabase, user, profile } = await requireWarehouseStaff();
+
+  // Verify warehouse ownership — CRITICAL security check
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .select('warehouse_id, warehouse_status')
+    .eq('id', orderId)
+    .single();
+  if (orderErr || !order) throw new Error('Order not found');
+  if (profile.role !== 'admin') {
+    const isAssigned = order.warehouse_id === profile.assigned_warehouse_id;
+    if (!isAssigned) {
+      const { data: assignment } = await supabase
+        .from('warehouse_assignments')
+        .select('id')
+        .eq('entity_type', 'order')
+        .eq('entity_id', orderId)
+        .eq('warehouse_id', profile.assigned_warehouse_id)
+        .eq('status', 'processing')
+        .maybeSingle();
+      if (!assignment) throw new Error('This order is not assigned to your warehouse');
+    }
+  }
 
   const updateData: any = {
     warehouse_status: 'ready_for_dispatch',
     status: 'ready_for_dispatch',
+    packing_status: 'verified',
+    shipping_ready: true,
+    ready_for_dispatch_at: new Date().toISOString(),
   };
   if (estimatedDispatch) updateData.warehouse_estimated_dispatch = estimatedDispatch;
   if (internalNotes) updateData.warehouse_notes = internalNotes;
 
   await supabase.from('orders').update(updateData).eq('id', orderId);
 
-  const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
+  // Sync warehouse assignment if one exists
+  const { data: assignment } = await supabase
+    .from('warehouse_assignments')
+    .select('id')
+    .eq('entity_type', 'order')
+    .eq('entity_id', orderId)
+    .eq('warehouse_id', order.warehouse_id)
+    .eq('status', 'processing')
+    .maybeSingle();
+  if (assignment) {
+    await supabase.from('warehouse_assignments').update({
+      status: 'ready_for_dispatch',
+      packing_status: 'verified',
+      shipping_ready: true,
+      ready_for_dispatch_at: new Date().toISOString(),
+    }).eq('id', assignment.id);
+  }
+
+  const { data: staffProfile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
   await addTimeline(supabase, orderId, 'ready_for_dispatch',
     `Ready for dispatch.${estimatedDispatch ? ` Est. dispatch: ${estimatedDispatch}` : ''}`,
-    user.id, profile?.full_name || 'Warehouse Staff', 'warehouse');
+    user.id, staffProfile?.full_name || 'Warehouse Staff', 'warehouse');
 
   // Notify admin
-  const { data: order } = await supabase.from('orders').select('order_number').eq('id', orderId).single();
+  const { data: orderMeta } = await supabase.from('orders').select('order_number').eq('id', orderId).single();
   await sendNotification(
     supabase,
     'Warehouse Ready',
-    `Order ${order?.order_number || orderId.substring(0, 8)} is ready for dispatch. Awaiting admin confirmation.`,
+    `Order ${orderMeta?.order_number || orderId.substring(0, 8)} is ready for dispatch. Awaiting admin confirmation.`,
     null, orderId, null,
     `/admin/orders/${orderId}`, 'order'
   );
@@ -486,7 +707,26 @@ export async function warehouseMarkReady(
 }
 
 export async function updateWarehouseNotes(orderId: string, notes: string) {
-  const { supabase, user } = await requireWarehouseStaff();
+  const { supabase, profile } = await requireWarehouseStaff();
+
+  // Verify warehouse ownership
+  const { data: order, error: orderErr } = await supabase
+    .from('orders')
+    .select('warehouse_id')
+    .eq('id', orderId)
+    .single();
+  if (orderErr || !order) throw new Error('Order not found');
+  if (profile.role !== 'admin' && order.warehouse_id !== profile.assigned_warehouse_id) {
+    const { data: assignment } = await supabase
+      .from('warehouse_assignments')
+      .select('id')
+      .eq('entity_type', 'order')
+      .eq('entity_id', orderId)
+      .eq('warehouse_id', profile.assigned_warehouse_id)
+      .neq('status', 'cancelled')
+      .maybeSingle();
+    if (!assignment) throw new Error('This order is not assigned to your warehouse');
+  }
 
   await supabase.from('orders').update({ warehouse_notes: notes }).eq('id', orderId);
   return { ok: true };

@@ -4,16 +4,25 @@ import { useState, useEffect } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import {
-  Lock, Bell, Shield, Eye, EyeOff, Smartphone, Globe,
-  CheckCircle2, AlertTriangle, Save, Key, LogOut
+  Lock, Bell, Shield, Eye, EyeOff, Smartphone, Globe, User,
+  CheckCircle2, AlertTriangle, Save, Key, LogOut, Upload
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function SettingsPage() {
   const supabase = createSupabaseBrowserClient();
-  const [activeTab, setActiveTab] = useState<'password' | 'notifications' | 'security' | 'sessions' | 'privacy'>('password');
+  const [activeTab, setActiveTab] = useState<'account' | 'password' | 'notifications' | 'security' | 'sessions' | 'privacy'>('account');
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
+
+  // Account form
+  const [profileForm, setProfileForm] = useState({
+    full_name: '',
+    phone: '',
+    avatar_url: '',
+  });
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Password form
   const [passwordForm, setPasswordForm] = useState({
@@ -52,6 +61,11 @@ export default function SettingsPage() {
         .single();
 
       setProfile(profileData);
+      setProfileForm({
+        full_name: profileData?.full_name || '',
+        phone: profileData?.phone || '',
+        avatar_url: profileData?.avatar_url || '',
+      });
 
       // Load notification preferences from profile or defaults
       if (profileData?.notification_preferences) {
@@ -70,6 +84,52 @@ export default function SettingsPage() {
       console.error('Failed to load settings:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Avatar Upload
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.id) return;
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${profile.id}-${Math.floor(Math.random() * 100000)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setProfileForm(prev => ({ ...prev, avatar_url: data.publicUrl }));
+      toast.success('Avatar uploaded! Click Save Changes to apply.');
+    } catch (err: any) {
+      toast.error(err.message || 'Avatar upload failed.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // Profile Update
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.id) return;
+    setUpdatingProfile(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: profileForm.full_name,
+          phone: profileForm.phone,
+          avatar_url: profileForm.avatar_url,
+        })
+        .eq('id', profile.id);
+      if (error) throw error;
+      toast.success('Profile updated successfully');
+      await loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update profile.');
+    } finally {
+      setUpdatingProfile(false);
     }
   };
 
@@ -131,6 +191,7 @@ export default function SettingsPage() {
   };
 
   const tabs = [
+    { id: 'account', label: 'Account', icon: User },
     { id: 'password', label: 'Change Password', icon: Key },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
@@ -143,8 +204,8 @@ export default function SettingsPage() {
       <div className="space-y-6 animate-pulse">
         <div className="h-8 w-48 bg-slate-200 rounded-lg" />
         <div className="h-6 w-72 bg-slate-100 rounded-lg" />
-        <div className="grid grid-cols-5 gap-3">
-          {[...Array(5)].map((_, i) => (
+        <div className="grid grid-cols-6 gap-3">
+          {[...Array(6)].map((_, i) => (
             <div key={i} className="h-10 bg-slate-100 rounded-xl" />
           ))}
         </div>
@@ -190,6 +251,101 @@ export default function SettingsPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
+        {/* Account Settings */}
+        {activeTab === 'account' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8 max-w-lg">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2.5 bg-sky-50 rounded-xl border border-sky-100">
+                <User className="w-5 h-5 text-sky-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Account Settings</h2>
+                <p className="text-xs text-slate-500">Keep your profile details up to date</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="space-y-5">
+              {/* Avatar upload workflow */}
+              <div className="flex items-center gap-5 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="relative h-16 w-16 rounded-xl bg-white overflow-hidden border border-slate-200 shrink-0 flex items-center justify-center text-slate-300">
+                  {profileForm.avatar_url ? (
+                    <img src={profileForm.avatar_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <User className="h-8 w-8" />
+                  )}
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Profile Avatar</label>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={uploadingAvatar}
+                    />
+                    <button
+                      type="button"
+                      className="px-4 py-2 border border-slate-200 hover:bg-white bg-white text-slate-600 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5"
+                    >
+                      <Upload className="w-3.5 h-3.5" /> Upload Avatar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Full Name</label>
+                  <input
+                    required
+                    type="text"
+                    value={profileForm.full_name}
+                    onChange={e => setProfileForm(p => ({ ...p, full_name: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl p-3 outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                    placeholder="Your full name"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl p-3 outline-none text-sm font-medium text-slate-700 bg-slate-50 focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                    placeholder="+880 1XXX-XXXXXX"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Email Address</label>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-sm font-semibold text-slate-500">{profile?.email || ''}</span>
+                  <span className="ml-auto px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full border border-emerald-200">Verified</span>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={updatingProfile}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
+              >
+                {updatingProfile ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                ) : (
+                  <><Save className="w-4 h-4" /> Save Changes</>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* Change Password */}
         {activeTab === 'password' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8 max-w-lg">

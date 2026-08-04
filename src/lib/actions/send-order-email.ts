@@ -1,5 +1,7 @@
 'use server';
 
+import { loadEmailSettingsForGate, loadNotificationSettings } from './notifications';
+
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
@@ -61,6 +63,19 @@ function buildOrderStatusEmail(params: {
 </html>`;
 }
 
+async function isOrderEmailEnabled(): Promise<boolean> {
+  try {
+    const notifications = await loadNotificationSettings();
+    const email = await loadEmailSettingsForGate();
+    return notifications.email_enabled !== false &&
+      notifications.order_update_enabled !== false &&
+      email.order_email_enabled !== false;
+  } catch (err) {
+    console.error('[Email] Failed to load settings, sending anyway:', err);
+    return true;
+  }
+}
+
 export async function sendOrderStatusEmail(params: {
   to: string;
   customerName: string;
@@ -72,6 +87,10 @@ export async function sendOrderStatusEmail(params: {
   estimatedDelivery?: string;
 }) {
   try {
+    if (!(await isOrderEmailEnabled())) {
+      return { ok: true, skipped: true };
+    }
+
     const html = buildOrderStatusEmail(params);
     const label = STATUS_LABELS[params.status] || params.status.replace(/_/g, ' ');
 

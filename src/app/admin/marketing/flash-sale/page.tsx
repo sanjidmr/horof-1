@@ -2,13 +2,26 @@
 
 import React, { useEffect, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { UploadCloud, Save, Timer, Package, Image as ImageIcon } from 'lucide-react';
+import { UploadCloud, Save, Trash2, Timer, Package, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/shadcn/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/shadcn/alert-dialog';
 
 export default function FlashSalePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [existingId, setExistingId] = useState<string | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [data, setData] = useState({
     image_url: '',
@@ -25,6 +38,7 @@ export default function FlashSalePage() {
       // Fetch existing flash sale
       const { data: flashData } = await supabase.from('flash_sales').select('*').limit(1).maybeSingle();
       if (flashData) {
+        setExistingId(flashData.id);
         setData({
           image_url: flashData.image_url,
           title: flashData.title,
@@ -38,7 +52,7 @@ export default function FlashSalePage() {
       // Fetch products for dropdown
       const { data: prodData } = await supabase.from('products').select('id, name').eq('is_active', true);
       if (prodData) setProducts(prodData);
-      
+
       setLoading(false);
     }
     fetchData();
@@ -79,12 +93,15 @@ export default function FlashSalePage() {
 
       // We only ever want ONE flash sale record for now
       const { data: existing } = await supabase.from('flash_sales').select('id').limit(1).maybeSingle();
-      
+
       let error;
       if (existing) {
         ({ error } = await supabase.from('flash_sales').update(payload).eq('id', existing.id));
+        setExistingId(existing.id);
       } else {
-        ({ error } = await supabase.from('flash_sales').insert([payload]));
+        const { data: inserted, error: insertErr } = await supabase.from('flash_sales').insert([payload]).select('id').single();
+        error = insertErr;
+        if (inserted) setExistingId(inserted.id);
       }
 
       if (error) throw error;
@@ -96,13 +113,60 @@ export default function FlashSalePage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!existingId) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('flash_sales').delete().eq('id', existingId);
+      if (error) throw error;
+      setExistingId(null);
+      setData({
+        image_url: '', title: '', main_price: '', offer_price: '', end_time: '', product_id: ''
+      });
+      toast.success('Flash Sale deleted');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="p-10 text-center">Loading Flash Sale data...</div>;
 
   return (
     <div className="max-w-4xl space-y-8 pb-20">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-slate-900">Flash Sale Management</h1>
-        <p className="text-slate-500">Configure the limited-time seasonal offer on the homepage.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-slate-900">Flash Sale Management</h1>
+          <p className="text-slate-500">Configure the limited-time seasonal offer on the homepage.</p>
+        </div>
+        {existingId && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-2xl px-6 h-12 font-bold flex items-center gap-2">
+                <Trash2 className="h-4 w-4" /> Delete Flash Sale
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Flash Sale?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently remove the flash sale from the homepage. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
@@ -134,12 +198,12 @@ export default function FlashSalePage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <ImageIcon className="h-3 w-3" /> Campaign Title
               </label>
-              <input 
-                required 
-                type="text" 
-                value={data.title} 
-                onChange={e => setData({...data, title: e.target.value})} 
-                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none" 
+              <input
+                required
+                type="text"
+                value={data.title}
+                onChange={e => setData({...data, title: e.target.value})}
+                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
                 placeholder="e.g. Winter Collection 2024"
               />
             </div>
@@ -147,23 +211,23 @@ export default function FlashSalePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Main Price</label>
-                <input 
-                  required 
-                  type="number" 
-                  value={data.main_price} 
-                  onChange={e => setData({...data, main_price: e.target.value})} 
-                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none" 
+                <input
+                  required
+                  type="number"
+                  value={data.main_price}
+                  onChange={e => setData({...data, main_price: e.target.value})}
+                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
                   placeholder="৳"
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Offer Price</label>
-                <input 
-                  required 
-                  type="number" 
-                  value={data.offer_price} 
-                  onChange={e => setData({...data, offer_price: e.target.value})} 
-                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none font-bold text-forest" 
+                <input
+                  required
+                  type="number"
+                  value={data.offer_price}
+                  onChange={e => setData({...data, offer_price: e.target.value})}
+                  className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none font-bold text-forest"
                   placeholder="৳"
                 />
               </div>
@@ -173,12 +237,12 @@ export default function FlashSalePage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Timer className="h-3 w-3" /> Sale Ends At
               </label>
-              <input 
-                required 
-                type="datetime-local" 
-                value={data.end_time} 
-                onChange={e => setData({...data, end_time: e.target.value})} 
-                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none" 
+              <input
+                required
+                type="datetime-local"
+                value={data.end_time}
+                onChange={e => setData({...data, end_time: e.target.value})}
+                className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
               />
             </div>
 
@@ -186,9 +250,9 @@ export default function FlashSalePage() {
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <Package className="h-3 w-3" /> Link to Product
               </label>
-              <select 
-                value={data.product_id} 
-                onChange={e => setData({...data, product_id: e.target.value})} 
+              <select
+                value={data.product_id}
+                onChange={e => setData({...data, product_id: e.target.value})}
                 className="w-full bg-slate-50 border-none rounded-xl p-4 text-slate-900 focus:ring-2 focus:ring-forest outline-none"
               >
                 <option value="">Select a product</option>
@@ -202,8 +266,8 @@ export default function FlashSalePage() {
         </div>
 
         <div className="pt-8 border-t border-slate-50 flex justify-end">
-          <Button 
-            disabled={saving || !data.image_url} 
+          <Button
+            disabled={saving || !data.image_url}
             className="bg-forest hover:bg-forest/90 text-white rounded-2xl px-10 h-14 font-bold shadow-xl shadow-forest/20 flex items-center gap-3"
           >
             {saving ? (
@@ -211,7 +275,7 @@ export default function FlashSalePage() {
             ) : (
               <Save className="h-5 w-5" />
             )}
-            {saving ? 'Saving...' : 'Save Flash Sale'}
+            {saving ? 'Saving...' : existingId ? 'Save Flash Sale' : 'Publish Flash Sale'}
           </Button>
         </div>
       </form>

@@ -43,6 +43,8 @@ export async function getProductPricingData(productId: number) {
 export async function upsertQuantityDiscount(discount: Omit<QuantityDiscount, 'id' | 'created_at'> & { id?: string }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error('Supabase client failed to initialize');
+  const { requirePermission } = await import('./security');
+  await requirePermission('products.edit');
 
   const payload: Record<string, unknown> = {
     product_id: discount.product_id,
@@ -65,6 +67,8 @@ export async function upsertQuantityDiscount(discount: Omit<QuantityDiscount, 'i
 export async function deleteQuantityDiscount(id: string, productId: number) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error('Supabase client failed to initialize');
+  const { requirePermission } = await import('./security');
+  await requirePermission('products.edit');
 
   const { error } = await supabase
     .from('quantity_discounts')
@@ -80,6 +84,8 @@ export async function deleteQuantityDiscount(id: string, productId: number) {
 export async function upsertConfigOption(option: Omit<ProductConfigOption, 'id' | 'created_at'> & { id?: string }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error('Supabase client failed to initialize');
+  const { requirePermission } = await import('./security');
+  await requirePermission('products.edit');
 
   const payload: Record<string, unknown> = {
     product_id: option.product_id,
@@ -104,6 +110,8 @@ export async function upsertConfigOption(option: Omit<ProductConfigOption, 'id' 
 export async function deleteConfigOption(id: string, productId: number) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) throw new Error('Supabase client failed to initialize');
+  const { requirePermission } = await import('./security');
+  await requirePermission('products.edit');
 
   const { error } = await supabase
     .from('product_config_options')

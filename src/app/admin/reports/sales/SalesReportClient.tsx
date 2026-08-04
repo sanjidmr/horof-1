@@ -1,182 +1,259 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { DollarSign, TrendingUp, ShoppingBag, Truck, Percent, RefreshCw } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { KPICard } from '@/components/reports/KPICard';
-import { ChartCard } from '@/components/reports/ChartCard';
-import { DateRangePicker } from '@/components/reports/DateRangePicker';
-import { ExportButton } from '@/components/reports/ExportButton';
-import { formatPrice } from '@/lib/utils';
+import {
+  Banknote,
+  ShoppingCart,
+  TrendingUp,
+  PackageOpen,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ReceiptText,
+  AlertTriangle,
+  Undo2,
+} from 'lucide-react';
+import { getReportSales } from '@/lib/actions/reports';
+import { useReportRange } from '@/components/admin/reports/useReportRange';
+import { useReportData } from '@/components/admin/reports/useReportData';
+import { ReportFilters } from '@/components/admin/reports/ReportFilters';
+import { StatCard } from '@/components/admin/reports/StatCard';
+import { ReportCard } from '@/components/admin/reports/ReportCard';
+import { ReportTable } from '@/components/admin/reports/ReportTable';
+import { AreaTrendChart, BarTrendChart, ChartLegend } from '@/components/admin/reports/charts';
+import { ReportGridSkeleton } from '@/components/admin/reports/Skeletons';
+import { EmptyState } from '@/components/admin/reports/EmptyState';
+import { formatCurrency, formatNumber, formatMonthKey } from '@/lib/reports/format';
+import { exportCSV, exportExcel, openPrintable, buildPrintBlock, safeFilename, type PrintBlock } from '@/lib/reports/export';
+import type { SalesReportData, ReportColumn } from '@/lib/reports/types';
+import type { ExportFormat } from '@/components/admin/reports/ExportMenu';
 
-const PIE_COLORS = ['#16a34a', '#2563eb', '#ca8a04', '#dc2626', '#9333ea', '#ea580c'];
+export function SalesReportClient() {
+  const { preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo, search, setSearch, range, key } = useReportRange('last7');
+  const { data, loading, error, reload } = useReportData<SalesReportData>(getReportSales, range, key);
 
-function statusColor(name: string) {
-  const map: Record<string, string> = { pending: '#ca8a04', processing: '#2563eb', shipped: '#9333ea', delivered: '#16a34a', cancelled: '#dc2626', failed: '#dc2626', refunded: '#ea580c' };
-  return map[name] || '#64748b';
-}
+  if (loading || (!data && !error)) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters
+          preset={preset}
+          onPresetChange={setPreset}
+          customFrom={customFrom}
+          setCustomFrom={setCustomFrom}
+          customTo={customTo}
+          setCustomTo={setCustomTo}
+          search={search}
+          setSearch={setSearch}
+          rangeLabel={range.label}
+          onRefresh={reload}
+          loading
+          exportDisabled
+        />
+        <ReportGridSkeleton />
+      </div>
+    );
+  }
 
-export function SalesReportClient({ data, currentRange }: { data: any; currentRange: string }) {
-  const router = useRouter();
+  if (error || !data) {
+    return (
+      <div className="space-y-6">
+        <ReportFilters
+          preset={preset}
+          onPresetChange={setPreset}
+          customFrom={customFrom}
+          setCustomFrom={setCustomFrom}
+          customTo={customTo}
+          setCustomTo={setCustomTo}
+          search={search}
+          setSearch={setSearch}
+          rangeLabel={range.label}
+          onRefresh={reload}
+        />
+        <ReportCard>
+          <EmptyState icon={AlertTriangle} title="Unable to load sales report" message={error || 'Something went wrong. Please refresh and try again.'} />
+        </ReportCard>
+      </div>
+    );
+  }
 
-  const kpiCards = [
-    { label: 'Total Revenue', value: formatPrice(data.totals.revenue), icon: DollarSign, color: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Orders', value: String(data.dailySales.reduce((s: number, d: any) => s + d.orders, 0)), icon: ShoppingBag, color: 'bg-blue-50 text-blue-600' },
-    { label: 'Shipping Charged', value: formatPrice(data.totals.shipping), icon: Truck, color: 'bg-purple-50 text-purple-600' },
-    { label: 'Discounts Given', value: formatPrice(data.totals.discount), icon: Percent, color: 'bg-amber-50 text-amber-600' },
-    { label: 'Items Sold', value: String(data.dailySales.reduce((s: number, d: any) => s + d.items_sold, 0)), icon: TrendingUp, color: 'bg-cyan-50 text-cyan-600' },
-    { label: 'Avg Order Value', value: formatPrice(
-      data.dailySales.reduce((s: number, d: any) => s + d.orders, 0) > 0
-        ? data.dailySales.reduce((s: number, d: any) => s + d.revenue, 0) / data.dailySales.reduce((s: number, d: any) => s + d.orders, 0)
-        : 0
-    ), icon: RefreshCw, color: 'bg-rose-50 text-rose-600' },
+  const k = data.kpis;
+  const growth = k.salesGrowthPct;
+  const growthTrend = { value: `${Math.abs(growth)}% vs previous period`, up: growth >= 0 };
+
+  const statusColumns: ReportColumn<any>[] = [
+    { key: 'status', label: 'Order Status' },
+    { key: 'count', label: 'Orders', align: 'right' },
+    { key: 'total', label: 'Total Value', align: 'right', render: (r) => formatCurrency(r.total) },
+  ];
+  const paymentColumns: ReportColumn<any>[] = [
+    { key: 'status', label: 'Payment Status' },
+    { key: 'count', label: 'Orders', align: 'right' },
+    { key: 'total', label: 'Total Value', align: 'right', render: (r) => formatCurrency(r.total) },
   ];
 
-  const handleRangeChange = (range: string) => {
-    router.push(`/admin/reports/sales?range=${encodeURIComponent(range)}`);
+  const dailyColumns: ReportColumn<any>[] = [
+    { key: 'label', label: 'Date' },
+    { key: 'orders', label: 'Orders', align: 'right' },
+    { key: 'revenue', label: 'Revenue', align: 'right', render: (r) => formatCurrency(r.revenue) },
+    { key: 'itemsSold', label: 'Items Sold', align: 'right', render: (r) => formatNumber(r.itemsSold ?? 0) },
+  ];
+  const monthlyColumns: ReportColumn<any>[] = [
+    { key: 'label', label: 'Month', render: (r) => formatMonthKey(r.label) },
+    { key: 'orders', label: 'Orders', align: 'right' },
+    { key: 'revenue', label: 'Revenue', align: 'right', render: (r) => formatCurrency(r.revenue) },
+  ];
+
+  const handleExport = (fmt: ExportFormat) => {
+    const name = safeFilename('sales-report', range.label);
+    if (fmt === 'csv') {
+      exportCSV(`${name}.csv`, dailyColumns, data.dailyTrend);
+      return;
+    }
+    if (fmt === 'excel') {
+      exportExcel(`${name}.xlsx`, dailyColumns, data.dailyTrend);
+      return;
+    }
+    const blocks: PrintBlock[] = [
+      buildPrintBlock('Daily Sales Trend', dailyColumns, data.dailyTrend),
+      buildPrintBlock('Order Status Breakdown', statusColumns, data.statusBreakdown),
+      buildPrintBlock('Payment Status Breakdown', paymentColumns, data.paymentBreakdown),
+      buildPrintBlock('Monthly Sales', monthlyColumns, data.monthlyTrend),
+    ];
+    openPrintable(
+      'Sales Report',
+      `Period: ${range.label}`,
+      blocks
+    );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <DateRangePicker value={currentRange} onChange={handleRangeChange} />
-        <ExportButton data={data.dailySales} filename="sales-report" columns={[
-          { key: 'date', label: 'Date' }, { key: 'orders', label: 'Orders' },
-          { key: 'revenue', label: 'Revenue' }, { key: 'items_sold', label: 'Items Sold' },
-          { key: 'avg_order_value', label: 'Avg Order Value' },
-        ]} />
+      <ReportFilters
+        preset={preset}
+        onPresetChange={setPreset}
+        customFrom={customFrom}
+        setCustomFrom={setCustomFrom}
+        customTo={customTo}
+        setCustomTo={setCustomTo}
+        search={search}
+        setSearch={setSearch}
+        rangeLabel={range.label}
+        onRefresh={reload}
+        loading={loading}
+        onExport={handleExport}
+        exportDisabled={data.dailyTrend.length === 0}
+      />
+
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard label="Gross Revenue" value={formatCurrency(k.grossRevenue)} icon={<Banknote className="h-5 w-5" />} accent="green" trend={growthTrend} />
+        <StatCard label="Net Revenue" value={formatCurrency(k.netRevenue)} icon={<ReceiptText className="h-5 w-5" />} accent="blue" sub={`Refunds: ${formatCurrency(k.refunds)}`} />
+        <StatCard label="Total Orders" value={formatNumber(k.totalOrders)} icon={<ShoppingCart className="h-5 w-5" />} accent="violet" />
+        <StatCard label="Avg Order Value" value={formatCurrency(k.avgOrderValue)} icon={<TrendingUp className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Items Sold" value={formatNumber(k.itemsSold)} icon={<PackageOpen className="h-5 w-5" />} accent="slate" />
+        <StatCard label="Successful Orders" value={formatNumber(k.successfulOrders)} icon={<CheckCircle2 className="h-5 w-5" />} accent="green" sub={`${formatNumber(k.deliveredOrders)} delivered`} />
+        <StatCard label="Pending Orders" value={formatNumber(k.pendingOrders)} icon={<Clock className="h-5 w-5" />} accent="amber" />
+        <StatCard label="Processing" value={formatNumber(k.processingOrders)} icon={<PackageOpen className="h-5 w-5" />} accent="blue" />
+        <StatCard label="Delivered" value={formatNumber(k.deliveredOrders)} icon={<CheckCircle2 className="h-5 w-5" />} accent="green" />
+        <StatCard label="Returned" value={formatNumber(k.returnedOrders)} icon={<Undo2 className="h-5 w-5" />} accent="violet" />
+        <StatCard label="Cancelled" value={formatNumber(k.cancelledOrders)} icon={<XCircle className="h-5 w-5" />} accent="red" />
+        <StatCard label="Sales Growth" value={`${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`} icon={<TrendingUp className="h-5 w-5" />} accent={growth >= 0 ? 'green' : 'red'} sub="vs previous period" />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpiCards.map((kpi) => <KPICard key={kpi.label} {...kpi} />)}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Sales Trend" subtitle={`Daily revenue & orders for ${range.label}`}>
+          {data.dailyTrend.length === 0 ? (
+            <EmptyState title="No sales in this period" message="Orders placed during this date range will appear here." />
+          ) : (
+            <>
+              <AreaTrendChart
+                data={data.dailyTrend}
+                xKey="label"
+                series={[
+                  { key: 'revenue', label: 'Revenue', color: '#1a4731', kind: 'area', format: 'currency' },
+                  { key: 'orders', label: 'Orders', color: '#10b981', kind: 'area', format: 'number' },
+                ]}
+                format="currency"
+              />
+              <ChartLegend
+                items={[
+                  { label: 'Revenue', color: '#1a4731' },
+                  { label: 'Orders', color: '#10b981' },
+                ]}
+              />
+            </>
+          )}
+        </ReportCard>
+
+        <ReportCard title="Hourly Sales" subtitle="Sales by hour of day">
+          {data.hourlySales.every((h) => h.orders === 0) ? (
+            <EmptyState title="No hourly data" message="No orders recorded within this period." />
+          ) : (
+            <>
+              <BarTrendChart
+                data={data.hourlySales}
+                xKey="label"
+                series={[{ key: 'revenue', label: 'Revenue', color: '#1a4731' }]}
+                format="currency"
+              />
+              <ChartLegend items={[{ label: 'Revenue by hour', color: '#1a4731' }]} />
+            </>
+          )}
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Daily Revenue" subtitle="Revenue per day">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.dailySales}>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: number) => formatPrice(v)} />
-                <Bar dataKey="revenue" fill="#1a4731" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Monthly Sales Trend" subtitle="Revenue per month">
+          {data.monthlyTrend.length === 0 ? (
+            <EmptyState title="No monthly data" />
+          ) : (
+            <BarTrendChart
+              data={data.monthlyTrend.map((m) => ({ ...m, label: formatMonthKey(m.label) }))}
+              xKey="label"
+              series={[{ key: 'revenue', label: 'Revenue', color: '#f59e0b' }]}
+              format="currency"
+            />
+          )}
+        </ReportCard>
 
-        <ChartCard title="Daily Orders" subtitle="Orders per day">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.dailySales}>
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="orders" stroke="#2563eb" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+        <ReportCard title="Weekly Comparison" subtitle="Last 8 weeks revenue & orders">
+          <BarTrendChart
+            data={data.weeklyComparison}
+            xKey="label"
+            series={[
+              { key: 'revenue', label: 'Revenue', color: '#1a4731' },
+              { key: 'orders', label: 'Orders', color: '#3b82f6' },
+            ]}
+            format="currency"
+          />
+        </ReportCard>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Order Status Breakdown" subtitle="Orders by status">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data.statusBreakdown} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={70} label={({ status, count }: any) => `${status}: ${count}`}>
-                  {data.statusBreakdown.map((_: any, i: number) => (
-                    <Cell key={i} fill={statusColor(_.status)} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Order Status Breakdown" subtitle="Orders by fulfillment status">
+          {data.statusBreakdown.length === 0 ? (
+            <EmptyState title="No orders" />
+          ) : (
+            <ReportTable<any> columns={statusColumns} rows={data.statusBreakdown} rowKey={(r) => r.status} pageSize={8} searchText={search} searchKeys={(r) => r.status} />
+          )}
+        </ReportCard>
 
-        <ChartCard title="Payment Status" subtitle="Orders by payment status">
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={data.paymentBreakdown} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={70} label={({ status, count }: any) => `${status}: ${count}`}>
-                  {data.paymentBreakdown.map((_: any, i: number) => (
-                    <Cell key={i} fill={statusColor(_.status)} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-
-        <ChartCard title="Coupon Usage" subtitle="Discount codes used">
-          <div className="h-64 overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead><tr className="text-left text-slate-400 border-b border-slate-100">
-                <th className="py-2 px-2 font-bold">Code</th>
-                <th className="py-2 px-2 font-bold text-right">Uses</th>
-                <th className="py-2 px-2 font-bold text-right">Discount</th>
-              </tr></thead>
-              <tbody>
-                {data.couponReport.length === 0 && (
-                  <tr><td colSpan={3} className="py-8 text-center text-slate-400">No coupon usage in this period</td></tr>
-                )}
-                {data.couponReport.map((c: any, i: number) => (
-                  <tr key={i} className="border-b border-slate-50">
-                    <td className="py-2 px-2 font-medium text-slate-800">{c.coupon_code}</td>
-                    <td className="py-2 px-2 text-right">{c.times_used}</td>
-                    <td className="py-2 px-2 text-right font-medium text-red-600">{formatPrice(c.total_discount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </ChartCard>
+        <ReportCard title="Payment Status Breakdown" subtitle="Orders by payment status">
+          {data.paymentBreakdown.length === 0 ? (
+            <EmptyState title="No orders" />
+          ) : (
+            <ReportTable<any> columns={paymentColumns} rows={data.paymentBreakdown} rowKey={(r) => r.status} pageSize={8} searchText={search} searchKeys={(r) => r.status} />
+          )}
+        </ReportCard>
       </div>
 
-      {data.salesByCategory?.length > 0 && (
-        <ChartCard title="Sales by Category" subtitle="Revenue by product category">
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.salesByCategory} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="category_name" tick={{ fontSize: 10 }} width={120} />
-                <Tooltip formatter={(v: number) => formatPrice(v)} />
-                <Bar dataKey="revenue" fill="#1a4731" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </ChartCard>
-      )}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ReportCard title="Daily Sales Detail" subtitle="Day-by-day revenue breakdown">
+          <ReportTable<any> columns={dailyColumns} rows={data.dailyTrend} rowKey={(r) => r.label} pageSize={10} searchText={search} searchKeys={(r) => r.label} />
+        </ReportCard>
 
-      <ChartCard title="Sales Data Table" subtitle="Detailed daily breakdown">
-        <div className="overflow-x-auto max-h-96">
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-slate-400 border-b border-slate-100">
-              <th className="py-2.5 px-3 font-bold">Date</th>
-              <th className="py-2.5 px-3 font-bold text-right">Orders</th>
-              <th className="py-2.5 px-3 font-bold text-right">Items Sold</th>
-              <th className="py-2.5 px-3 font-bold text-right">Revenue</th>
-              <th className="py-2.5 px-3 font-bold text-right">Avg Order Value</th>
-            </tr></thead>
-            <tbody>
-              {data.dailySales.length === 0 && (
-                <tr><td colSpan={5} className="py-10 text-center text-slate-400">No sales data in this period</td></tr>
-              )}
-              {data.dailySales.map((row: any, i: number) => (
-                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50/50">
-                  <td className="py-2.5 px-3 font-medium text-slate-800">{row.date}</td>
-                  <td className="py-2.5 px-3 text-right">{row.orders}</td>
-                  <td className="py-2.5 px-3 text-right">{row.items_sold}</td>
-                  <td className="py-2.5 px-3 text-right font-medium">{formatPrice(row.revenue)}</td>
-                  <td className="py-2.5 px-3 text-right">{formatPrice(row.avg_order_value)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ChartCard>
+        <ReportCard title="Monthly Sales Detail" subtitle="Month-by-month revenue breakdown">
+          <ReportTable<any> columns={monthlyColumns} rows={data.monthlyTrend} rowKey={(r) => r.label} pageSize={12} searchText={search} searchKeys={(r) => formatMonthKey(r.label)} />
+        </ReportCard>
+      </div>
     </div>
   );
 }

@@ -256,7 +256,7 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Buy Qty</Label>
-                <Input type="number" min={1} value={formData.buy_quantity} onChange={(e) => setFormData((p) => ({ ...p, buy_quantity: Number(e.target.value) }))} />
+                <Input type="number" min={1} value={formData.buy_quantity || ''} onChange={(e) => setFormData((p) => ({ ...p, buy_quantity: Number(e.target.value) || 1 }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Get Product ID</Label>
@@ -264,11 +264,11 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Get Qty</Label>
-                <Input type="number" min={1} value={formData.get_quantity} onChange={(e) => setFormData((p) => ({ ...p, get_quantity: Number(e.target.value) }))} />
+                <Input type="number" min={1} value={formData.get_quantity || ''} onChange={(e) => setFormData((p) => ({ ...p, get_quantity: Number(e.target.value) || 1 }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Get Discount %</Label>
-                <Input type="number" min={0} max={100} value={formData.get_discount_percent} onChange={(e) => setFormData((p) => ({ ...p, get_discount_percent: Number(e.target.value) }))} />
+                <Input type="number" min={0} max={100} value={formData.get_discount_percent || ''} onChange={(e) => setFormData((p) => ({ ...p, get_discount_percent: Number(e.target.value) }))} />
               </div>
             </div>
           )}
@@ -281,7 +281,7 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Fixed Bundle Price (৳)</Label>
-                <Input type="number" min={0} value={formData.fixed_price_total} onChange={(e) => setFormData((p) => ({ ...p, fixed_price_total: Number(e.target.value) }))} />
+                <Input type="number" min={0} value={formData.fixed_price_total || ''} onChange={(e) => setFormData((p) => ({ ...p, fixed_price_total: Number(e.target.value) }))} />
               </div>
             </div>
           )}
@@ -290,7 +290,7 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl">
               <div className="space-y-1.5">
                 <Label>Discount %</Label>
-                <Input type="number" min={0} max={100} value={formData.bundle_discount_percent} onChange={(e) => setFormData((p) => ({ ...p, bundle_discount_percent: Number(e.target.value) }))} />
+                <Input type="number" min={0} max={100} value={formData.bundle_discount_percent || ''} onChange={(e) => setFormData((p) => ({ ...p, bundle_discount_percent: Number(e.target.value) }))} />
               </div>
             </div>
           )}
@@ -303,7 +303,7 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Discount Amount (৳)</Label>
-                <Input type="number" min={0} value={formData.combination_discount_amount} onChange={(e) => setFormData((p) => ({ ...p, combination_discount_amount: Number(e.target.value) }))} />
+                <Input type="number" min={0} value={formData.combination_discount_amount || ''} onChange={(e) => setFormData((p) => ({ ...p, combination_discount_amount: Number(e.target.value) }))} />
               </div>
             </div>
           )}
@@ -311,19 +311,19 @@ export function BundleOfferManager({ initial }: { initial: BundleOffer[] }) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <Label>Min Subtotal</Label>
-              <Input type="number" min={0} value={formData.min_subtotal} onChange={(e) => setFormData((p) => ({ ...p, min_subtotal: Number(e.target.value) }))} />
+              <Input type="number" min={0} value={formData.min_subtotal || ''} onChange={(e) => setFormData((p) => ({ ...p, min_subtotal: Number(e.target.value) }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Max Uses (0 = unlimited)</Label>
-              <Input type="number" min={0} value={formData.max_uses} onChange={(e) => setFormData((p) => ({ ...p, max_uses: Number(e.target.value) }))} />
+              <Input type="number" min={0} value={formData.max_uses || ''} onChange={(e) => setFormData((p) => ({ ...p, max_uses: Number(e.target.value) }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Per User Limit</Label>
-              <Input type="number" min={1} value={formData.per_user_limit} onChange={(e) => setFormData((p) => ({ ...p, per_user_limit: Number(e.target.value) }))} />
+              <Input type="number" min={1} value={formData.per_user_limit || ''} onChange={(e) => setFormData((p) => ({ ...p, per_user_limit: Number(e.target.value) || 1 }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Priority</Label>
-              <Input type="number" value={formData.priority} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
+              <Input type="number" value={formData.priority || ''} onChange={(e) => setFormData((p) => ({ ...p, priority: Number(e.target.value) }))} />
             </div>
           </div>
 

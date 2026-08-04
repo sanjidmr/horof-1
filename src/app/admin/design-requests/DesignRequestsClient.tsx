@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Palette, Search, Eye, Filter, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Palette, Search, Eye, Filter, ChevronLeft, ChevronRight, Calendar, Flag, MessageCircle, FileText, Image as ImageIcon } from 'lucide-react';
 import { getDesignRequests } from '@/lib/actions/design-requests';
 import Link from 'next/link';
 
@@ -18,9 +18,11 @@ interface DesignRequest {
   product_name: string | null;
   description: string;
   status: string;
+  priority: string;
   created_at: string;
   updated_at: string;
   files: DesignRequestFile | DesignRequestFile[];
+  messages: DesignRequestFile | DesignRequestFile[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -47,11 +49,26 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Completed',
 };
 
+const PRIORITY_COLORS: Record<string, string> = {
+  low: 'bg-slate-50 text-slate-600 border-slate-200',
+  normal: 'bg-blue-50 text-blue-700 border-blue-200',
+  high: 'bg-amber-50 text-amber-700 border-amber-200',
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  low: 'Low',
+  normal: 'Normal',
+  high: 'High',
+  urgent: 'Urgent',
+};
+
 export default function DesignRequestsClient() {
   const [requests, setRequests] = useState<DesignRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
   const [sort, setSort] = useState('newest');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -64,6 +81,7 @@ export default function DesignRequestsClient() {
       const result = await getDesignRequests({
         search: search || undefined,
         status: statusFilter || undefined,
+        priority: priorityFilter || undefined,
         sort: sort === 'updated' ? 'updated' : undefined,
         page,
         perPage,
@@ -78,14 +96,14 @@ export default function DesignRequestsClient() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, sort, page, refreshKey]);
+  }, [search, statusFilter, priorityFilter, sort, page, refreshKey]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
-  const getFileCount = (files: DesignRequestFile | DesignRequestFile[] | undefined): number => {
-    if (!files) return 0;
-    if (Array.isArray(files)) return files.length;
-    return files.count ?? 0;
+  const getCount = (val: DesignRequestFile | DesignRequestFile[] | undefined): number => {
+    if (!val) return 0;
+    if (Array.isArray(val)) return val.length;
+    return val.count ?? 0;
   };
 
   const totalPages = Math.ceil(total / perPage);
@@ -124,6 +142,19 @@ export default function DesignRequestsClient() {
           </select>
         </div>
         <div className="relative">
+          <Flag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+          <select
+            value={priorityFilter}
+            onChange={e => { setPriorityFilter(e.target.value); setPage(1); }}
+            className="pl-10 pr-8 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 appearance-none"
+          >
+            <option value="">All Priorities</option>
+            {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <select
             value={sort}
@@ -157,7 +188,9 @@ export default function DesignRequestsClient() {
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Priority</th>
                   <th className="text-center px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Files</th>
+                  <th className="text-center px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Messages</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
                   <th className="text-right px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -198,8 +231,23 @@ export default function DesignRequestsClient() {
                         {STATUS_LABELS[req.status] || req.status.replace(/_/g, ' ')}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border ${PRIORITY_COLORS[req.priority] || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                        <Flag className="h-3 w-3" />
+                        {PRIORITY_LABELS[req.priority] || req.priority || 'Normal'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-center">
-                      <span className="text-sm text-slate-600 font-bold">{getFileCount(req.files)}</span>
+                      <span className="inline-flex items-center gap-1 text-sm text-slate-600 font-bold">
+                        <FileText className="h-3.5 w-3.5 text-slate-400" />
+                        {getCount(req.files)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-sm text-slate-600 font-bold">
+                        <MessageCircle className="h-3.5 w-3.5 text-slate-400" />
+                        {getCount(req.messages)}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-xs text-slate-500">{new Date(req.created_at).toLocaleDateString()}</div>

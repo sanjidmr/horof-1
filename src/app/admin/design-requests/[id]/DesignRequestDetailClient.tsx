@@ -1,23 +1,25 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Download, Trash2, Send, Upload, MessageCircle, Clock,
   User, FileText, ClipboardList, CheckCircle, XCircle, RefreshCw,
-  Plus, DollarSign, Hash, Loader2,
+  Plus, DollarSign, Hash, Loader2, Paperclip, CheckCheck, Phone, Mail,
+  Flag, Package,
 } from 'lucide-react';
 import {
   getDesignRequest, updateDesignRequestStatus, addDesignComment,
   uploadDesignFile, sendForApproval, deleteDesignFile,
+  sendDesignRequestMessage, markDesignRequestMessagesRead,
+  updateDesignRequestPriority,
 } from '@/lib/actions/design-requests';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card';
 import { Button } from '@/components/shadcn/button';
-import { Badge } from '@/components/shadcn/badge';
 import { Textarea } from '@/components/shadcn/textarea';
 import { Input } from '@/components/shadcn/input';
 import { Label } from '@/components/shadcn/label';
@@ -25,6 +27,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/shadcn/select';
 import { Skeleton } from '@/components/shadcn/skeleton';
+import { motion } from 'framer-motion';
 
 const STATUS_OPTIONS = [
   'pending', 'under_review', 'design_in_progress', 'design_ready',
@@ -42,6 +45,16 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   rejected: { label: 'Rejected', color: '#991B1B', bg: '#FEE2E2', border: '#FCA5A5' },
   completed: { label: 'Completed', color: '#065F46', bg: '#D1FAE5', border: '#6EE7B7' },
 };
+
+const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  low: { label: 'Low', color: '#475569', bg: '#F1F5F9', border: '#CBD5E1' },
+  normal: { label: 'Normal', color: '#1D4ED8', bg: '#DBEAFE', border: '#93C5FD' },
+  high: { label: 'High', color: '#B45309', bg: '#FEF3C7', border: '#FCD34D' },
+  urgent: { label: 'Urgent', color: '#991B1B', bg: '#FEE2E2', border: '#FCA5A5' },
+};
+
+const ACCEPTED_TYPES = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.pdf', '.ai', '.psd', '.eps', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.7z', '.rar', '.tif', '.tiff', '.bmp', '.ico'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 function StatusBadge({ status, large }: { status: string; large?: boolean }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
@@ -61,6 +74,30 @@ function StatusBadge({ status, large }: { status: string; large?: boolean }) {
         border: `2px solid ${cfg.border}`,
       }}
     >
+      {cfg.label}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const cfg = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.normal;
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 12px',
+        borderRadius: '9999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        backgroundColor: cfg.bg,
+        color: cfg.color,
+        border: `2px solid ${cfg.border}`,
+      }}
+    >
+      <Flag className="h-3 w-3" />
       {cfg.label}
     </span>
   );
@@ -94,6 +131,12 @@ function formatFileSize(bytes: number | null | undefined) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageFile(file: any): boolean {
+  const mime = file?.mime_type || '';
+  const name = file?.file_name || '';
+  return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|bmp|ico|tif|tiff)$/i.test(name);
 }
 
 function Avatar({ name, email, size = 36 }: { name?: string | null; email?: string | null; size?: number }) {
@@ -130,12 +173,18 @@ export default function DesignRequestDetailClient() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [newComment, setNewComment] = useState('');
-  const [submittingComment, setSubmittingComment] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [submittingMessage, setSubmittingMessage] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [selectedStatus, setSelectedStatus] = useState('');
   const [statusComment, setStatusComment] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  const [selectedPriority, setSelectedPriority] = useState('');
+  const [updatingPriority, setUpdatingPriority] = useState(false);
 
   const [adminNotes, setAdminNotes] = useState('');
   const [estimatedQuantity, setEstimatedQuantity] = useState('');
@@ -151,6 +200,7 @@ export default function DesignRequestDetailClient() {
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  const supabase = createSupabaseBrowserClient();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -161,6 +211,7 @@ export default function DesignRequestDetailClient() {
       } else {
         setData(result);
         setSelectedStatus(result.request?.status || '');
+        setSelectedPriority(result.request?.priority || 'normal');
         setAdminNotes(result.request?.admin_notes || '');
         setEstimatedQuantity(result.request?.estimated_quantity?.toString() || '');
         setEstimatedPrice(result.request?.estimated_price?.toString() || '');
@@ -169,9 +220,9 @@ export default function DesignRequestDetailClient() {
         if (result.request?.customer_id) userIds.add(result.request.customer_id);
         result.history?.forEach((h: any) => { if (h.changed_by) userIds.add(h.changed_by); });
         result.comments?.forEach((c: any) => { if (c.user_id) userIds.add(c.user_id); });
+        result.messages?.forEach((m: any) => { if (m.sender_id) userIds.add(m.sender_id); });
 
         if (userIds.size > 0) {
-          const supabase = createSupabaseBrowserClient();
           const { data: profiles } = await supabase
             .from('profiles')
             .select('id, full_name')
@@ -180,17 +231,82 @@ export default function DesignRequestDetailClient() {
           profiles?.forEach((p: any) => { nameMap[p.id] = p.full_name; });
           setProfileNames(nameMap);
         }
+
+        // Mark messages as read
+        await markDesignRequestMessagesRead(id);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load design request');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, supabase]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData, refreshKey]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel(`admin-dr-${id}-${Date.now()}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'design_request_messages',
+        filter: `request_id=eq.${id}`,
+      }, async (payload) => {
+        const newMsg = payload.new as any;
+        setData((prev: any) => {
+          if (!prev) return prev;
+          const exists = prev.messages?.some((m: any) => m.id === newMsg.id);
+          if (exists) return prev;
+          return { ...prev, messages: [...(prev.messages || []), newMsg] };
+        });
+        await markDesignRequestMessagesRead(id);
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'design_request_message_files',
+        filter: `request_id=eq.${id}`,
+      }, (payload) => {
+        const newFile = payload.new as any;
+        setData((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            messages: prev.messages?.map((m: any) =>
+              m.id === newFile.message_id ? { ...m, files: [...(m.files || []), newFile] } : m
+            ),
+          };
+        });
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'design_requests',
+        filter: `id=eq.${id}`,
+      }, (payload) => {
+        const updated = payload.new as any;
+        setData((prev: any) => {
+          if (!prev) return prev;
+          return { ...prev, request: { ...prev.request, ...updated } };
+        });
+        setSelectedStatus(updated.status || '');
+        setSelectedPriority(updated.priority || 'normal');
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [id, supabase]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [data?.messages]);
 
   const handleStatusUpdate = async () => {
     if (!selectedStatus || selectedStatus === data.request.status) return;
@@ -211,22 +327,63 @@ export default function DesignRequestDetailClient() {
     }
   };
 
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-    setSubmittingComment(true);
+  const handlePriorityUpdate = async () => {
+    if (!selectedPriority || selectedPriority === data.request.priority) return;
+    setUpdatingPriority(true);
     try {
-      const { error: err } = await addDesignComment(id, newComment.trim());
+      const { error: err } = await updateDesignRequestPriority(id, selectedPriority);
       if (err) {
         toast.error(err);
       } else {
-        toast.success('Comment added');
-        setNewComment('');
+        toast.success(`Priority changed to ${PRIORITY_CONFIG[selectedPriority]?.label || selectedPriority}`);
         setRefreshKey(k => k + 1);
       }
     } catch {
-      toast.error('Failed to add comment');
+      toast.error('Failed to update priority');
     } finally {
-      setSubmittingComment(false);
+      setUpdatingPriority(false);
+    }
+  };
+
+  const handleAddFiles = (incoming: FileList | File[]) => {
+    const newFiles: File[] = [];
+    for (const file of Array.from(incoming)) {
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!ACCEPTED_TYPES.includes(ext)) {
+        toast.error(`${file.name}: Unsupported file type`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name}: Exceeds 50MB limit`);
+        continue;
+      }
+      newFiles.push(file);
+    }
+    if (newFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() && selectedFiles.length === 0) return;
+    setSubmittingMessage(true);
+    try {
+      const result = await sendDesignRequestMessage(id, newMessage.trim(), selectedFiles.length > 0 ? selectedFiles : undefined);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        if (result.uploadErrors && result.uploadErrors.length > 0) {
+          result.uploadErrors.forEach(err => toast.error(err));
+        }
+        toast.success('Message sent');
+        setNewMessage('');
+        setSelectedFiles([]);
+        setRefreshKey(k => k + 1);
+      }
+    } catch {
+      toast.error('Failed to send message');
+    } finally {
+      setSubmittingMessage(false);
     }
   };
 
@@ -356,7 +513,7 @@ export default function DesignRequestDetailClient() {
     );
   }
 
-  const { request, files, comments, history } = data;
+  const { request, files, messages, comments, history } = data;
   const customerFiles = files?.filter((f: any) => f.file_type === 'customer_upload') || [];
   const adminFiles = files?.filter((f: any) => f.file_type === 'design_file') || [];
 
@@ -376,15 +533,18 @@ export default function DesignRequestDetailClient() {
             Submitted by {request.full_name} &middot; {new Date(request.created_at).toLocaleDateString()}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setRefreshKey(k => k + 1)}
-          className="h-9 rounded-xl gap-1.5 text-xs font-bold"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <PriorityBadge priority={request.priority} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRefreshKey(k => k + 1)}
+            className="h-9 rounded-xl gap-1.5 text-xs font-bold"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -406,15 +566,24 @@ export default function DesignRequestDetailClient() {
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</span>
-                  <p className="text-sm font-medium text-slate-900">{request.phone_number || '—'}</p>
+                  <p className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
+                    <Phone className="h-3.5 w-3.5 text-slate-400" />
+                    {request.phone_number || '—'}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</span>
-                  <p className="text-sm font-medium text-slate-900">{request.email}</p>
+                  <p className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5 text-slate-400" />
+                    {request.email}
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Name</span>
-                  <p className="text-sm font-medium text-slate-900">{request.product_name || '—'}</p>
+                  <p className="text-sm font-medium text-slate-900 flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5 text-slate-400" />
+                    {request.product_name || '—'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -450,24 +619,35 @@ export default function DesignRequestDetailClient() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {customerFiles.map((file: any) => (
-                    <div key={file.id} className="flex items-center gap-3 p-4 px-6 hover:bg-slate-50/50 transition-colors">
-                      <FileText className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate">{file.file_name}</p>
-                        <p className="text-[11px] text-slate-400">{formatFileSize(file.file_size)}</p>
+                  {customerFiles.map((file: any) => {
+                    const isImage = isImageFile(file);
+                    return (
+                      <div key={file.id} className="flex items-center gap-3 p-4 px-6 hover:bg-slate-50/50 transition-colors">
+                        {isImage ? (
+                          <div className="h-12 w-12 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 shrink-0">
+                            <img src={file.file_url} alt={file.file_name} className="h-full w-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-12 w-12 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{file.file_name}</p>
+                          <p className="text-[11px] text-slate-400">{formatFileSize(file.file_size)}</p>
+                        </div>
+                        <a
+                          href={file.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#1a4731] bg-[#E6F0EB] hover:bg-[#CDE0D6] transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download
+                        </a>
                       </div>
-                      <a
-                        href={file.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#1a4731] bg-[#E6F0EB] hover:bg-[#CDE0D6] transition-colors"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download
-                      </a>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -488,103 +668,240 @@ export default function DesignRequestDetailClient() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {adminFiles.map((file: any) => (
-                    <div key={file.id} className="flex items-center gap-3 p-4 px-6 hover:bg-slate-50/50 transition-colors">
-                      <FileText className="h-5 w-5 text-slate-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate">{file.file_name}</p>
-                        <p className="text-[11px] text-slate-400">{formatFileSize(file.file_size)}</p>
-                      </div>
-                      <a
-                        href={file.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#1a4731] bg-[#E6F0EB] hover:bg-[#CDE0D6] transition-colors"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download
-                      </a>
-                      <button
-                        onClick={() => handleDeleteFile(file.id)}
-                        disabled={deletingFileId === file.id}
-                        className="inline-flex items-center justify-center p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
-                        title="Delete file"
-                      >
-                        {deletingFileId === file.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                  {adminFiles.map((file: any) => {
+                    const isImage = isImageFile(file);
+                    return (
+                      <div key={file.id} className="flex items-center gap-3 p-4 px-6 hover:bg-slate-50/50 transition-colors">
+                        {isImage ? (
+                          <div className="h-12 w-12 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 shrink-0">
+                            <img src={file.file_url} alt={file.file_name} className="h-full w-full object-cover" />
+                          </div>
                         ) : (
-                          <Trash2 className="h-4 w-4" />
+                          <div className="h-12 w-12 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
+                            <FileText className="h-5 w-5" />
+                          </div>
                         )}
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{file.file_name}</p>
+                          <p className="text-[11px] text-slate-400">{formatFileSize(file.file_size)}</p>
+                        </div>
+                        <a
+                          href={file.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#1a4731] bg-[#E6F0EB] hover:bg-[#CDE0D6] transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download
+                        </a>
+                        <button
+                          onClick={() => handleDeleteFile(file.id)}
+                          disabled={deletingFileId === file.id}
+                          className="inline-flex items-center justify-center p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+                          title="Delete file"
+                        >
+                          {deletingFileId === file.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Comments Section */}
+          {/* Chat / Conversation Section */}
           <Card className="bg-white border-slate-100 shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="p-6 border-b border-slate-100">
-              <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-[#1a4731]" />
-                Comments ({comments?.length || 0})
+            <CardHeader className="p-6 border-b border-slate-100 bg-gradient-to-r from-[#1a4731] to-[#2D6A4F]">
+              <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+                <MessageCircle className="h-5 w-5" />
+                Conversation with {request.full_name}
               </CardTitle>
             </CardHeader>
-            <div className="max-h-[500px] overflow-y-auto">
-              {!comments || comments.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-400">
-                  <MessageCircle className="h-8 w-8 mx-auto mb-2 text-slate-200" />
-                  No comments yet.
+
+            {/* Messages Area */}
+            <div className="h-[500px] overflow-y-auto p-6 bg-slate-50/50">
+              {!messages || messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="h-16 w-16 bg-white border border-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
+                    <MessageCircle className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-700">No messages yet</h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                    Start the conversation with the customer. Send a message or upload design files.
+                  </p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {comments.map((comment: any) => (
-                    <div key={comment.id} className="flex gap-3 p-4 px-6">
-                      <Avatar
-                        name={comment.user?.full_name}
-                        email={comment.user?.full_name}
-                        size={34}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-slate-900">
-                            {comment.user?.full_name || 'Unknown'}
-                          </span>
-                          <span className="text-[11px] text-slate-400 ml-auto">
-                            {formatDate(comment.created_at)}
-                          </span>
+                <div className="space-y-4">
+                  {messages.map((msg: any) => {
+                    const isAdmin = msg.sender_role === 'admin';
+                    const isSystem = msg.message_type === 'system';
+                    const msgFiles = msg.files || [];
+
+                    if (isSystem) {
+                      return (
+                        <div key={msg.id} className="flex justify-center">
+                          <div className="bg-slate-100 border border-slate-200 rounded-full px-4 py-1.5 text-[11px] text-slate-500 font-medium">
+                            {msg.message}
+                          </div>
                         </div>
-                        <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                          {comment.comment}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    }
+
+                    return (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn('flex gap-3', isAdmin ? 'justify-end' : 'justify-start')}
+                      >
+                        {!isAdmin && (
+                          <Avatar
+                            name={profileNames[msg.sender_id] || request.full_name}
+                            email={request.email}
+                            size={32}
+                          />
+                        )}
+                        <div className={cn('max-w-[75%]', isAdmin ? 'items-end' : 'items-start')}>
+                          <div
+                            className={cn(
+                              'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                              isAdmin
+                                ? 'bg-[#1a4731] text-white rounded-br-md'
+                                : 'bg-white border border-slate-200 text-slate-700 rounded-bl-md shadow-sm'
+                            )}
+                          >
+                            {msg.message && <p className="whitespace-pre-wrap">{msg.message}</p>}
+
+                            {msgFiles.length > 0 && (
+                              <div className={cn('mt-2 space-y-2', msg.message && 'pt-2 border-t', isAdmin ? 'border-white/20' : 'border-slate-100')}>
+                                {msgFiles.map((file: any) => {
+                                  const isImg = isImageFile(file);
+                                  return (
+                                    <div key={file.id} className="flex items-center gap-2">
+                                      {isImg ? (
+                                        <a href={file.file_url} target="_blank" rel="noopener noreferrer" className="block">
+                                          <img
+                                            src={file.file_url}
+                                            alt={file.file_name}
+                                            className="max-h-40 rounded-lg object-cover border border-black/10"
+                                          />
+                                        </a>
+                                      ) : (
+                                        <a
+                                          href={file.file_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={cn(
+                                            'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                                            isAdmin ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                                          )}
+                                        >
+                                          <FileText className="h-4 w-4 shrink-0" />
+                                          <span className="truncate max-w-[150px]">{file.file_name}</span>
+                                          <Download className="h-3.5 w-3.5 shrink-0" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          <div className={cn('flex items-center gap-1.5 mt-1 px-1', isAdmin ? 'justify-end' : 'justify-start')}>
+                            <span className="text-[10px] text-slate-400 font-medium">{formatDate(msg.created_at)}</span>
+                            {isAdmin && (
+                              <CheckCheck className={cn('h-3 w-3', msg.is_read ? 'text-emerald-500' : 'text-slate-300')} />
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
-            <div className="p-6 border-t border-slate-100">
-              <Textarea
-                placeholder="Write a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                className="min-h-[90px] w-full text-sm"
-              />
-              <div className="flex justify-end mt-3">
-                <Button
-                  onClick={handleAddComment}
-                  disabled={!newComment.trim() || submittingComment}
-                  className="bg-[#1a4731] hover:bg-[#2D6A4F] text-white font-bold text-xs h-9 px-5 rounded-xl gap-1.5"
-                >
-                  {submittingComment ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                  {submittingComment ? 'Sending...' : 'Send Comment'}
-                </Button>
+
+            {/* Selected Files Preview */}
+            {selectedFiles.length > 0 && (
+              <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50">
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+                      {file.type.startsWith('image/') ? (
+                        <img src={URL.createObjectURL(file)} alt="" className="h-6 w-6 rounded object-cover" />
+                      ) : (
+                        <FileText className="h-4 w-4 text-slate-400" />
+                      )}
+                      <span className="text-slate-600 font-medium max-w-[120px] truncate">{file.name}</span>
+                      <span className="text-slate-400">{formatFileSize(file.size)}</span>
+                      <button
+                        onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+
+            {/* Message Input */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-white">
+              <div className="flex items-end gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept={ACCEPTED_TYPES.join(',')}
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) handleAddFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl border border-slate-200 text-slate-500 hover:text-[#1a4731] hover:border-[#1a4731]/30 hover:bg-[#1a4731]/5 transition-all shrink-0"
+                  title="Attach files"
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Type your message..."
+                  rows={1}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a4731]/30 focus:bg-white resize-none min-h-[44px] max-h-[120px]"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={submittingMessage || (!newMessage.trim() && selectedFiles.length === 0)}
+                  className="p-2.5 bg-[#1a4731] text-white rounded-xl hover:bg-[#2D6A4F] transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  title="Send message"
+                >
+                  {submittingMessage ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">
+                JPG, PNG, PDF, AI, PSD, SVG, ZIP, DOCX, XLSX (max 50MB each)
+              </p>
             </div>
           </Card>
         </div>
@@ -644,6 +961,36 @@ export default function DesignRequestDetailClient() {
                 )}
                 {updatingStatus ? 'Updating...' : 'Update Status'}
               </Button>
+
+              <div className="pt-2 border-t border-slate-100">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Priority</Label>
+                  <Select value={selectedPriority} onValueChange={setSelectedPriority}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => (
+                        <SelectItem key={value} value={value}>
+                          {cfg.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={handlePriorityUpdate}
+                  disabled={!selectedPriority || selectedPriority === request.priority || updatingPriority}
+                  className="w-full mt-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs h-9 rounded-xl gap-1.5"
+                >
+                  {updatingPriority ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Flag className="h-4 w-4" />
+                  )}
+                  {updatingPriority ? 'Updating...' : 'Update Priority'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -652,7 +999,7 @@ export default function DesignRequestDetailClient() {
             <CardHeader className="p-6 border-b border-slate-100">
               <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <FileText className="h-5 w-5 text-[#1a4731]" />
-                Admin Notes &amp; Estimation
+                Admin Notes & Estimation
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
@@ -800,7 +1147,7 @@ export default function DesignRequestDetailClient() {
                   <Input
                     type="file"
                     name="file"
-                    accept=".jpg,.jpeg,.png,.pdf,.ai,.psd,.svg,.eps,.zip"
+                    accept={ACCEPTED_TYPES.join(',')}
                     className="text-sm file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#E6F0EB] file:text-[#1a4731] hover:file:bg-[#CDE0D6]"
                     required
                   />

@@ -6,6 +6,7 @@
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { isInternalAdminRole } from '@/lib/auth/roles';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ async function requireAdmin() {
   
   if (profileError) throw new Error(`Profile error: ${profileError.message}`);
   if (!profile) throw new Error('User profile not found');
-  if (profile.role !== 'admin' && !profile.is_warehouse_staff) throw new Error('Forbidden - Admin access required');
+  if (!isInternalAdminRole(profile.role) && !profile.is_warehouse_staff) throw new Error('Forbidden - Admin access required');
   
   return { supabase, user };
 }
@@ -74,7 +75,8 @@ export type CouponRow = {
   excluded_products: string[];
   excluded_categories: string[];
   is_active: boolean;
-  created_at: string;
+  created_at?: string;
+  updated_at: string;
 };
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
@@ -84,7 +86,7 @@ export async function getCoupons(): Promise<CouponRow[]> {
   const { data, error } = await supabase
     .from('coupons')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data || []) as CouponRow[];
 }
@@ -154,7 +156,7 @@ export async function updateCoupon(id: string, data: Partial<CouponData>): Promi
   const payload: Record<string, unknown> = {};
   if (data.code !== undefined) payload.code = data.code.toUpperCase().trim();
   if (data.type !== undefined) payload.type = data.type;
-  if (data.value !== undefined) payload.value = data.value;
+  if (data.value !== undefined) payload.value = data.type === 'free_shipping' ? 0 : data.value;
   if (data.description !== undefined) payload.description = data.description || null;
   if (data.name !== undefined) payload.name = data.name;
   if (data.min_order !== undefined) payload.min_order = data.min_order;

@@ -13,7 +13,7 @@ export async function getDashboardData() {
   const [productRes, orderRes, customerRes, ordersListRes, msgRes, dailySalesRes, profitLossRes, catSalesRes, invSummaryRes, orderStatusRes] = await Promise.all([
     supabase.from('products').select('id,stock,stock_status,is_active,cost_price,price').limit(9999),
     supabase.from('orders').select('id,total,status,payment_status,created_at'),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'customer'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('user_type', 'customer').eq('role', 'customer').eq('is_warehouse_staff', false),
     supabase.from('orders').select('id,total,status,created_at,profiles!customer_id(full_name)').order('created_at', { ascending: false }).limit(5),
     supabase.from('contact_messages').select('id,name,subject,message,created_at').order('created_at', { ascending: false }).limit(5),
     supabase.rpc('get_daily_sales', { from_date: from30, to_date: new Date().toISOString() }),

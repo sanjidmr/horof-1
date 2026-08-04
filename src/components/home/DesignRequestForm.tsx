@@ -6,7 +6,7 @@ import { submitDesignRequest } from '@/lib/actions/design-requests';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const ACCEPTED_TYPES = ['.jpg', '.jpeg', '.png', '.pdf', '.ai', '.psd', '.svg', '.eps', '.zip'];
+const ACCEPTED_TYPES = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.pdf', '.ai', '.psd', '.eps', '.zip', '.doc', '.docx', '.xls', '.xlsx', '.7z', '.rar', '.tif', '.tiff', '.bmp', '.ico'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 interface FileEntry {
@@ -223,6 +223,21 @@ export function DesignRequestForm() {
         </div>
 
         <div>
+          <label htmlFor="priority" className="text-xs font-bold text-slate-600 block mb-1">Priority</label>
+          <select
+            id="priority"
+            name="priority"
+            className="w-full border border-slate-200 rounded-xl px-3 h-11 text-sm outline-none focus:border-[#1a4731] transition-colors bg-white"
+            defaultValue="normal"
+          >
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        </div>
+
+        <div>
           <label htmlFor="description" className="text-xs font-bold text-slate-600 block mb-1">
             Design Description / Requirements <span className="text-red-500">*</span>
           </label>
@@ -263,7 +278,7 @@ export function DesignRequestForm() {
             <p className="text-sm text-slate-600 font-medium">
               {isDragOver ? 'Drop files here' : 'Drag & drop files here, or click to browse'}
             </p>
-            <p className="text-xs text-slate-400 mt-1">JPG, PNG, PDF, AI, PSD, SVG, EPS, ZIP (max 50MB each)</p>
+            <p className="text-xs text-slate-400 mt-1">JPG, PNG, PDF, AI, PSD, SVG, ZIP, DOCX, XLSX (max 50MB each)</p>
           </div>
         </div>
 

@@ -21,6 +21,8 @@ export function parseProductDetails(productDetails: any) {
     fulfillment_status: 'Unfulfilled',
     return_status: 'None',
     return_reason: '',
+    return_notes: '',
+    return_admin_note: '',
     refund_status: 'None',
     refund_reason: ''
   };

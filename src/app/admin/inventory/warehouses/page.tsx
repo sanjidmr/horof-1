@@ -53,6 +53,13 @@ export default function WarehousesPage() {
 
   useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
 
+  // The staff phone number automatically becomes their login password
+  useEffect(() => {
+    if (staffForm.phone.trim()) {
+      setStaffForm(prev => ({ ...prev, password: staffForm.phone.trim() }));
+    }
+  }, [staffForm.phone]);
+
   const resetForm = () => { setForm({ name: '', slug: '', location: '', manager: '', phone: '', email: '', capacity: '' }); setEditing(null); setAddStaff(false); setStaffForm({ name: '', email: '', password: '', phone: '' }); };
 
   const openEdit = (w: WarehouseType) => {
@@ -62,7 +69,7 @@ export default function WarehousesPage() {
 
   const handleSave = async () => {
     if (!form.name || !form.slug) { toast.error('Name and slug required'); return; }
-    if (addStaff && (!staffForm.name || !staffForm.email || !staffForm.password)) { toast.error('Staff name, email and password required'); return; }
+    if (addStaff && (!staffForm.name || !staffForm.email || !staffForm.phone)) { toast.error('Staff name, email and phone number required'); return; }
     setSaving(true);
     try {
       if (editing) {
@@ -228,11 +235,11 @@ export default function WarehousesPage() {
                       className="w-full px-3 py-2.5 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">Password *</label>
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Password (auto from phone)</label>
                     <div className="relative">
-                      <input type={showStaffPassword ? 'text' : 'password'} placeholder="Min 6 characters" value={staffForm.password}
+                      <input type={showStaffPassword ? 'text' : 'password'} placeholder="Auto-set from phone number" value={staffForm.password}
                         onChange={e => setStaffForm({ ...staffForm, password: e.target.value })}
-                        className="w-full px-3 py-2.5 pr-10 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                        className="w-full px-3 py-2.5 pr-10 border border-blue-200 bg-slate-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
                       <button type="button" onClick={() => setShowStaffPassword(!showStaffPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
                         {showStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -240,10 +247,11 @@ export default function WarehousesPage() {
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500 mb-1 block">Phone</label>
-                    <input placeholder="01XXXXXXXXX" value={staffForm.phone}
+                    <label className="text-xs font-bold text-slate-500 mb-1 block">Phone * (login password)</label>
+                    <input type="tel" required placeholder="01XXXXXXXXX" value={staffForm.phone}
                       onChange={e => setStaffForm({ ...staffForm, phone: e.target.value })}
                       className="w-full px-3 py-2.5 border border-blue-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30" />
+                    <p className="text-[10px] text-blue-600 mt-1">This number automatically becomes the staff&apos;s login password.</p>
                   </div>
                 </div>
               )}

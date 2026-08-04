@@ -7,11 +7,11 @@ import { extractProductImages } from '@/lib/store/extract-images';
 import {
   Search,
   Package,
-  Clock, 
-  Truck, 
-  CheckCircle2, 
-  XCircle, 
-  Download, 
+  Clock,
+  Truck,
+  CheckCircle2,
+  XCircle,
+  Download,
   ArrowRight,
   Filter,
   CornerUpLeft,
@@ -33,14 +33,15 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  
+
   // Interactive Modal states
-  const [cancelModalId, setCancelModalId] = useState<number | null>(null);
+  const [cancelModalId, setCancelModalId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const [returnModalId, setReturnModalId] = useState<number | null>(null);
+  const [returnModalId, setReturnModalId] = useState<string | null>(null);
   const [returnReason, setReturnReason] = useState('');
+  const [returnDetails, setReturnDetails] = useState('');
   const [returnLoading, setReturnLoading] = useState(false);
 
   // Reorder state
@@ -123,8 +124,8 @@ export default function OrdersPage() {
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter(o => 
-        String(o.id).toLowerCase().includes(q) || 
+      result = result.filter(o =>
+        String(o.id).toLowerCase().includes(q) ||
         (o.transaction_id && o.transaction_id.toLowerCase().includes(q))
       );
     }
@@ -137,10 +138,10 @@ export default function OrdersPage() {
     if (!cancelModalId) return;
     setCancelLoading(true);
     try {
-      const res = await cancelOrderAction(cancelModalId, cancelReason, 'customer');
+      const res = await cancelOrderAction(String(cancelModalId), cancelReason, 'customer');
       if (res.success) {
         toast.success('Order cancelled successfully.');
-        setOrders(prev => 
+        setOrders(prev =>
           prev.map(o => o.id === cancelModalId ? { ...o, status: 'cancelled' } : o)
         );
         setCancelModalId(null);
@@ -162,15 +163,16 @@ export default function OrdersPage() {
     }
     setReturnLoading(true);
     try {
-      const res = await requestOrderReturnAction(returnModalId, returnReason);
+      const res = await requestOrderReturnAction(String(returnModalId), returnReason, returnDetails);
       if (res.success) {
         toast.success('Return requested successfully.');
-        setOrders(prev => 
+        setOrders(prev =>
           prev.map(o => {
             if (o.id === returnModalId) {
               const { items, metadata } = parseProductDetails(o.product_details);
               metadata.return_status = 'Requested';
               metadata.return_reason = returnReason;
+              metadata.return_notes = returnDetails;
               return { ...o, product_details: [ ...items, { ...metadata, is_metadata: true } ] };
             }
             return o;
@@ -178,6 +180,7 @@ export default function OrdersPage() {
         );
         setReturnModalId(null);
         setReturnReason('');
+        setReturnDetails('');
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to request return.');
@@ -189,31 +192,31 @@ export default function OrdersPage() {
   // Render Status Badge
   const renderStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'pending': 
+      case 'pending':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-200/50"><Clock className="h-3.5 w-3.5" /> Pending</span>;
       case 'confirmed':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#1B4332] text-xs font-bold border border-[#B7E4C7]"><CheckCircle2 className="h-3.5 w-3.5" /> Confirmed</span>;
-      case 'processing': 
+      case 'processing':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200/50"><Package className="h-3.5 w-3.5" /> Processing</span>;
-      case 'packed': 
+      case 'packed':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-700 text-xs font-bold border border-teal-200/50"><Package className="h-3.5 w-3.5" /> Packed</span>;
-      case 'ready_for_pickup': 
+      case 'ready_for_pickup':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-50 text-violet-700 text-xs font-bold border border-violet-200/50"><Truck className="h-3.5 w-3.5" /> Ready for Pickup</span>;
-      case 'shipped': 
+      case 'shipped':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold border border-purple-200/50"><Truck className="h-3.5 w-3.5" /> Shipped</span>;
-      case 'in_transit': 
+      case 'in_transit':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200/50"><Truck className="h-3.5 w-3.5" /> In Transit</span>;
-      case 'out_for_delivery': 
+      case 'out_for_delivery':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-bold border border-sky-200/50"><Truck className="h-3.5 w-3.5" /> Out for Delivery</span>;
-      case 'delivered': 
+      case 'delivered':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200/50"><CheckCircle2 className="h-3.5 w-3.5" /> Delivered</span>;
-      case 'cancelled': 
+      case 'cancelled':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200/50"><XCircle className="h-3.5 w-3.5" /> Cancelled</span>;
-      case 'returned': 
+      case 'returned':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200/50"><Undo2 className="h-3.5 w-3.5" /> Returned</span>;
-      case 'refunded': 
+      case 'refunded':
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 text-xs font-bold border border-rose-200/50"><Undo2 className="h-3.5 w-3.5" /> Refunded</span>;
-      default: 
+      default:
         return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200/50">{status}</span>;
     }
   };
@@ -223,10 +226,10 @@ export default function OrdersPage() {
     if (order.status !== 'delivered') return false;
     const deliveryDate = new Date(order.updated_at || order.created_at);
     const differenceInDays = (Date.now() - deliveryDate.getTime()) / (1000 * 3600 * 24);
-    
+
     const { metadata } = parseProductDetails(order.product_details);
     const returnStatus = metadata.return_status || 'None';
-    
+
     return differenceInDays <= 7 && returnStatus === 'None';
   };
 
@@ -237,7 +240,7 @@ export default function OrdersPage() {
   return (
     <div className="min-h-screen bg-slate-50/50 pt-32 pb-24 px-6">
       <div className="max-w-4xl mx-auto space-y-10">
-        
+
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-b pb-6 border-slate-100">
           <div className="space-y-2">
@@ -253,17 +256,17 @@ export default function OrdersPage() {
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
           <div className="relative flex-1 w-full group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-[#1a4731] transition-colors" />
-            <input 
-              placeholder="Search by Order ID or Transaction ID..." 
+            <input
+              placeholder="Search by Order ID or Transaction ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl pl-12 pr-4 text-sm text-slate-950 outline-none focus:bg-white focus:border-[#1a4731] focus:ring-1 focus:ring-[#1a4731] transition-all"
             />
           </div>
-          
+
           <div className="flex items-center gap-2 w-full md:w-auto">
             <Filter className="h-4 w-4 text-slate-400 hidden md:block" />
-            <select 
+            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full md:w-48 h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 text-sm text-slate-800 outline-none focus:bg-white focus:border-[#1a4731] transition-all cursor-pointer"
@@ -299,8 +302,8 @@ export default function OrdersPage() {
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-slate-800">No orders found</h2>
               <p className="text-slate-400 max-w-sm mx-auto text-sm font-light">
-                {searchQuery || statusFilter !== 'all' 
-                  ? 'We couldn\'t find any orders matching your filters. Try clearing your search.' 
+                {searchQuery || statusFilter !== 'all'
+                  ? 'We couldn\'t find any orders matching your filters. Try clearing your search.'
                   : 'You haven\'t placed any orders yet. Visit our gallery to see our premium handcrafted pieces.'}
               </p>
             </div>
@@ -324,7 +327,7 @@ export default function OrdersPage() {
                       <p className="font-mono text-sm text-slate-800 font-semibold">#{order.id}</p>
                       <p className="text-[10px] text-slate-400">{new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
                     </div>
-                    
+
                     <div className="flex flex-wrap gap-2 items-center">
                       {metadata.return_status && metadata.return_status !== 'None' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
@@ -380,7 +383,7 @@ export default function OrdersPage() {
                         <p><span className="font-semibold text-slate-700">Est. Delivery:</span> {new Date(metadata.estimated_delivery).toLocaleDateString()}</p>
                       )}
                     </div>
-                    
+
                     <div className="text-right">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Price</span>
                       <p className="text-2xl font-display font-black text-[#1a4731]">{formatPrice(Number(order.total_price || order.amount || 0))}</p>
@@ -449,7 +452,7 @@ export default function OrdersPage() {
                   <div className="flex flex-wrap gap-3 justify-between items-center pt-2">
                     <div className="flex gap-2">
                       {order.status === 'pending' && (
-                        <button 
+                        <button
                           onClick={() => setCancelModalId(order.id)}
                           className="h-11 px-6 rounded-2xl border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold transition-all cursor-pointer"
                         >
@@ -457,7 +460,7 @@ export default function OrdersPage() {
                         </button>
                       )}
                       {returnEligible && (
-                        <button 
+                        <button
                           onClick={() => setReturnModalId(order.id)}
                           className="h-11 px-6 rounded-2xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                         >
@@ -465,7 +468,7 @@ export default function OrdersPage() {
                         </button>
                       )}
                       {isReorderEligible(order.status) && (
-                        <button 
+                        <button
                           onClick={() => setReorderModalId(order.id)}
                           className="h-11 px-6 rounded-2xl border border-[#1a4731]/30 text-[#1a4731] hover:bg-[#1a4731]/5 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                         >
@@ -473,16 +476,16 @@ export default function OrdersPage() {
                         </button>
                       )}
                     </div>
-                    
+
                     <div className="flex gap-3 w-full sm:w-auto justify-end">
-                      <Link 
-                        href={`/orders/invoice/${order.id}`} 
+                      <Link
+                        href={`/orders/invoice/${order.id}`}
                         target="_blank"
                         className="inline-flex items-center gap-1.5 h-11 px-6 rounded-2xl border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 transition-colors"
                       >
                         <Download className="h-3.5 w-3.5" /> Invoice
                       </Link>
-                      <Link 
+                      <Link
                         href={`/track-order?order=${order.order_number || order.id}`}
                         className="inline-flex items-center gap-2 h-11 px-8 bg-[#1a4731] hover:bg-[#2d6a4f] text-white rounded-2xl text-xs font-bold shadow-lg shadow-forest-900/10 transition-all"
                       >
@@ -510,7 +513,7 @@ export default function OrdersPage() {
               </p>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Reason for cancellation</label>
-                <textarea 
+                <textarea
                   placeholder="e.g. Changed my mind, Ordered by mistake..."
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
@@ -518,13 +521,13 @@ export default function OrdersPage() {
                 />
               </div>
               <div className="flex gap-3 justify-end">
-                <button 
+                <button
                   onClick={() => { setCancelModalId(null); setCancelReason(''); }}
                   className="h-12 px-6 rounded-2xl border text-xs font-bold hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleCancelOrder}
                   disabled={cancelLoading}
                   className="h-12 px-6 bg-red-600 text-white rounded-2xl text-xs font-bold hover:bg-red-700 disabled:opacity-50 transition-all cursor-pointer"
@@ -549,22 +552,38 @@ export default function OrdersPage() {
               </p>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Reason for Return</label>
-                <textarea 
-                  placeholder="Please describe why you are returning this item (e.g. damaged, wrong size)..."
+                <select
                   value={returnReason}
                   onChange={(e) => setReturnReason(e.target.value)}
                   className="w-full h-28 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs text-slate-900 outline-none focus:bg-white focus:border-[#1a4731] transition-all resize-none"
                   required
+                >
+                  <option value="">Select a reason...</option>
+                  <option value="defective">Defective / Damaged Product</option>
+                  <option value="wrong_item">Wrong Item Received</option>
+                  <option value="not_as_described">Not as Described</option>
+                  <option value="size_issue">Size / Fit Issue</option>
+                  <option value="changed_mind">Changed Mind</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">Additional Details (optional)</label>
+                <textarea
+                  placeholder="Describe the issue in more detail..."
+                  value={returnDetails}
+                  onChange={(e) => setReturnDetails(e.target.value)}
+                  className="w-full h-28 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xs text-slate-900 outline-none focus:bg-white focus:border-[#1a4731] transition-all resize-none"
                 />
               </div>
               <div className="flex gap-3 justify-end">
-                <button 
-                  onClick={() => { setReturnModalId(null); setReturnReason(''); }}
+                <button
+                  onClick={() => { setReturnModalId(null); setReturnReason(''); setReturnDetails(''); }}
                   className="h-12 px-6 rounded-2xl border text-xs font-bold hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleRequestReturn}
                   disabled={returnLoading}
                   className="h-12 px-8 bg-[#1a4731] text-white rounded-2xl text-xs font-bold hover:bg-[#2d6a4f] disabled:opacity-50 transition-all cursor-pointer"
@@ -589,13 +608,13 @@ export default function OrdersPage() {
                 Prices will be recalculated at current rates.
               </p>
               <div className="flex gap-3 justify-end">
-                <button 
+                <button
                   onClick={() => setReorderModalId(null)}
                   className="h-12 px-6 rounded-2xl border text-xs font-bold hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleReorder}
                   disabled={reorderLoading}
                   className="h-12 px-8 bg-[#1a4731] text-white rounded-2xl text-xs font-bold hover:bg-[#2d6a4f] disabled:opacity-50 transition-all cursor-pointer flex items-center gap-2"

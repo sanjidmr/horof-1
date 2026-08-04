@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
-import { CheckCircle, Loader2, Send, AlertCircle, X } from 'lucide-react';
+import { CheckCircle, Loader2, Send, AlertCircle, X, Lock } from 'lucide-react';
 import { submitReview } from '@/lib/actions/reviews';
 import { StarRating } from './StarRating';
 
@@ -9,6 +9,7 @@ interface ReviewableOrder {
   orderId: string;
   orderNumber: string;
   alreadyReviewed: boolean;
+  variantInfo: { size?: string | null; color?: string | null } | null;
 }
 
 interface LeaveReviewFormProps {
@@ -16,7 +17,7 @@ interface LeaveReviewFormProps {
   productName: string;
   slug: string;
   reviewableOrders?: ReviewableOrder[];
-  onReviewSubmitted?: (review: any) => void;
+  onReviewSubmitted?: () => void;
   user?: any;
 }
 
@@ -30,9 +31,8 @@ export function LeaveReviewForm({
 }: LeaveReviewFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [rating, setRating] = useState(0);
-  const [guestName, setGuestName] = useState('');
   
-  // Find pending orders for database reviews
+  // Find pending orders for reviews (not yet reviewed)
   const pendingOrders = reviewableOrders.filter((o) => !o.alreadyReviewed);
   
   const [selectedOrder, setSelectedOrder] = useState<string>(
@@ -43,13 +43,23 @@ export function LeaveReviewForm({
   const [errorMsg, setErrorMsg] = useState('');
   const [isPending, startTransition] = useTransition();
 
-  // If logged in and has pending orders, this is a database review
-  const isDbReviewEligible = user && pendingOrders.length > 0;
+  // Only authenticated users with delivered orders can review
+  const canReview = user && pendingOrders.length > 0;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+
+    if (!user) {
+      setErrorMsg('Please log in to write a review.');
+      return;
+    }
+
+    if (!canReview) {
+      setErrorMsg('You can only review products from delivered orders.');
+      return;
+    }
 
     if (rating === 0) {
       setErrorMsg('Please select a star rating before submitting.');
@@ -57,7 +67,6 @@ export function LeaveReviewForm({
     }
 
     const fd = new FormData(formRef.current!);
-    const title = (fd.get('title') as string)?.trim() || '';
     const body = (fd.get('body') as string)?.trim() || '';
 
     if (!body) {
@@ -65,77 +74,74 @@ export function LeaveReviewForm({
       return;
     }
 
-    if (!user && !guestName.trim()) {
-      setErrorMsg('Please enter your name.');
+    if (!selectedOrder) {
+      setErrorMsg('Please select an order.');
       return;
     }
 
-    if (isDbReviewEligible) {
-      // Authenticated database review flow
-      fd.set('rating', String(rating));
-      fd.set('slug', slug);
-      fd.set('order_id', selectedOrder);
+    fd.set('rating', String(rating));
+    fd.set('slug', slug);
+    fd.set('order_id', selectedOrder);
 
-      startTransition(async () => {
-        const result = await submitReview(fd);
-        if (result.success) {
-          setSuccessMsg('Your review has been submitted successfully! Thank you.');
-          
-          const newReview = {
-            id: `db-local-${Date.now()}`,
-            product_id: productId,
-            customer_id: user.id,
-            order_id: selectedOrder,
-            rating: rating,
-            title: title || null,
-            body: body || null,
-            is_approved: true,
-            created_at: new Date().toISOString(),
-            profiles: {
-              full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Verified Customer',
-              avatar_url: user.user_metadata?.avatar_url || null
-            }
-          };
-
-          if (onReviewSubmitted) {
-            onReviewSubmitted(newReview);
-          }
-
-          setRating(0);
-          formRef.current?.reset();
-        } else {
-          setErrorMsg(result.error ?? 'Something went wrong.');
-        }
-      });
-    } else {
-      // Guest or local-only review flow
-      const newReview = {
-        id: `local-${Date.now()}`,
-        product_id: productId,
-        customer_id: user?.id || 'guest',
-        order_id: 'local-order',
-        rating: rating,
-        title: title || null,
-        body: body || null,
-        is_approved: true,
-        created_at: new Date().toISOString(),
-        profiles: {
-          full_name: user 
-            ? (user.user_metadata?.full_name || user.email?.split('@')[0] || 'Customer')
-            : (guestName.trim() || 'Guest Customer'),
-          avatar_url: user?.user_metadata?.avatar_url || null
-        }
-      };
-
-      if (onReviewSubmitted) {
-        onReviewSubmitted(newReview);
-      }
-
-      setSuccessMsg('Thank you! Your review has been added.');
-      setRating(0);
-      setGuestName('');
-      formRef.current?.reset();
+    // Add variant info if available
+    const selectedOrderData = pendingOrders.find(o => o.orderId === selectedOrder);
+    if (selectedOrderData?.variantInfo) {
+      fd.set('variant_info', JSON.stringify(selectedOrderData.variantInfo));
     }
+
+    startTransition(async () => {
+      const result = await submitReview(fd);
+      if (result.success) {
+        setSuccessMsg('Your review has been submitted and is pending admin approval. Thank you!');
+        setRating(0);
+        formRef.current?.reset();
+        if (onReviewSubmitted) onReviewSubmitted();
+      } else {
+        setErrorMsg(result.error ?? 'Something went wrong.');
+      }
+    });
+  }
+
+  // If user is not logged in
+  if (!user) {
+    return (
+      <div className="review-form-card bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="review-form-icon bg-slate-100 p-2.5 rounded-xl">
+            <Lock className="w-4 h-4 text-slate-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 font-display">Write a Review</h3>
+            <p className="text-xs text-slate-500">for <span className="font-semibold">{productName}</span></p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">
+          Please <a href="/login" className="text-[#2D6A4F] font-bold underline">log in</a> to write a review. 
+          Only customers who have purchased and received this product can leave a review.
+        </p>
+      </div>
+    );
+  }
+
+  // If user is logged in but has no eligible orders
+  if (!canReview) {
+    return (
+      <div className="review-form-card bg-white border border-slate-200/60 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="review-form-icon bg-slate-100 p-2.5 rounded-xl">
+            <Lock className="w-4 h-4 text-slate-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 font-display">Write a Review</h3>
+            <p className="text-xs text-slate-500">for <span className="font-semibold">{productName}</span></p>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500">
+          You can only review this product after your order has been delivered. 
+          Once your order is marked as delivered, you'll be able to share your experience here.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -173,24 +179,8 @@ export function LeaveReviewForm({
         {/* Hidden fields */}
         <input type="hidden" name="product_id" value={productId} />
 
-        {/* Guest Name input */}
-        {!user && (
-          <div className="review-field-group">
-            <label htmlFor="guest-name" className="review-field-label text-xs font-bold text-slate-600 block mb-1">Your Name *</label>
-            <input
-              id="guest-name"
-              required
-              type="text"
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              placeholder="Enter your name..."
-              className="review-input w-full border border-slate-200 rounded-xl px-3 h-11 text-sm outline-none focus:border-[#2D6A4F]"
-            />
-          </div>
-        )}
-
         {/* Order selector (if multiple eligible orders) */}
-        {isDbReviewEligible && pendingOrders.length > 1 && (
+        {pendingOrders.length > 1 && (
           <div className="review-field-group">
             <label className="review-field-label text-xs font-bold text-slate-600 block mb-1">Select Order</label>
             <select

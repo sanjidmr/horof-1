@@ -27,5 +27,5 @@ export default async function TermsPage() {
     );
   }
 
-  return <LegalPageContent data={data} />;
+  return <LegalPageContent data={data} pageType="terms" />;
 }

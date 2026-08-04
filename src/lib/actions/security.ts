@@ -33,6 +33,7 @@ export async function logAudit(action: string, entityType: string, entityId?: st
 export async function getAuditLogs(page: number = 1, perPage: number = 50, filters?: { action?: string; entityType?: string; severity?: string; userId?: string; from?: string; to?: string }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  await requirePermission('audit_logs.view');
 
   let query = supabase.from('audit_logs').select('*, user:user_id(id, full_name, email, avatar_url)', { count: 'exact' });
 
@@ -54,6 +55,7 @@ export async function getAuditLogs(page: number = 1, perPage: number = 50, filte
 export async function clearAuditLogs() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  await requirePermission('security.manage_settings');
   const { error } = await supabase.from('audit_logs').delete().lt('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
   if (error) return { error: error.message };
   await logAudit('clear_audit_logs', 'audit_logs', undefined, 'Cleared audit logs older than 90 days');
@@ -67,6 +69,7 @@ export async function clearAuditLogs() {
 export async function getRoles() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  await requirePermission('roles.view');
   const { data } = await supabase.from('roles').select('*, permissions:role_permissions(permission:permission_id(*))').order('priority', { ascending: false });
   return data || [];
 }
@@ -111,6 +114,7 @@ export async function deleteRole(id: string) {
 export async function getPermissions() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  await requirePermission('permissions.view');
   const { data } = await supabase.from('permissions').select('*').order('module').order('name');
   return data || [];
 }
@@ -118,7 +122,7 @@ export async function getPermissions() {
 export async function updateRolePermission(roleId: string, permissionId: string, granted: boolean) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
-  await requirePermission('permissions.manage');
+  await requirePermission('permissions.manage_settings');
 
   if (granted) {
     const { error } = await supabase.from('role_permissions').upsert({ role_id: roleId, permission_id: permissionId, granted: true }, { onConflict: 'role_id,permission_id' });
@@ -135,7 +139,7 @@ export async function updateRolePermission(roleId: string, permissionId: string,
 export async function updateRolePermissionsBatch(roleId: string, permissionIds: string[]) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
-  await requirePermission('permissions.manage');
+  await requirePermission('permissions.manage_settings');
 
   // Delete all existing permissions for this role
   const { error: delErr } = await supabase.from('role_permissions').delete().eq('role_id', roleId);
@@ -162,11 +166,19 @@ export async function requirePermission(permissionCode: string) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, is_warehouse_staff')
+    .select('role, is_warehouse_staff, user_type')
     .eq('id', user.id)
     .single();
 
   if (!profile) throw new Error('Profile not found');
+
+  // Only internal users can hold admin permissions (strict RBAC).
+  // There is NO implicit 'admin profile role = super admin' bypass:
+  // access flows exclusively through user_roles -> role_permissions
+  // and per-user overrides in user_permissions.
+  if (profile.user_type !== 'internal') {
+    throw new Error(`Access denied: missing permission "${permissionCode}"`);
+  }
 
   const { data: userRoles } = await supabase
     .from('user_roles')
@@ -175,40 +187,36 @@ export async function requirePermission(permissionCode: string) {
 
   const roleNames = (userRoles || []).map((ur: any) => ur.role?.name).filter(Boolean) as string[];
 
+  // super_admin and owner are unrestricted.
   if (roleNames.includes('super_admin') || roleNames.includes('owner')) return;
 
-  const { data: rolePerms } = await supabase
-    .from('role_permissions')
-    .select('permission:permission_id(code), granted')
-    .eq('granted', true)
-    .in('role_id', (userRoles || []).map((ur: any) => ur.role_id).filter(Boolean));
+  const roleIds = (userRoles || []).map((ur: any) => ur.role_id).filter(Boolean);
+  if (roleIds.length > 0) {
+    const { data: rolePerms } = await supabase
+      .from('role_permissions')
+      .select('permission:permission_id(code), granted')
+      .eq('granted', true)
+      .in('role_id', roleIds);
 
-  const grantedCodes = new Set((rolePerms || []).map((rp: any) => rp.permission?.code).filter(Boolean) as string[]);
-  if (grantedCodes.has(permissionCode)) return;
-
-  const { data: userPerm } = await supabase
-    .from('user_permissions')
-    .select('granted')
-    .eq('user_id', user.id)
-    .eq('permission_id', (await supabase.from('permissions').select('id').eq('code', permissionCode).single()).data?.id || '')
-    .maybeSingle();
-
-  if (userPerm?.granted) return;
-
-  if (profile.role === 'admin' && roleNames.length === 0) {
-    const { data: superAdminRole } = await supabase.from('roles').select('id').eq('name', 'super_admin').maybeSingle();
-    if (superAdminRole) {
-      await supabase.from('user_roles').insert({ user_id: user.id, role_id: superAdminRole.id });
-      return;
-    }
+    const grantedCodes = new Set((rolePerms || []).map((rp: any) => rp.permission?.code).filter(Boolean) as string[]);
+    if (grantedCodes.has(permissionCode)) return;
   }
 
-  if (profile.is_warehouse_staff) {
-    const warehousePerms = [
-      'dashboard.view', 'inventory.view', 'orders.view', 'orders.edit',
-      'products.view', 'products.edit', 'warehouse.view', 'warehouse.manage',
-    ];
-    if (warehousePerms.includes(permissionCode)) return;
+  const { data: perm } = await supabase
+    .from('permissions')
+    .select('id')
+    .eq('code', permissionCode)
+    .maybeSingle();
+
+  if (perm) {
+    const { data: userPerm } = await supabase
+      .from('user_permissions')
+      .select('granted')
+      .eq('user_id', user.id)
+      .eq('permission_id', perm.id)
+      .maybeSingle();
+
+    if (userPerm?.granted) return;
   }
 
   throw new Error(`Access denied: missing permission "${permissionCode}"`);
@@ -228,7 +236,7 @@ export async function getUserRoles(userId: string) {
 export async function assignUserRole(userId: string, roleId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
-  await requirePermission('users.manage_roles');
+  await requirePermission('users.assign');
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated' };
@@ -245,7 +253,7 @@ export async function assignUserRole(userId: string, roleId: string) {
 export async function removeUserRole(userId: string, roleId: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
-  await requirePermission('users.manage_roles');
+  await requirePermission('users.assign');
   const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role_id', roleId);
   if (error) return { error: error.message };
   await logAudit('remove_role', 'user_roles', userId, `Removed role`);
@@ -256,10 +264,11 @@ export async function removeUserRole(userId: string, roleId: string) {
 export async function getAdminUsers() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  await requirePermission('users.view');
   const { data } = await supabase
     .from('profiles')
     .select('*, user_roles:user_roles!user_id(role:role_id(*))')
-    .or('role.eq.admin,is_warehouse_staff.eq.true')
+    .eq('user_type', 'internal')
     .order('created_at', { ascending: false });
   return data || [];
 }
@@ -271,6 +280,7 @@ export async function getAdminUsers() {
 export async function getLoginHistory(page: number = 1, perPage: number = 50, filters?: { status?: string; userId?: string; from?: string; to?: string }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  await requirePermission('login_history.view');
 
   let query = supabase.from('login_history').select('*', { count: 'exact' });
 
@@ -294,6 +304,7 @@ export async function getLoginHistory(page: number = 1, perPage: number = 50, fi
 export async function getSecurityEvents(page: number = 1, perPage: number = 50, filters?: { severity?: string; eventType?: string; isResolved?: boolean }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  await requirePermission('security.view');
 
   let query = supabase.from('security_events').select('*', { count: 'exact' });
 
@@ -312,6 +323,7 @@ export async function getSecurityEvents(page: number = 1, perPage: number = 50, 
 export async function resolveSecurityEvent(id: string) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  await requirePermission('security.edit');
   const { error } = await supabase.from('security_events').update({ is_resolved: true }).eq('id', id);
   if (error) return { error: error.message };
   return { error: null };
@@ -336,6 +348,7 @@ export async function createSecurityEvent(eventType: string, title: string, mess
 export async function getBackups(page: number = 1, perPage: number = 50) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  await requirePermission('backup.view');
 
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
@@ -348,6 +361,7 @@ export async function getBackups(page: number = 1, perPage: number = 50) {
 export async function createBackup(type: string = 'manual', includes: string[] = ['database']) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated', id: null };
+  await requirePermission('backup.create');
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not authenticated', id: null };
@@ -389,6 +403,7 @@ export async function createBackup(type: string = 'manual', includes: string[] =
 export async function getBackupSchedules() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  await requirePermission('backup.view');
   const { data } = await supabase.from('backup_schedules').select('*').order('created_at');
   return data || [];
 }
@@ -396,6 +411,7 @@ export async function getBackupSchedules() {
 export async function createBackupSchedule(data: { name: string; type: string; frequency: string; timeOfDay?: string; retentionDays?: number }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  await requirePermission('backup.manage_settings');
 
   const now = new Date();
   let nextRun = new Date();
@@ -416,6 +432,7 @@ export async function createBackupSchedule(data: { name: string; type: string; f
 export async function updateBackupSchedule(id: string, data: { is_active?: boolean; frequency?: string; retention_days?: number }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'Not authenticated' };
+  await requirePermission('backup.manage_settings');
   const { error } = await supabase.from('backup_schedules').update(data).eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/admin/security');
@@ -425,6 +442,7 @@ export async function updateBackupSchedule(id: string, data: { is_active?: boole
 export async function getRestoreHistory(page: number = 1, perPage: number = 50) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { data: [], total: 0 };
+  await requirePermission('backup.view');
   const from = (page - 1) * perPage;
   const to = from + perPage - 1;
   const { data, count } = await supabase.from('restore_history').select('*, backup:backup_id(name, type, size_bytes)', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
@@ -433,85 +451,14 @@ export async function getRestoreHistory(page: number = 1, perPage: number = 50) 
 
 // ============================================================
 // FRAUD PROTECTION
+// NOTE: fraud_blacklist, fraud_whitelist, and fraud_events tables
+// do NOT exist in the actual schema. Only fraud_rules exists.
 // ============================================================
-
-export async function getFraudEvents(page: number = 1, perPage: number = 50, filters?: { eventType?: string; isResolved?: boolean; userId?: string }) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { data: [], total: 0 };
-  let query = supabase.from('fraud_events').select('*', { count: 'exact' });
-  if (filters?.eventType) query = query.eq('event_type', filters.eventType);
-  if (filters?.isResolved !== undefined) query = query.eq('is_resolved', filters.isResolved);
-  if (filters?.userId) query = query.eq('user_id', filters.userId);
-  const from = (page - 1) * perPage;
-  const to = from + perPage - 1;
-  const { data, count } = await query.order('created_at', { ascending: false }).range(from, to);
-  return { data: data || [], total: count || 0 };
-}
-
-export async function resolveFraudEvent(id: string, notes?: string) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: 'Not authenticated' };
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Not authenticated' };
-  const { error } = await supabase.from('fraud_events').update({ is_resolved: true, resolved_by: user.id, resolved_at: new Date().toISOString(), notes }).eq('id', id);
-  if (error) return { error: error.message };
-  return { error: null };
-}
-
-export async function getBlacklist() {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return [];
-  const { data } = await supabase.from('fraud_blacklist').select('*').eq('is_active', true).order('created_at', { ascending: false });
-  return data || [];
-}
-
-export async function addToBlacklist(type: string, value: string, reason?: string, riskScore?: number) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: 'Not authenticated' };
-  const { error } = await supabase.from('fraud_blacklist').upsert({ type, value, reason, risk_score: riskScore || 100 }, { onConflict: 'type,value' });
-  if (error) return { error: error.message };
-  await logAudit('blacklist_add', 'fraud_blacklist', `${type}:${value}`, `Added ${type} to blacklist: ${value}`);
-  revalidatePath('/admin/security');
-  return { error: null };
-}
-
-export async function removeFromBlacklist(id: string) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: 'Not authenticated' };
-  const { error } = await supabase.from('fraud_blacklist').update({ is_active: false }).eq('id', id);
-  if (error) return { error: error.message };
-  revalidatePath('/admin/security');
-  return { error: null };
-}
-
-export async function getWhitelist() {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return [];
-  const { data } = await supabase.from('fraud_whitelist').select('*').order('created_at', { ascending: false });
-  return data || [];
-}
-
-export async function addToWhitelist(type: string, value: string, reason?: string) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: 'Not authenticated' };
-  const { error } = await supabase.from('fraud_whitelist').upsert({ type, value, reason }, { onConflict: 'type,value' });
-  if (error) return { error: error.message };
-  revalidatePath('/admin/security');
-  return { error: null };
-}
-
-export async function removeFromWhitelist(id: string) {
-  const supabase = await createSupabaseServerClient();
-  if (!supabase) return { error: 'Not authenticated' };
-  const { error } = await supabase.from('fraud_whitelist').delete().eq('id', id);
-  if (error) return { error: error.message };
-  revalidatePath('/admin/security');
-  return { error: null };
-}
 
 export async function getFraudRules() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return [];
+  await requirePermission('security.view');
   const { data } = await supabase.from('fraud_rules').select('*').eq('is_active', true);
   return data || [];
 }
@@ -523,6 +470,7 @@ export async function getFraudRules() {
 export async function getSecurityDashboardStats() {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return null;
+  await requirePermission('security.view');
 
   const now = new Date().toISOString();
   const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -531,35 +479,30 @@ export async function getSecurityDashboardStats() {
   const [
     totalAuditLogs, recentAuditLogs,
     activeSessions, securityEvents,
-    openFraudEvents, totalBackups,
+    totalBackups,
     totalRoles, totalAdminUsers,
     failedLogins24h, loginHistory24h,
-    blacklistCount,
   ] = await Promise.all([
     supabase.from('audit_logs').select('id', { count: 'exact', head: true }),
     supabase.from('audit_logs').select('*').gte('created_at', last24h).order('created_at', { ascending: false }).limit(10),
     supabase.from('login_history').select('id', { count: 'exact', head: true }).gte('created_at', last24h).eq('status', 'success'),
     supabase.from('security_events').select('id', { count: 'exact', head: true }).eq('is_resolved', false),
-    supabase.from('fraud_events').select('id', { count: 'exact', head: true }).eq('is_resolved', false),
     supabase.from('backups').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
     supabase.from('roles').select('id', { count: 'exact', head: true }),
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'admin'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('user_type', 'internal'),
     supabase.from('login_history').select('id', { count: 'exact', head: true }).gte('created_at', last24h).eq('status', 'failed'),
     supabase.from('login_history').select('*').gte('created_at', last7d).order('created_at', { ascending: false }).limit(50),
-    supabase.from('fraud_blacklist').select('id', { count: 'exact', head: true }).eq('is_active', true),
   ]);
 
   return {
     totalAuditLogs: totalAuditLogs.count || 0,
     activeSessions: activeSessions.count || 0,
     unresolvedSecurityEvents: securityEvents.count || 0,
-    openFraudEvents: openFraudEvents.count || 0,
     totalBackups: totalBackups.count || 0,
     totalRoles: totalRoles.count || 0,
     totalAdminUsers: totalAdminUsers.count || 0,
     failedLogins24h: failedLogins24h.count || 0,
     recentActivity: recentAuditLogs.data || [],
     loginHistory: loginHistory24h.data || [],
-    blacklistedItems: blacklistCount.count || 0,
   };
 }
