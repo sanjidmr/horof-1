@@ -1,0 +1,134 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display", serif;
+
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F9F7F2;
+  --color-bg-card: #FFFFFF;
+  --color-accent-primary: #1A3320;
+  --color-accent-hover: #2D6A4F;
+  --color-accent-light: #74C69D;
+  --color-gold: #D4A853;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #4A4A4A;
+  --color-text-muted: #8E8E8E;
+  --color-success: #2D6A4F;
+  --color-error: #E63946;
+  --color-border-forest: rgba(26, 51, 32, 0.1);
+}
+
+@utility glass-card {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(26, 51, 32, 0.1);
+}
+
+@utility dark-green-section {
+  background-color: #1A3320;
+  color: #F0F4F0;
+}
+
+@utility gold-glow {
+  box-shadow: 0 10px 30px rgba(212, 168, 83, 0.15);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-primary text-text-primary font-body antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display text-accent-primary;
+  }
+
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.04)] rounded-3xl;
+  }
+  
+  /* --- Review System --- */
+  .review-card {
+    @apply bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300;
+  }
+  
+  .review-form-card {
+    @apply bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-lg shadow-[#1B4332]/5 relative overflow-hidden;
+  }
+  
+  .review-form-card::before {
+    content: '';
+    @apply absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#1B4332] to-[#40916C];
+  }
+  
+  .review-form-icon {
+    @apply w-10 h-10 rounded-xl bg-gradient-to-br from-[#1B4332] to-[#2D6A4F] flex items-center justify-center shadow-md shadow-[#1B4332]/20;
+  }
+  
+  .review-field-group {
+    @apply flex flex-col space-y-1.5;
+  }
+  
+  .review-field-label {
+    @apply text-sm font-semibold text-slate-700;
+  }
+  
+  .review-input, .review-select {
+    @apply w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-slate-900 
+           focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20 focus:border-[#2D6A4F] transition-all;
+  }
+  
+  .review-textarea {
+    @apply w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-900 
+           focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]/20 focus:border-[#2D6A4F] transition-all resize-none;
+  }
+  
+  .review-submit-btn {
+    @apply w-full h-12 mt-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white rounded-xl font-bold 
+           flex items-center justify-center gap-2 transition-all shadow-md shadow-[#1B4332]/20 
+           disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-bg-primary);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-accent-primary);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-hover);
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+}
+
+/* Swiper Custom Pagination Styles */
+.swiper-pagination-bullet {
+  background: #cbd5e1 !important;
+  opacity: 0.6 !important;
+  transition: all 0.3s ease !important;
+}
+
+.swiper-pagination-bullet-active {
+  background: #1A3320 !important;
+  opacity: 1 !important;
+  width: 24px !important;
+  border-radius: 9999px !important;
+}
+

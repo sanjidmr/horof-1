@@ -1,0 +1,62 @@
+<svg width="520" height="320" viewBox="0 0 520 320" xmlns="http://www.w3.org/2000/svg">
+
+
+
+  <g transform="translate(260, 100)">
+    <line x1="-28" y1="0" x2="28" y2="0" stroke="#2C1F0E" stroke-width="0.8" opacity="0.3"/>
+    <line x1="0" y1="-28" x2="0" y2="28" stroke="#2C1F0E" stroke-width="0.8" opacity="0.3"/>
+
+    <polygon points="0,-26 15,-8 9,20 -9,20 -15,-8" fill="none" stroke="#2C1F0E" stroke-width="1.2"/>
+
+    <line x1="-9" y1="20" x2="9" y2="20" stroke="#8B6340" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-15" y1="-8" x2="-9" y2="20" stroke="#8B6340" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15" y1="-8" x2="9" y2="20" stroke="#8B6340" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="-15" y1="-8" x2="0" y2="-26" stroke="#8B6340" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="15" y1="-8" x2="0" y2="-26" stroke="#8B6340" stroke-width="1.5" stroke-linecap="round"/>
+
+    <line x1="-6" y1="-4" x2="6" y2="-4" stroke="#8B6340" stroke-width="0.7" opacity="0.5"/>
+    <line x1="-8" y1="4" x2="8" y2="4" stroke="#8B6340" stroke-width="0.7" opacity="0.5"/>
+    <line x1="-7" y1="12" x2="7" y2="12" stroke="#8B6340" stroke-width="0.7" opacity="0.5"/>
+
+    <circle cx="0" cy="-26" r="2.5" fill="#8B6340"/>
+    <circle cx="-15" cy="-8" r="1.8" fill="#8B6340"/>
+    <circle cx="15" cy="-8" r="1.8" fill="#8B6340"/>
+    <circle cx="-9" cy="20" r="1.8" fill="#8B6340"/>
+    <circle cx="9" cy="20" r="1.8" fill="#8B6340"/>
+  </g>
+
+  <text
+    x="260" y="168"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="64"
+    font-weight="400"
+    fill="#2C1F0E"
+    letter-spacing="10"
+  >HOROF</text>
+
+  <line x1="120" y1="182" x2="212" y2="182" stroke="#8B6340" stroke-width="0.7" opacity="0.6"/>
+  <line x1="308" y1="182" x2="400" y2="182" stroke="#8B6340" stroke-width="0.7" opacity="0.6"/>
+  <circle cx="260" cy="182" r="1.8" fill="#8B6340" opacity="0.7"/>
+
+  <text
+    x="260" y="210"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="13"
+    fill="#8B6340"
+    letter-spacing="6"
+  >HANDCRAFTED DECOR</text>
+
+  <text
+    x="260" y="245"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="18"
+    font-style="italic"
+    fill="#2C1F0E"
+    opacity="0.3"
+    letter-spacing="2"
+  >হরফ</text>
+
+</svg>
