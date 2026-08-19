@@ -167,6 +167,17 @@ export async function loadInvoiceData(
 
 /** Pure check: can this user view any order invoice? Requires orders.view. */
 export async function canManageInvoices(supabase: any, userId: string): Promise<boolean> {
+  // First check the internal operator bypass (mirrors requirePermission in security.ts).
+  // This restores access for admin/super_admin/manager/staff profiles whose
+  // user_roles entry may be missing or stale.
+  try {
+    const { data: isOperator } = await supabase.rpc('is_internal_operator').single();
+    if (isOperator === true) return true;
+  } catch {
+    // Fall through to the has_permission RPC check below.
+  }
+
+  // Fall back to the strict RBAC matrix check.
   const { data: allowed } = await supabase.rpc('has_permission', { p_code: 'orders.view' });
   return allowed === true;
 }

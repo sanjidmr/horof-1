@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendWelcomeEmail } from '@/lib/email/send-email';
 
 export async function POST(request: Request) {
   try {
@@ -69,6 +70,17 @@ export async function POST(request: Request) {
       });
     } catch (e) {
       console.error('Failed to create notification:', e);
+    }
+
+    // Send welcome email (non-fatal — never breaks signup)
+    try {
+      const customerName = data.user?.user_metadata?.full_name || data.user?.user_metadata?.first_name || email.split('@')[0] || 'Customer';
+      await sendWelcomeEmail({
+        to: email,
+        customerName,
+      });
+    } catch (e) {
+      console.error('Failed to send welcome email:', e);
     }
 
     return NextResponse.json({ success: true, user: data.user });

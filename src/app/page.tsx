@@ -18,6 +18,8 @@ import { extractProductImages } from '../lib/store/extract-images';
 import { Product } from '../lib/types';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
 import { OurServices } from '../components/home/OurServices';
+import { IoLogoWhatsapp } from 'react-icons/io';
+import { Mail, Phone, MessageSquare } from 'lucide-react';
 
 export const metadata: Metadata = buildMeta({
   title: 'Horof - Premium Wood Crafts',
@@ -33,7 +35,6 @@ export default async function HomePage() {
     { data: bestSellingData },
     { data: newArrivalsData },
     { data: productDayData },
-    { data: allProdData },
     { data: decorImages },
     { data: heroData },
     { data: heroContent },
@@ -61,12 +62,6 @@ export default async function HomePage() {
       .eq('section', 'product_of_the_day')
       .limit(4),
     supabase
-      .from('products')
-      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(8),
-    supabase
       .from('site_images')
       .select('*')
       .like('section', 'decor-%'),
@@ -82,7 +77,7 @@ export default async function HomePage() {
       .maybeSingle(),
     supabase
       .from('site_images')
-      .select('*')
+      .select('*, categories(name, slug)')
       .eq('section', 'services')
       .order('created_at', { ascending: true })
   ]);
@@ -122,11 +117,17 @@ export default async function HomePage() {
   const featuredProducts = bestSellingData ? bestSellingData.map(mapProduct) : [];
   const newArrivals = newArrivalsData ? newArrivalsData.map(mapProduct) : [];
   const dailyProducts = productDayData ? productDayData.map(mapProduct) : [];
-  const allProducts = allProdData ? allProdData.map(mapProduct) : [];
   const initialDecorImages = decorImages || [];
   const heroImage = heroData?.image_url || '';
   const subtitleNormal = heroContent?.subtitle_normal || undefined;
   const subtitleBold = heroContent?.subtitle_bold || undefined;
+
+  // Resolve each service's linked category (via site_images.category_id)
+  // so the "Products" button can reuse the existing /category/<slug> route.
+  const services = (servicesData || []).map((s: any) => ({
+    ...s,
+    categorySlug: s.categories?.slug || undefined,
+  }));
 
   return (
     <HomeMotionWrapper>
@@ -148,7 +149,7 @@ export default async function HomePage() {
         />
       </div>
       <div className="max-w-[1400px] mx-auto px-6">
-        <OurServices services={servicesData || []} />
+        <OurServices services={services} />
       </div>
       <FlashSale />
       <div className="max-w-7xl mx-auto px-6">
@@ -165,6 +166,33 @@ export default async function HomePage() {
       </div>
       <div className="max-w-[1400px] mx-auto px-6 py-8 md:py-12">
         <DesignRequestForm />
+        <div className="bg-white border-t border-slate-100 pt-12">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#F0F4F0] text-slate-800 text-sm font-bold uppercase tracking-wider mb-6">
+              <MessageSquare className="w-4 h-4" /> Get In Touch
+            </div>
+            <div className="space-y-4 text-slate-600">
+              <div className="flex items-center gap-3">
+                <a
+                  href="https://wa.me/01877292706"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#25D366] text-white hover:bg-[#20ba5a] transition-all font-bold uppercase tracking-wider text-xs"
+                >
+                  <IoLogoWhatsapp className="w-4 h-4" /> Chat on WhatsApp
+                </a>
+              </div>
+              <div className="flex items-center gap-3">
+                <Mail className="w-3.5 h-3.5 text-slate-400" />
+                <a href="mailto:info@horof.com" className="hover:underline font-semibold">info@horof.com</a>
+              </div>
+              <div className="flex items-center gap-3">
+                <Phone className="w-3.5 h-3.5 text-slate-400" />
+                <span>+880 1723 8900 / +880 1938 4948</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </HomeMotionWrapper>
   );

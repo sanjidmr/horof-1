@@ -19,7 +19,7 @@ export async function getAccountingDashboardData(fromDate?: string, toDate?: str
 
   const [expenseCatRes, expenseRes, plRes, cashFlowRes, customerDueRes] = await Promise.all([
     supabase.from('expense_categories').select('*').order('name'),
-    supabase.from('expenses').select('id, amount, category_id, created_at, expense_categories(name)').gte('created_at', from).lte('created_at', to).order('created_at', { ascending: false }),
+    supabase.from('expenses').select('id, amount, category_id, paid_to, description, created_at, expense_categories(name)').gte('created_at', from).lte('created_at', to).order('created_at', { ascending: false }),
     supabase.rpc('get_full_profit_loss', { from_date: from, to_date: to }),
     supabase.rpc('get_cash_flow', { from_date: from, to_date: to }),
     supabase.rpc('get_all_customer_dues'),
@@ -72,6 +72,8 @@ export async function getAccountingDashboardData(fromDate?: string, toDate?: str
 export async function createExpense(data: {
   category_id: string;
   amount: number;
+  paid_to?: string;
+  description?: string;
 }) {
   const supabase = await createSupabaseServerClient();
   if (!supabase) return { error: 'No session' };
@@ -86,6 +88,8 @@ export async function createExpense(data: {
   const { error } = await supabase.from('expenses').insert({
     category_id: data.category_id,
     amount: data.amount,
+    paid_to: data.paid_to?.trim() || null,
+    description: data.description?.trim() || null,
   });
 
   if (error) return { error: error.message };

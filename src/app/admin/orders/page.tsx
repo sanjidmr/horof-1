@@ -420,30 +420,35 @@ export default function AdminOrdersPage() {
             <thead>
               <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
                 <th className="px-6 py-4">Order ID</th>
+                <th className="px-6 py-4 hidden md:table-cell">Products</th>
                 <th className="px-6 py-4">Customer Details</th>
                 <th className="px-6 py-4">Order Date</th>
                 <th className="px-6 py-4">Fulfillment Status</th>
                 <th className="px-6 py-4 text-right">Total Price</th>
-                <th className="px-6 py-4">Warehouse</th>
+                <th className="px-6 py-4 hidden lg:table-cell">Warehouse</th>
                 <th className="px-6 py-4 text-center">Fulfillment</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-150">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-light">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-light">
                     Querying order database...
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-light">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-light">
                     No orders match your filter criteria.
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map((order) => {
-                  const { metadata } = parseProductDetails(order.product_details);
+                  const { items: productDetailsItems, metadata } = parseProductDetails(order.product_details);
+                  const productNames = productDetailsItems
+                    .map((it: any) => it.product_name || it.name)
+                    .filter(Boolean)
+                    .join(', ');
                   const clientName = order.customer_name || order.profiles?.full_name || 'Guest User';
                   
                   return (
@@ -451,6 +456,13 @@ export default function AdminOrdersPage() {
                       {/* ID */}
                       <td className="px-6 py-4 font-mono text-slate-500 font-semibold">
                         #{order.id}
+                      </td>
+                      
+                      {/* Products */}
+                      <td className="px-6 py-4 hidden md:table-cell max-w-[240px]">
+                        <p className="text-slate-700 font-semibold leading-snug line-clamp-2">
+                          {productNames || 'No product info'}
+                        </p>
                       </td>
                       
                       {/* Customer Info */}
@@ -475,7 +487,7 @@ export default function AdminOrdersPage() {
                       </td>
                       
                       {/* Warehouse */}
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 hidden lg:table-cell">
                         {order.warehouse_id ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100">
                             {warehouses.find(w => w.id === order.warehouse_id)?.name || 'Assigned'}

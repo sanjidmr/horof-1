@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, Minus, DollarSign, ShoppingCart, Package,
   Users, BarChart3, AlertTriangle, Warehouse,
@@ -167,6 +167,14 @@ export function AnalyticsDashboardClient({ initialData }: { initialData: Dashboa
     }
   }, []);
 
+  // Auto-refresh every 30 seconds for real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh(filter);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [filter, refresh]);
+
   const handleFilter = useCallback((f: string) => {
     setFilter(f);
     if (f !== 'custom') {
@@ -311,7 +319,7 @@ export function AnalyticsDashboardClient({ initialData }: { initialData: Dashboa
         </ChartCard>
 
         {/* Profit Trend */}
-        <ChartCard title="Profit Trend" subtitle="Estimated profit over 30 days">
+        <ChartCard title="Profit Trend" subtitle="Real profit from delivered orders (revenue - COGS - shipping - discounts)">
           {charts.profitTrend.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">

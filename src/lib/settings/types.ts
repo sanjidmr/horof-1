@@ -22,7 +22,7 @@ export const DEFAULT_GENERAL: GeneralSettings = {
   website_name: 'Horof',
   business_address: 'Mymensingh, Dhaka',
   phone: '+880 1234 567890',
-  support_email: 'studio@horof.com',
+  support_email: 'studio@horofbd.com',
   company_logo: '/images/horof.svg',
   admin_logo: '/images/horof.svg',
   favicon: '/images/horof.svg',
@@ -97,8 +97,8 @@ export type EmailSettings = {
 
 export const DEFAULT_EMAIL: EmailSettings = {
   sender_name: 'Horof',
-  sender_email: 'noreply@horof.com',
-  support_email: 'studio@horof.com',
+  sender_email: 'noreply@horofbd.com',
+  support_email: 'studio@horofbd.com',
   smtp_enabled: false,
   smtp_provider: 'resend',
   smtp_host: '',

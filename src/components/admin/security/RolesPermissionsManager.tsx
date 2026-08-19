@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   KeyRound, Plus, Trash2, CheckCircle2, XCircle, Loader2,
-  Search, ShieldCheck, Lock, Users, ChevronDown, ChevronRight,
+  Search, ShieldCheck, Users, ChevronDown, ChevronRight,
   Eye, Save, RotateCcw, PenLine, UserCog,
 } from 'lucide-react';
 import {
@@ -208,14 +208,14 @@ export default function RolesPermissionsManager() {
   );
 
   const dirty = useMemo(() => {
-    if (Object.keys(base).length === 0) return false;
-    const nameDirty = selectedRole ? roleName !== selectedRole.name || roleDesc !== (selectedRole.description || '') || Number(rolePriority) !== selectedRole.priority : false;
+    if (!selectedRole) return false;
+    const nameDirty = roleName !== selectedRole.name || roleDesc !== (selectedRole.description || '') || Number(rolePriority) !== selectedRole.priority;
     const permsDirty = canonicalPerms.some((p) => !!draft[p.id] !== !!base[p.id]);
     return nameDirty || permsDirty;
   }, [base, draft, canonicalPerms, roleName, roleDesc, rolePriority, selectedRole]);
 
   const isProtected = selectedRole?.is_system === true || selectedRole?.name === 'super_admin' || selectedRole?.name === 'owner';
-  const canManage = !isProtected && (isSuperAdmin || (hasPermission('security_center.edit') && hasPermission('security_center.manage')));
+  const canManage = isSuperAdmin || (!isProtected && hasPermission('security_center.edit') && hasPermission('security_center.manage'));
   const canCreate = isSuperAdmin || hasPermission('security_center.edit');
   const canDelete = !isProtected && (isSuperAdmin || hasPermission('security_center.delete')) && selectedRole?.is_system !== true;
 
@@ -397,9 +397,7 @@ export default function RolesPermissionsManager() {
                       <p className={`text-sm font-bold truncate ${active ? 'text-[#1a4731]' : 'text-slate-700'}`}>
                         {role.name.replace(/_/g, ' ')}
                       </p>
-                      {role.is_system && (
-                        <Lock className="h-3 w-3 text-purple-400" />
-                      )}
+
                     </div>
                     <p className="text-[10px] text-slate-400 truncate">
                       {granted} / {perms.length} permissions
@@ -449,7 +447,7 @@ export default function RolesPermissionsManager() {
                         )}
                         {isProtected && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                            <Lock className="h-3 w-3" /> Managed by Super Admin
+                            Managed by Super Admin
                           </span>
                         )}
                         {!canManage && !isProtected && (

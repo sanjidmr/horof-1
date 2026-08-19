@@ -26,6 +26,6 @@ export async function generateQrDataUrl(text: string): Promise<string> {
 
 /** Build the order tracking URL used for the QR payload. */
 export function buildTrackingUrl(trackPath: string): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://horof.com';
+  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://horofbd.com';
   return `${base}${trackPath}`;
 }

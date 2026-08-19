@@ -15,10 +15,19 @@ interface ServiceItem {
   title: string;
   subtitle: string;
   description: string;
+  category_id: string | null;
+  categories?: { name: string } | null;
+}
+
+interface CategoryItem {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 export default function AdminServicesPage() {
   const [services, setServices] = useState<ServiceItem[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -29,20 +38,33 @@ export default function AdminServicesPage() {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
     fetchServices();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, name, slug')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    if (!error) {
+      setCategories((data || []) as CategoryItem[]);
+    }
+  };
 
   const fetchServices = async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('site_images')
-        .select('*')
+        .select('*, categories(name)')
         .eq('section', 'services')
         .order('created_at', { ascending: true });
 
@@ -54,6 +76,8 @@ export default function AdminServicesPage() {
           title: item.title || '',
           subtitle: item.subtitle || '',
           description: item.description || '',
+          category_id: item.category_id || null,
+          categories: item.categories,
         }))
       );
     } catch (err: any) {
@@ -112,6 +136,7 @@ export default function AdminServicesPage() {
         title,
         subtitle,
         description,
+        category_id: categoryId || null,
         button_text: 'View Details',
       };
 
@@ -145,6 +170,7 @@ export default function AdminServicesPage() {
     setTitle(item.title);
     setSubtitle(item.subtitle);
     setDescription(item.description);
+    setCategoryId(item.category_id || '');
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -175,6 +201,7 @@ export default function AdminServicesPage() {
     setTitle('');
     setSubtitle('');
     setDescription('');
+    setCategoryId('');
     setIsEditing(false);
   };
 
@@ -270,6 +297,28 @@ export default function AdminServicesPage() {
                   className="rounded-xl border-slate-200 bg-slate-50 resize-none"
                 />
               </div>
+
+              {/* Linked Category */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  Link to Category
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-[#1A3320] focus:ring-1 focus:ring-[#1A3320]"
+                >
+                  <option value="">No category (hide Products button)</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400">
+                  The service's &quot;Products&quot; button opens this category on the home page.
+                </p>
+              </div>
             </CardContent>
             <CardFooter className="flex gap-2">
               <Button type="submit" disabled={saving || uploadingImage} className="bg-[#1A3320] hover:bg-[#2D6A4F] text-white flex-1 rounded-xl cursor-pointer">
@@ -308,6 +357,15 @@ export default function AdminServicesPage() {
                         {item.subtitle}
                       </span>
                       <CardTitle className="text-xl font-bold text-[#1A3320] mt-1">{item.title}</CardTitle>
+                      {item.categories?.name ? (
+                        <span className="inline-flex self-start mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#1A3320]/10 text-[#1A3320]">
+                          Category: {item.categories.name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex self-start mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                          No category
+                        </span>
+                      )}
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-slate-600 line-clamp-3 leading-relaxed">{item.description}</p>

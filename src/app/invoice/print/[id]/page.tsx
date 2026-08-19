@@ -41,6 +41,20 @@ export default async function PrintInvoicePage({ params }: { params: Promise<{ i
 
   return (
     <div className="min-h-screen bg-[#eef1ef]">
+      <style>{`
+        @media print {
+          /* Hide ALL app chrome — navbar, footer, sidebar, admin nav, buttons */
+          header, footer, nav, aside, .navbar, .footer, .sidebar, .admin-nav,
+          .mobile-nav, .desktop-nav, .no-print, .toaster, [class*="navbar"],
+          [class*="footer"], [class*="sidebar"], [class*="admin-nav"],
+          [class*="mobile-nav"], [class*="desktop-nav"] {
+            display: none !important;
+          }
+          body { background: #ffffff !important; }
+          .min-h-screen { min-height: 0 !important; }
+          .min-h-\\[calc\\(100vh-140px\\)\\] { min-height: 0 !important; }
+        }
+      `}</style>
       <PrintOnMount />
       <div className="max-w-4xl mx-auto px-4 md:px-6 py-5">
         <InvoiceToolbar

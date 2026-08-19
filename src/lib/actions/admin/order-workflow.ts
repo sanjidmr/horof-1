@@ -760,9 +760,15 @@ const { supabase, user } = await requireAdmin('orders.manage');
   if (status === 'delivered') {
     extra.delivered_at = new Date().toISOString();
     extra.fulfillment_status = 'Fulfilled';
+    // Mark order as PAID once delivered — money is received on delivery
+    extra.payment_status = 'paid';
+    extra.paid_at = new Date().toISOString();
   }
   if (status === 'completed') {
     extra.completed_at = new Date().toISOString();
+    // Completed = confirmed delivered & paid
+    extra.payment_status = 'paid';
+    extra.paid_at = new Date().toISOString();
   }
 
   await supabase.from('orders').update({ status, ...extra }).eq('id', orderId);

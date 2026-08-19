@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useState, useCallback } from 'react';
 import { TrendingUp, DollarSign, Users, Package, ShoppingBag, AlertTriangle, Warehouse, BarChart3, ArrowUpRight } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, AreaChart, Area } from 'recharts';
 import { formatPrice } from '@/lib/utils';
 import Link from 'next/link';
 import { usePermissions } from '@/context/PermissionContext';
+import { getDashboardData } from '@/lib/actions/dashboard-data';
 
 const COLORS = ['#1a4731', '#2d6a4f', '#52b788', '#95d5b2', '#b7e4c7'];
 const STATUS_COLORS: Record<string, string> = {
@@ -12,8 +14,24 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: '#dc2626', returned: '#ea580c', refunded: '#0891b2', completed: '#16a34a',
 };
 
-export function DashboardClient({ data }: { data: any }) {
+export function DashboardClient({ data: initialData }: { data: any }) {
   const { hasPermission } = usePermissions();
+  const [data, setData] = useState<any>(initialData);
+
+  // Auto-refresh dashboard data every 30 seconds for real-time updates
+  const refresh = useCallback(async () => {
+    try {
+      const fresh = await getDashboardData();
+      if (fresh) setData(fresh);
+    } catch {
+      // keep existing data on failure
+    }
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(refresh, 30000);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   if (!data) return null;
 

@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = await loadEmailSettings();
-    const senderName = body?.from?.name || settings.sender_name || 'Horof';
-    const senderEmail = body?.from?.email || settings.sender_email || process.env.EMAIL_FROM || 'noreply@horof.com';
+    const senderName = body?.from?.name || settings.sender_name || process.env.BREVO_SENDER_NAME || 'Horof';
+    const senderEmail = body?.from?.email || settings.sender_email || process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM || 'noreply@horof.com';
 
     // 1. Custom SMTP configured in Settings Center
     const wantCustom = settings.smtp_enabled && (provider === 'custom' || !provider);

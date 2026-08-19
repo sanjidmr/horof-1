@@ -133,7 +133,6 @@ const allNav: NavItem[] = [
     icon: Tag,
     children: [
       { title: 'Coupons', href: '/admin/marketing/coupons', permission: 'offer_campaign.view' },
-      { title: 'Free Shipping', href: '/admin/marketing/free-shipping', permission: 'offer_campaign.view' },
       { title: 'Popup Campaigns', href: '/admin/marketing/popup-campaigns', permission: 'offer_campaign.view' },
       { title: 'Flash Sale', href: '/admin/marketing/flash-sale', permission: 'offer_campaign.view' },
       { title: 'Special Offer', href: '/admin/marketing/special-offer', permission: 'offer_campaign.view' },
@@ -149,7 +148,7 @@ const allNav: NavItem[] = [
       { title: 'Site Visuals', href: '/admin/marketing/site-images', permission: 'display_pages.view' },
       { title: 'Our Services', href: '/admin/marketing/services', permission: 'display_pages.view' },
       { title: 'FAQ', href: '/admin/marketing/faq', permission: 'display_pages.view' },
-      { title: 'About', href: '/admin/settings/about', permission: 'display_pages.view' },
+      { title: 'About', href: '/admin/marketing/about', permission: 'display_pages.view' },
     ]
   },
   { title: 'Settings Center', href: '/admin/settings', icon: Settings, permission: 'settings_center.view' },

@@ -3,7 +3,8 @@
 import { createSupabaseServerClient } from '../supabase/server';
 import { parseProductDetails, buildProductDetails } from '@/lib/utils/order-helpers';
 import { revalidatePath } from 'next/cache';
-import { sendOrderStatusEmail } from './send-order-email';
+import { sendOrderStatusEmail, sendPaymentConfirmationEmail } from './send-order-email';
+import type { OrderEmailData } from '@/lib/email/templates';
 import { logSystemTransaction } from './accounting';
 
 async function requireAdmin(permissionCode: string) {
@@ -66,12 +67,20 @@ export async function updateOrderStatusAction(
   const updatedProductDetails = buildProductDetails(items, metadata);
 
   // Perform order update
+  const updateFields: Record<string, any> = {
+    status: newStatus.toLowerCase(),
+    product_details: updatedProductDetails
+  };
+
+  // Mark order as PAID once delivered/completed — money is received on delivery
+  if (newStatus.toLowerCase() === 'delivered' || newStatus.toLowerCase() === 'completed') {
+    updateFields.payment_status = 'paid';
+    updateFields.paid_at = new Date().toISOString();
+  }
+
   const { error: updateErr } = await supabase
     .from('orders')
-    .update({
-      status: newStatus.toLowerCase(),
-      product_details: updatedProductDetails
-    })
+    .update(updateFields)
     .eq('id', orderId);
 
   if (updateErr) {
@@ -238,6 +247,35 @@ export async function updateOrderPaymentStatusAction(
     status: order.status,
     note: timelineNote
   });
+
+  // ── Send Payment Confirmation Email to Customer ──
+  // Non-fatal: email failure never breaks the payment-status update.
+  if (newPaymentStatus.toLowerCase() === 'paid' && order.customer_email) {
+    const { items } = parseProductDetails(order.product_details);
+    const emailData: OrderEmailData = {
+      customerName: order.customer_name || 'Customer',
+      orderNumber: order.order_number || `#${orderId}`,
+      orderId,
+      total: Number(order.total || 0),
+      subtotal: Number(order.subtotal || order.total || 0),
+      deliveryCharge: Number(order.shipping_charge || 0),
+      discount: Number(order.discount || 0),
+      items: items.map((item: any) => ({
+        name: item.product_name || item.name || 'Product',
+        quantity: item.quantity || 1,
+        unit_price: Number(item.unit_price || item.price || 0),
+        total: Number(item.unit_price || item.price || 0) * (item.quantity || 1),
+      })),
+      paymentMethod: order.payment_method || 'Paid',
+      customerAddress: order.customer_address || undefined,
+      customerPhone: order.customer_phone || undefined,
+      createdAt: order.created_at,
+    };
+    sendPaymentConfirmationEmail({
+      to: order.customer_email,
+      data: emailData,
+    }).catch((err) => console.error('[Email] Failed to send payment confirmation:', err));
+  }
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${orderId}`);

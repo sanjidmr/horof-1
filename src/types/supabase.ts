@@ -225,6 +225,7 @@ export interface Database {
           subtitle: string | null
           description: string | null
           button_text: string | null
+          category_id: string | null
         }
         Insert: {
           id?: string
@@ -235,6 +236,7 @@ export interface Database {
           subtitle?: string | null
           description?: string | null
           button_text?: string | null
+          category_id?: string | null
         }
         Update: {
           id?: string
@@ -245,6 +247,7 @@ export interface Database {
           subtitle?: string | null
           description?: string | null
           button_text?: string | null
+          category_id?: string | null
         }
       }
       flash_sales: {

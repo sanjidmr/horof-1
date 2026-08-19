@@ -3,8 +3,10 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { sendOrderConfirmationEmail, sendAdminNewOrderEmail } from './send-order-email';
 import { createNotification, checkLowStock } from './notifications';
 import { logSystemTransaction } from './accounting';
+import type { OrderEmailData } from '@/lib/email/templates';
 
 export async function placeOrder(orderData: {
   customer_name: string;
@@ -166,6 +168,44 @@ export async function placeOrder(orderData: {
     message: `A new order request (#${String(orderRequest.id).slice(0, 8)}) for ৳${Math.max(0, finalTotal).toLocaleString()} placed by ${orderData.customer_name}.${orderData.coupon_code ? ` Coupon: ${orderData.coupon_code}` : ''}${orderData.bundle_offer_name ? ` Bundle: ${orderData.bundle_offer_name}` : ''}${orderData.free_shipping_offer_name ? ` Free Shipping: ${orderData.free_shipping_offer_name}` : ''}`,
     type: 'order',
   });
+
+  // ── Send Order Confirmation Email to Customer ──
+  // Non-fatal: email failure never breaks the order placement.
+  if (orderData.customer_email) {
+    const emailData: OrderEmailData = {
+      customerName: orderData.customer_name || 'Customer',
+      orderNumber: `#${String(orderRequest.id).slice(0, 8).toUpperCase()}`,
+      orderId: orderRequest.id,
+      total: Math.max(0, finalTotal),
+      subtotal: Math.max(0, finalTotal - (orderData.delivery_charge || 0)),
+      deliveryCharge: orderData.delivery_charge || 0,
+      discount: totalDiscount,
+      items: orderData.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total: item.unit_price * item.quantity,
+      })),
+      paymentMethod: 'Cash on Delivery',
+      customerAddress: orderData.customer_address,
+      customerPhone: orderData.customer_phone,
+      createdAt: new Date().toISOString(),
+    };
+
+    sendOrderConfirmationEmail({
+      to: orderData.customer_email,
+      data: emailData,
+    }).catch((err) => console.error('[Email] Failed to send order confirmation:', err));
+
+    // ── Send Admin Notification Email ──
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.BREVO_SENDER_EMAIL;
+    if (adminEmail) {
+      sendAdminNewOrderEmail({
+        to: adminEmail,
+        data: emailData,
+      }).catch((err) => console.error('[Email] Failed to send admin notification:', err));
+    }
+  }
 
   revalidatePath('/admin/dashboard');
   revalidatePath('/admin/order-requests');

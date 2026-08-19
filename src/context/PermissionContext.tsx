@@ -45,13 +45,22 @@ const PermissionContext = createContext<PermissionContextValue>({
  * guaranteed a role assignment by migration 20260810000000.
  */
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin, isWarehouseStaff } = useAuth();
+  const { user, isAdmin, isWarehouseStaff, isLoading: authLoading } = useAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createSupabaseBrowserClient();
 
   const fetchPermissions = useCallback(async () => {
+    // The auth session has not resolved yet. Keep `loading` as true so
+    // RBAC consumers (e.g. the client-side admin guard) never see an empty
+    // permission set and wrongly redirect to /admin/forbidden on a fresh
+    // page load / new tab. This races was previously causing the packing
+    // slip page to redirect to "Access Denied" right after rendering.
+    if (authLoading) {
+      return;
+    }
+
     if (!user || (!isAdmin && !isWarehouseStaff)) {
       setPermissions([]);
       setRoles([]);
@@ -109,7 +118,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     } finally {
       setLoading(false);
     }
-  }, [user, isAdmin, isWarehouseStaff, supabase]);
+  }, [user, isAdmin, isWarehouseStaff, supabase, authLoading]);
 
   useEffect(() => {
     fetchPermissions();

@@ -73,11 +73,13 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           transition={{ duration: 3, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-0"
         >
-          <img
-            src={heroImage}
-            alt="Premium Artisan Decor"
-            className="w-full h-full object-cover object-top"
-          />
+          {heroImage && (
+            <img
+              src={heroImage}
+              alt="Premium Artisan Decor"
+              className="w-full h-full object-cover object-top"
+            />
+          )}
         </motion.div>
 
         {/* Refined Dark Overlays */}

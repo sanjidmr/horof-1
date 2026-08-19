@@ -166,7 +166,11 @@ export async function getAnalyticsDashboardData(
       }
       if (filters) {
         for (const [k, v] of Object.entries(filters)) {
-          q = q.eq(k, v);
+          if (Array.isArray(v)) {
+            q = q.in(k, v);
+          } else {
+            q = q.eq(k, v);
+          }
         }
       }
       const { data, error } = await q;
@@ -202,8 +206,10 @@ export async function getAnalyticsDashboardData(
   const orderCountQueries = allPeriods.map(p =>
     countTable('orders', p, undefined).then(v => ({ period: p.label, value: v }))
   );
+  // Paid revenue only counts orders that have been DELIVERED (or completed) AND paid.
+  // Money is only considered "received" once the order is delivered.
   const paidOrderQueries = allPeriods.map(p =>
-    sumField('orders', 'total', p, { payment_status: 'paid' }).then(v => ({ period: p.label, value: v }))
+    sumField('orders', 'total', p, { payment_status: 'paid', status: ['delivered', 'completed'] }).then(v => ({ period: p.label, value: v }))
   );
   const unpaidOrderQueries = allPeriods.map(p =>
     sumField('orders', 'total', p, { payment_status: 'unpaid' }).then(v => ({ period: p.label, value: v }))
@@ -519,11 +525,12 @@ export async function getAnalyticsDashboardData(
   const topCustomers = (topCustomersRes.data ?? []) as any[];
   const recentOrdersList = (recentOrders ?? []) as any[];
 
-  // Build profit trend from daily sales (revenue - estimated cost)
+  // Build profit trend from daily sales — real profit from delivered orders
+  // (revenue - COGS - shipping - discounts) computed by get_daily_sales RPC
   const profitTrend = dailySales.map((d: any) => ({
     date: d.date,
     revenue: d.revenue ?? 0,
-    profit: (d.revenue ?? 0) * 0.25,
+    profit: d.profit ?? 0,
   }));
 
   // Orders overview chart

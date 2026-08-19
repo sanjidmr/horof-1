@@ -14,6 +14,8 @@ function toWaLink(value: string): string | null {
   return digits ? `https://wa.me/${digits}` : null;
 }
 
+const FALLBACK_WHATSAPP = 'https://wa.me/01877292706';
+
 export const FloatingActions: React.FC = () => {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const { settings } = usePublicSettings();
@@ -30,7 +32,10 @@ export const FloatingActions: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const whatsappHref = useMemo(() => toWaLink(settings.social.whatsapp), [settings.social.whatsapp]);
+  const whatsappHref = useMemo(
+    () => toWaLink(settings.social.whatsapp) || FALLBACK_WHATSAPP,
+    [settings.social.whatsapp]
+  );
 
   return (
     <div className="fixed bottom-24 lg:bottom-10 right-6 z-[100] flex flex-col gap-4">

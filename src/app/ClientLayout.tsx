@@ -19,6 +19,9 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const pathname = usePathname();
   const isAdminPath = pathname?.startsWith('/admin');
   const isDashboardPath = pathname?.startsWith('/dashboard') || pathname?.startsWith('/customer');
+  const isInvoicePrintPath = pathname?.startsWith('/invoice/print');
+  const isPackingSlipPath = pathname?.startsWith('/admin/orders/packing-slip');
+  const isPrintView = isInvoicePrintPath || isPackingSlipPath;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -31,7 +34,7 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
           <WishlistProvider>
             <CartProvider>
               <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
-                {!isAdminPath && !isDashboardPath && (
+                {!isAdminPath && !isDashboardPath && !isPrintView && (
                 <Navbar onOpenCart={() => setIsCartOpen(true)} isCartOpen={isCartOpen} />
               )}
               <CartSidebar isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
@@ -40,9 +43,9 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
                 {children}
               </main>
 
-              {!isAdminPath && !isDashboardPath && <Footer />}
-              {!isAdminPath && !isDashboardPath && <PopupDisplay />}
-              {!isAdminPath && !isDashboardPath && <FloatingActions />}
+              {!isAdminPath && !isDashboardPath && !isPrintView && <Footer />}
+              {!isAdminPath && !isDashboardPath && !isPrintView && <PopupDisplay />}
+              {!isAdminPath && !isDashboardPath && !isPrintView && <FloatingActions />}
               <Toaster 
                 position="bottom-right"
                 toastOptions={{

@@ -158,7 +158,7 @@ export function AdminTopbar({ email, avatarUrl }: { email: string | null; avatar
   };
 
   return (
-    <header className="flex h-24 items-center gap-4 bg-white px-8 sticky top-0 z-30 w-full text-slate-800 border-b border-slate-50">
+    <header className="flex h-24 items-center gap-4 bg-white px-8 sticky top-0 z-60 w-full text-slate-800 border-b border-slate-50">
       <Button
         type="button"
         variant="ghost"

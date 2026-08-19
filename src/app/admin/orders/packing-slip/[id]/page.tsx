@@ -1,10 +1,9 @@
 import React from 'react';
-import { createSupabaseServerClient } from '../../../../../lib/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
-import { Printer, ChevronLeft } from 'lucide-react';
+import { Printer, ChevronLeft, Package, Truck, MapPin, User, Phone, Mail, Clock, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
-import PrintButton from './PrintButton';
 import { formatPrice } from '@/lib/utils';
 import { extractProductImages } from '@/lib/store/extract-images';
 
@@ -28,13 +27,17 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
 
   const { items: metaItems, metadata } = parseProductDetails(order.product_details);
 
+  // Combine items from order_items table with metadata from product_details
+  const displayItems = (items ?? []).length > 0 ? items : metaItems;
+
   return (
     <div className="min-h-screen bg-slate-50 py-12 px-6">
       <style>{`
         @media print {
           body { background: white !important; }
           .no-print { display: none !important; }
-          .packing-slip-page { padding: 0 !important; background: white !important; }
+          .packing-slip-page { padding: 0 !important; background: white !important; box-shadow: none !important; border: none !important; }
+          .packing-slip-page > * { page-break-inside: avoid; }
         }
       `}</style>
       <div className="packing-slip-page max-w-4xl mx-auto bg-white border border-slate-200 p-10 md:p-14 shadow-sm space-y-8">
@@ -44,14 +47,21 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
           <Link href={`/admin/orders/${order.id}`} className="flex items-center text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors">
             <ChevronLeft className="mr-1 h-4 w-4" /> Back to Order details
           </Link>
-          <PrintButton />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 h-10 px-5 border rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
+            >
+              <Printer size={15} /> Print
+            </button>
+          </div>
         </div>
 
         {/* Company Header */}
         <div className="flex justify-between items-start border-b-2 border-[#1a4731] pb-6">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-widest text-[#1a4731]">Horof</h1>
-            <p className="text-[10px] text-slate-500 mt-1">Premium Handcrafted Signage &amp; Custom Acrylic Masterpieces</p>
+            <p className="text-[10px] text-slate-500 mt-1">Premium Handcrafted Signage & Custom Acrylic Masterpieces</p>
           </div>
           <div className="text-right">
             <h2 className="text-lg font-bold uppercase tracking-[0.3em] text-slate-400">Packing Slip</h2>
@@ -66,6 +76,7 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
               <h3 className="text-[9px] font-bold text-slate-400 uppercase tracking-widest border-b pb-1.5 border-slate-100">Order Information</h3>
               <div className="text-xs text-slate-700 space-y-1 mt-2">
                 <p><span className="font-semibold text-slate-500">Order ID:</span> #{order.id}</p>
+                <p><span className="font-semibold text-slate-500">Order Number:</span> {order.order_number || '—'}</p>
                 <p><span className="font-semibold text-slate-500">Order Date:</span> {new Date(order.created_at).toLocaleDateString()}</p>
                 <p><span className="font-semibold text-slate-500">Order Status:</span> <span className="capitalize font-semibold text-[#1a4731]">{order.status?.replace(/_/g, ' ')}</span></p>
                 <p><span className="font-semibold text-slate-500">Payment:</span> {order.payment_method || 'COD'} | <span className="capitalize">{order.payment_status || 'pending'}</span></p>
@@ -76,6 +87,7 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
               <div className="text-xs text-slate-700 space-y-1 mt-2">
                 <p><span className="font-semibold text-slate-500">Courier:</span> {metadata.courier_name || 'Not Assigned'}</p>
                 {metadata.tracking_number && <p><span className="font-semibold text-slate-500">Tracking #:</span> <span className="font-mono font-bold">{metadata.tracking_number}</span></p>}
+                {metadata.estimated_delivery && <p><span className="font-semibold text-slate-500">Est. Delivery:</span> {new Date(metadata.estimated_delivery).toLocaleDateString()}</p>}
               </div>
             </div>
           </div>
@@ -85,6 +97,9 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
               <div className="text-xs text-slate-700 space-y-1 mt-2 leading-relaxed">
                 <p className="font-bold text-slate-900">{order.customer_name || 'Valued Customer'}</p>
                 <p className="whitespace-pre-line leading-relaxed">{order.customer_address || 'No address provided'}</p>
+                <p className="text-slate-500">
+                  {[order.district, order.thana || order.area].filter(Boolean).join(', ') || '—'}
+                </p>
               </div>
             </div>
             <div>
@@ -110,67 +125,31 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(items ?? []).length > 0 ? (
-                (items ?? []).map((item: any) => {
-                  const detail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
-                  const specs = detail?.specifications || detail?.selectedSpecs || {};
-                  const note = detail?.customer_notes || detail?.customerNotes || '';
-                  const images = extractProductImages(item.products?.product_images);
+              {(displayItems ?? []).map((item: any, idx: number) => {
+                const detail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
+                const specs = detail?.specifications || detail?.selectedSpecs || {};
+                const note = detail?.customer_notes || detail?.customerNotes || '';
+                const images = extractProductImages(item.products?.product_images);
 
-                  return (
-                    <tr key={item.id} className="align-middle hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center">
-                          {images[0] ? (
-                            <img src={images[0]} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                          ) : (
-                            <span className="text-slate-300 text-[9px] font-bold">N/A</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-bold text-slate-900">{item.products?.name || detail?.product_name || 'Product'}</p>
-                        {item.products?.sku && <p className="text-[9px] text-slate-400 font-mono mt-0.5">SKU: {item.products.sku}</p>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {specs && typeof specs === 'object' && Object.keys(specs).length > 0 ? (
-                          <div className="space-y-0.5">
-                            {Object.entries(specs).map(([k, v]) => (
-                              <p key={k} className="text-[10px] text-slate-600"><span className="font-semibold text-slate-500">{k}:</span> {String(v)}</p>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {note ? (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 inline-block max-w-[200px] truncate" title={note}>
-                            {note}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold text-slate-900">{item.quantity}</td>
-                    </tr>
-                  );
-                })
-              ) : (
-                metaItems.map((item: any, idx: number) => (
-                  <tr key={idx} className="align-middle hover:bg-slate-50/50 transition-colors">
+                return (
+                  <tr key={item.id ?? idx} className="align-middle hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
-                        <span className="text-slate-300 text-[9px] font-bold">N/A</span>
+                      <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center">
+                        {images[0] ? (
+                          <img src={images[0]} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        ) : (
+                          <span className="text-slate-300 text-[9px] font-bold">N/A</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-bold text-slate-900">{item.product_name || 'Product'}</p>
+                      <p className="font-bold text-slate-900">{item.products?.name || detail?.product_name || 'Product'}</p>
+                      {item.products?.sku && <p className="text-[9px] text-slate-400 font-mono mt-0.5">SKU: {item.products.sku}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      {item.specifications && typeof item.specifications === 'object' && Object.keys(item.specifications).length > 0 ? (
+                      {specs && typeof specs === 'object' && Object.keys(specs).length > 0 ? (
                         <div className="space-y-0.5">
-                          {Object.entries(item.specifications).map(([k, v]) => (
+                          {Object.entries(specs).map(([k, v]) => (
                             <p key={k} className="text-[10px] text-slate-600"><span className="font-semibold text-slate-500">{k}:</span> {String(v)}</p>
                           ))}
                         </div>
@@ -179,16 +158,18 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {item.customer_notes || item.customerNotes ? (
-                        <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 inline-block">{item.customer_notes || item.customerNotes}</span>
+                      {note ? (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 inline-block max-w-[200px] truncate" title={note}>
+                          {note}
+                        </span>
                       ) : (
                         <span className="text-[10px] text-slate-400 italic">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center font-bold text-slate-900">{item.quantity || 1}</td>
+                    <td className="px-4 py-3 text-center font-bold text-slate-900">{item.quantity}</td>
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>

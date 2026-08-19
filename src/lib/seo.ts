@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 const SITE_NAME = 'Horof';
 const SITE_DESCRIPTION = 'Premium handcrafted wood crafts, DIY supplies, and home decor from Bangladesh.';
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://horof.com';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://horofbd.com';
 
 export function buildMeta({
   title,

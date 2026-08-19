@@ -60,7 +60,7 @@ export async function GET(
   }
 
   const filename = `Invoice-${safeFilename(data.invoiceNumber)}.pdf`;
-  return new NextResponse(pdf, {
+  return new NextResponse(new Uint8Array(pdf), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',

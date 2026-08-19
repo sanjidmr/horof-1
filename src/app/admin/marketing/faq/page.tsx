@@ -116,7 +116,7 @@ export default function FAQAdminPage() {
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="ghost" onClick={() => setIsAdding(false)}>Cancel</Button>
-              <Button type="submit" className="bg-forest text-white rounded-xl px-8 h-12">Save FAQ</Button>
+              <Button type="submit" className="bg-black text-white rounded-xl px-8 h-12">Save FAQ</Button>
             </div>
           </form>
         </div>

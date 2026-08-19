@@ -107,7 +107,14 @@ export default function ContactPage() {
         });
       }
 
+      // If the customer selected a file, the upload MUST succeed —
+      // otherwise the message would be saved without its attachment
+      // and the file would silently disappear on the admin side.
       const attachment = await uploadAttachment(fileObj);
+      if (fileObj && !attachment) {
+        toast.error('File upload failed. Your message was not sent. Please try again.');
+        return;
+      }
       const attachments = attachment ? [attachment] : [];
 
       const fullMessage = `${data.message}${data.phone ? `\n\nPhone: ${data.phone}` : ''}${data.inquiryType ? `\nInquiry Type: ${data.inquiryType}` : ''}`;

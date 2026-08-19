@@ -24,9 +24,6 @@ import {
   Warehouse,
   RotateCcw,
   ImageIcon,
-  Tag,
-  FileEdit,
-  Globe,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -42,6 +39,7 @@ import {
 } from '@/lib/actions/orders';
 import { assignWarehouseToOrder } from '@/lib/actions/admin/order-workflow';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
+import { PackingSlipDownloadButton } from './PackingSlipDownloadButton';
 
 interface OrderDetailViewProps {
   order: any;
@@ -87,6 +85,8 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
   // Input states
   const [status, setStatus] = useState(order.status);
   const [statusNote, setStatusNote] = useState('');
+  const [collected, setCollected] = useState(0);
+  const [due, setDue] = useState(0);
 
   const { items: metaItems, metadata } = parseProductDetails(order.product_details);
 
@@ -359,6 +359,48 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
     }
   };
 
+  // Save payment handler
+  const handleSavePayment = async () => {
+    setIsUpdating(true);
+    try {
+      // Validate collected and due
+      const orderTotal = Number(order.total_price || order.amount || 0);
+      if (collected < 0) {
+        toast.error('Collected cannot be negative.');
+        setIsUpdating(false);
+        return;
+      }
+      if (due < 0) {
+        toast.error('Due cannot be negative.');
+        setIsUpdating(false);
+        return;
+      }
+      if (collected + due !== orderTotal) {
+        toast.error(`Collected + Due must equal the order total (৳${orderTotal}).`);
+        setIsUpdating(false);
+        return;
+      }
+
+      // Save to Supabase
+      const { error } = await supabase
+        .from('orders')
+        .update({ collected_amount: collected, due_amount: due })
+        .eq('id', order.id);
+
+      if (error) {
+        toast.error('Failed to save payment: ' + error.message);
+        setIsUpdating(false);
+        return;
+      }
+
+      toast.success('Payment saved successfully.');
+      setIsUpdating(false);
+    } catch (err: any) {
+      toast.error('Failed to save payment: ' + (err.message || 'Unknown error'));
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-24">
       {/* Detail Header & Action bars */}
@@ -387,76 +429,6 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
               {new Date(order.created_at).toLocaleString()}
             </p>
 
-            {/* Full Order Summary */}
-            <div className="mt-4 bg-gradient-to-br from-emerald-50/80 to-teal-50/40 border border-emerald-100 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-800 flex items-center gap-1.5">
-                  <Package size={12} /> Full Order Summary
-                </h3>
-                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-100/60 px-2 py-0.5 rounded-full">
-                  {displayItems.length} {displayItems.length === 1 ? 'Product' : 'Products'} • {displayItems.reduce((sum, it) => sum + Number(it.quantity || 0), 0)} Units
-                </span>
-              </div>
-
-              {/* Product lines */}
-              <div className="space-y-1.5">
-                {items.map((item, idx) => {
-                  const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
-                  const productName = item.products?.name || matchingDetail?.product_name || 'Artisan Piece';
-                  const qty = Number(item.quantity || 1);
-                  const unitPrice = Number(item.unit_price || 0);
-                  const design = Number(matchingDetail?.design_charge || matchingDetail?.designCharge || item.designCharge || 0);
-                  const lineTotal = (qty * unitPrice) + design;
-                  const variant = item.product_variants?.size || item.product_variants?.color 
-                    ? [item.product_variants?.size, item.product_variants?.color].filter(Boolean).join(' / ')
-                    : '';
-
-                  return (
-                    <div key={item.id} className="flex items-center justify-between gap-3 bg-white/70 border border-emerald-100/60 rounded-xl px-3 py-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-black flex items-center justify-center flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-bold text-slate-800 truncate">{productName}</p>
-                          <p className="text-[9px] text-slate-500">
-                            {qty} × {formatPrice(unitPrice)}
-                            {variant && <span className="ml-1 text-emerald-600">• {variant}</span>}
-                            {design > 0 && <span className="ml-1 text-amber-600">• Design +{formatPrice(design)}</span>}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-black text-emerald-800 flex-shrink-0">{formatPrice(lineTotal)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Order source & meta */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-emerald-100/70">
-                <div className="bg-white/60 rounded-lg px-2.5 py-1.5">
-                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Order Source</p>
-                  <p className="text-[10px] font-bold text-slate-700 mt-0.5 flex items-center gap-1">
-                    <Globe size={10} className="text-emerald-600" />
-                    {order.user_id ? 'Website (Logged In)' : 'Website (Guest Checkout)'}
-                  </p>
-                </div>
-                <div className="bg-white/60 rounded-lg px-2.5 py-1.5">
-                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Payment</p>
-                  <p className="text-[10px] font-bold text-slate-700 mt-0.5 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
-                </div>
-                <div className="bg-white/60 rounded-lg px-2.5 py-1.5">
-                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Delivery</p>
-                  <p className="text-[10px] font-bold text-slate-700 mt-0.5 capitalize">{order.delivery_type || 'Standard'}</p>
-                </div>
-              </div>
-
-              {/* Grand total */}
-              <div className="flex items-center justify-between bg-emerald-800 text-white rounded-xl px-3 py-2">
-                <span className="text-[10px] font-black uppercase tracking-widest">Grand Total</span>
-                <span className="text-sm font-black">{formatPrice(Number(order.total_price || order.amount || 0))}</span>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -469,8 +441,9 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
           >
             <Printer size={15} /> Packing Slip
           </Link>
+          <PackingSlipDownloadButton orderId={order.id} orderNumber={order.order_number} />
           <Link
-            href={`/admin/orders/${order.id}/print-invoice`}
+            href={`/invoice/print/${order.id}`}
             target="_blank"
             className="inline-flex items-center gap-2 h-11 px-5 bg-[#1a4731] text-white rounded-xl text-xs font-bold hover:bg-[#2d6a4f] transition-colors"
           >
@@ -493,364 +466,330 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Double Columns */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Order items lists - Complete Order Summary */}
-          <Card className="border-slate-100 shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-50 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 text-slate-700">
-                <Package size={16} className="text-[#1a4731]" /> Product Collections ({items.length})
-              </CardTitle>
-              <span className="text-[10px] text-slate-400 font-semibold">Order #{String(order.id).slice(0, 8)}</span>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              {items.map((item) => {
-                const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
-                const specs = matchingDetail?.specifications || matchingDetail?.selectedSpecs || item.selectedSpecs || {};
-                const design = Number(matchingDetail?.design_charge || matchingDetail?.designCharge || item.designCharge || 0);
-                const customerNote = matchingDetail?.customer_notes || matchingDetail?.customerNotes || '';
-                const itemSubtotal = Number(item.unit_price || 0) * Number(item.quantity || 1);
-                const itemTotal = itemSubtotal + design;
-                const productImage = item.images?.[0] || null;
-
-                return (
-                  <div key={item.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    {/* Product Header Row */}
-                    <div className="flex flex-col sm:flex-row gap-4 p-4 sm:p-5 bg-white border-b border-slate-50">
-                      {/* Product Image */}
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0">
-                        {productImage ? (
-                          <img
-                            src={productImage}
-                            alt={item.products?.name || 'Product'}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                              (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-300">
-                            <ImageIcon size={24} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Product Info */}
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-900">
-                              {item.products?.name || matchingDetail?.product_name || 'Artisan Piece'}
-                            </h4>
-                            {item.products?.sku && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono mt-0.5">
-                                <Tag size={10} /> SKU: {item.products.sku}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-base font-black text-[#1a4731]">{formatPrice(itemTotal)}</p>
-                            <p className="text-[9px] text-slate-400 font-semibold">
-                              {item.quantity} x {formatPrice(Number(item.unit_price))}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* All Specifications & Selected Options */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {/* Variant Info */}
-                          {item.product_variants?.size && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-[9px] font-bold text-blue-700">
-                              Size: {item.product_variants.size}
-                            </span>
-                          )}
-                          {item.product_variants?.color && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 border border-purple-200 rounded-md text-[9px] font-bold text-purple-700">
-                              Color: {item.product_variants.color}
-                            </span>
-                          )}
-                          
-                          {/* Additional Specifications from product_details */}
-                          {specs && typeof specs === 'object' && Object.entries(specs).map(([key, value]) => (
-                            <span 
-                              key={key}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-md text-[9px] font-bold text-emerald-700"
-                            >
-                              {key}: {String(value)}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Customer Note */}
-                        {customerNote && (
-                          <div className="bg-amber-50/60 border border-amber-100 rounded-lg p-2 mt-2">
-                            <p className="text-[10px] text-amber-900 font-medium italic">"{customerNote}"</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Specifications & Details Section */}
-                    <div className="px-4 sm:px-5 py-4 space-y-3 bg-white">
-                      {/* Design Charge */}
-                      {design > 0 && (
-                        <div className="flex items-center gap-2 text-[11px] text-[#1B4332] bg-[#E6F0EB] px-3 py-1.5 rounded-lg w-fit">
-                          <FileEdit size={12} />
-                          <span className="font-bold">Design Charge:</span>
-                          <span>{formatPrice(design)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Order Totals Summary */}
-              <div className="bg-slate-50/40 border border-slate-100 rounded-2xl p-5">
-                <h5 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-4">Order Summary</h5>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Subtotal</span>
-                    <span className="font-bold text-slate-800">{formatPrice(Number(order.total_price || order.amount || 0))}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Delivery Charge</span>
-                    <span className="font-bold text-slate-800">
-                      {Number(order.delivery_charge) > 0 ? formatPrice(Number(order.delivery_charge)) : 'Free'}
-                    </span>
-                  </div>
-                  {metadata.discount > 0 && (
-                    <div className="flex justify-between items-center text-emerald-600">
-                      <span>
-                        Discount {metadata.coupon_code ? `(${metadata.coupon_code})` : ''}
-                      </span>
-                      <span className="font-bold">-{formatPrice(metadata.discount)}</span>
-                    </div>
-                  )}
-                  {metadata.coupon_code && metadata.discount === 0 && (
-                    <div className="flex justify-between items-center text-slate-500">
-                      <span>Coupon Code</span>
-                      <span className="font-mono font-bold text-slate-700">{metadata.coupon_code}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center text-base font-black text-[#1a4731] border-t border-slate-200 pt-3 mt-3">
-                    <span>Grand Total</span>
-                    <span>{formatPrice(Number(order.total_price || order.amount || 0))}</span>
-                  </div>
-                </div>
-              </div>
 
               {/* Complete Order Details Summary */}
               <Card className="border-slate-100 shadow-sm rounded-3xl overflow-hidden">
-                <CardHeader className="bg-slate-50/50 border-b border-slate-50">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-50 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 text-slate-700">
                     <FileText size={16} className="text-[#1a4731]" /> Complete Order Summary
                   </CardTitle>
+                  <span className="text-[10px] text-slate-400 font-semibold font-mono">{order.order_number || String(order.id).slice(0, 8)}</span>
                 </CardHeader>
-                <CardContent className="p-6">
-                  <div className="space-y-6">
-                    {/* Order Information */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-2">Order Information</h4>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Order ID:</span>
-                            <span className="font-mono font-bold text-slate-800">{order.id}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Order Number:</span>
-                            <span className="font-bold text-slate-800">{order.order_number}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Order Date:</span>
-                            <span className="font-bold text-slate-800">{new Date(order.created_at).toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Order Status:</span>
-                            <span className="font-bold capitalize text-slate-800">{order.status.replace('_', ' ')}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Payment Status:</span>
-                            <span className="font-bold capitalize text-slate-800">{order.payment_status}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Payment Method:</span>
-                            <span className="font-bold text-slate-800">{order.payment_method || 'Cash on Delivery'}</span>
-                          </div>
-                          {order.transaction_id && (
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Transaction ID:</span>
-                              <span className="font-mono font-bold text-slate-800">{order.transaction_id}</span>
-                            </div>
-                          )}
-                        </div>
+                <CardContent className="p-6 space-y-6">
+                  {/* Key stats overview */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Order Number</p>
+                      <p className="text-sm font-black text-slate-900 mt-1 font-mono">{order.order_number || '—'}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-mono">ID: {String(order.id).slice(0, 8)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Placed On</p>
+                      <p className="text-sm font-black text-slate-900 mt-1">
+                        {new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Order Status</p>
+                      <div className="mt-1.5">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                          order.status === 'delivered' || order.status === 'confirmed'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : order.status === 'cancelled' || order.status === 'returned' || order.status === 'refunded'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {order.status.replace('_', ' ')}
+                        </span>
                       </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Payment</p>
+                      <p className="text-sm font-black text-slate-900 mt-1 capitalize">{order.payment_method || 'Cash on Delivery'}</p>
+                      <p className={`text-[10px] font-bold mt-0.5 capitalize ${
+                        order.payment_status === 'paid' || order.payment_status === 'completed'
+                          ? 'text-emerald-600'
+                          : order.payment_status === 'refunded'
+                            ? 'text-rose-600'
+                            : 'text-amber-600'
+                      }`}>{order.payment_status || 'pending'}</p>
+                    </div>
+                  </div>
 
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-2">Customer Information</h4>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Customer Name:</span>
-                            <span className="font-bold text-slate-800">{order.customer_name || 'Guest'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Customer Email:</span>
-                            <span className="font-bold text-slate-800">{order.customer_email || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Customer Phone:</span>
-                            <span className="font-bold text-slate-800">{order.customer_phone || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Delivery Type:</span>
-                            <span className="font-bold text-slate-800">{order.delivery_type || 'Standard'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">District:</span>
-                            <span className="font-bold text-slate-800">{order.district || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Thana/Area:</span>
-                            <span className="font-bold text-slate-800">{order.thana || order.area || 'N/A'}</span>
-                          </div>
-                        </div>
+                  {/* Who / Where / How */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Customer */}
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/40 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-slate-100">
+                        <User size={13} className="text-[#1a4731]" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Customer</span>
+                      </div>
+                      <div className="p-4 space-y-1.5 text-xs">
+                        <p className="font-black text-slate-900">{order.customer_name || 'Guest'}</p>
+                        <p className="text-slate-600 break-words">{order.customer_email || 'No email provided'}</p>
+                        <p className="text-slate-600">{order.customer_phone || 'No phone provided'}</p>
                       </div>
                     </div>
 
-                    {/* Product Details Table */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-2">Product Details</h4>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                              <th className="text-left py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Product</th>
-                              <th className="text-left py-2 px-3 text-[10px] font-bold uppercase text-slate-600">SKU</th>
-                              <th className="text-left py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Variant</th>
-                              <th className="text-left py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Size</th>
-                              <th className="text-left py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Color</th>
-                              <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Qty</th>
-                              <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Unit Price</th>
-                              <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Discount</th>
-                              <th className="text-right py-2 px-3 text-[10px] font-bold uppercase text-slate-600">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {items.map((item, idx) => {
-                              const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
-                              const specs = matchingDetail?.specifications || matchingDetail?.selectedSpecs || item.selectedSpecs || {};
-                              const design = Number(matchingDetail?.design_charge || matchingDetail?.designCharge || item.designCharge || 0);
-                              const itemTotal = (Number(item.unit_price || 0) * Number(item.quantity || 1)) + design;
+                    {/* Delivery Address */}
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/40 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-slate-100">
+                        <MapPin size={13} className="text-[#1a4731]" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Delivery Address</span>
+                      </div>
+                      <div className="p-4 space-y-1.5 text-xs">
+                        <p className="text-slate-700 leading-relaxed">{order.customer_address || 'No address provided'}</p>
+                        <p className="text-slate-500">
+                          {[order.district, order.thana || order.area].filter(Boolean).join(', ') || '—'}
+                        </p>
+                        {order.shipping_address && typeof order.shipping_address === 'object' && (
+                          <p className="text-slate-500">
+                            {[order.shipping_address.city, order.shipping_address.postal_code].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                        <p className="text-slate-400 capitalize">{order.delivery_type || 'Standard'} delivery</p>
+                      </div>
+                    </div>
 
-                              return (
-                                <tr key={item.id} className="hover:bg-slate-50/50">
-                                  <td className="py-3 px-3">
-                                    <div>
-                                      <div className="font-bold text-slate-900">{item.products?.name || matchingDetail?.product_name || 'Product'}</div>
-                                      {Object.keys(specs).length > 0 && (
-                                        <div className="text-[9px] text-slate-500 mt-1">
-                                          {Object.entries(specs).map(([key, value]) => (
-                                            <span key={key} className="inline-block mr-2">
-                                              {key}: {String(value)}
-                                            </span>
-                                          ))}
-                                        </div>
+                    {/* Fulfillment / Courier */}
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/40 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-slate-100">
+                        <Truck size={13} className="text-[#1a4731]" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Fulfillment</span>
+                      </div>
+                      <div className="p-4 space-y-2 text-xs">
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Courier</span>
+                          <span className="font-bold text-slate-800">{order.courier_name || metadata.courier_name || 'Not assigned'}</span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Tracking #</span>
+                          <span className="font-mono font-bold text-slate-800">{order.tracking_number || metadata.tracking_number || '—'}</span>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Est. Delivery</span>
+                          <span className="font-bold text-slate-800">
+                            {order.estimated_delivery ? new Date(order.estimated_delivery).toLocaleDateString() : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Table */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                        <Package size={12} /> Items ({displayItems.length})
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        {displayItems.reduce((sum, it) => sum + Number(it.quantity || 0), 0)} unit(s)
+                      </span>
+                    </div>
+                    <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                          <tr>
+                            <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Product</th>
+                            <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">SKU</th>
+                            <th className="text-left py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Selection</th>
+                            <th className="text-right py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Qty</th>
+                            <th className="text-right py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Unit Price</th>
+                            <th className="text-right py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Discount</th>
+                            <th className="text-right py-2.5 px-4 text-[10px] font-bold uppercase text-slate-500">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {displayItems.map((item, idx) => {
+                            const matchingDetail = metaItems.find((d: any) => String(d.product_id) === String(item.product_id));
+                            const specs = matchingDetail?.specifications || matchingDetail?.selectedSpecs || item.selectedSpecs || {};
+                            const design = Number(matchingDetail?.design_charge || matchingDetail?.designCharge || item.designCharge || 0);
+                            const itemTotal = (Number(item.unit_price || 0) * Number(item.quantity || 1)) + design;
+                            const productImage = item.images?.[0] || item.products?.product_images?.[0]?.url || null;
+                            const selection = [
+                              item.product_variants?.size || item.size,
+                              item.product_variants?.color || item.color,
+                              ...Object.entries(specs).map(([k, v]) => `${k}: ${String(v)}`),
+                            ].filter(Boolean);
+
+                            return (
+                              <tr key={item.id ?? idx} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                      {productImage ? (
+                                        <img
+                                          src={productImage}
+                                          alt={item.products?.name || 'Product'}
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                          }}
+                                        />
+                                      ) : (
+                                        <ImageIcon size={16} className="text-slate-300" />
                                       )}
                                     </div>
-                                  </td>
-                                  <td className="py-3 px-3 font-mono text-slate-600">{item.products?.sku || 'N/A'}</td>
-                                  <td className="py-3 px-3 text-slate-600">{item.variant_name || 'N/A'}</td>
-                                  <td className="py-3 px-3 text-slate-600">{item.product_variants?.size || item.size || 'N/A'}</td>
-                                  <td className="py-3 px-3 text-slate-600">{item.product_variants?.color || item.color || 'N/A'}</td>
-                                  <td className="py-3 px-3 text-right font-bold text-slate-800">{item.quantity}</td>
-                                  <td className="py-3 px-3 text-right font-bold text-slate-800">{formatPrice(Number(item.unit_price))}</td>
-                                  <td className="py-3 px-3 text-right text-slate-600">{formatPrice(Number(item.discount || 0))}</td>
-                                  <td className="py-3 px-3 text-right font-black text-[#1a4731]">{formatPrice(itemTotal)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-slate-900 truncate">
+                                        {item.products?.name || matchingDetail?.product_name || item.name || 'Product'}
+                                      </p>
+                                      {design > 0 && (
+                                        <p className="text-[9px] text-amber-600 font-bold mt-0.5">Design charge +{formatPrice(design)}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 font-mono text-slate-600">
+                                  {item.products?.sku || matchingDetail?.sku || 'N/A'}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {selection.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {selection.map((s, i) => (
+                                        <span key={i} className="px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded-md text-[9px] font-semibold text-slate-600">
+                                          {s}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400">Standard</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-right font-bold text-slate-800">{item.quantity}</td>
+                                <td className="py-3 px-4 text-right font-bold text-slate-800">{formatPrice(Number(item.unit_price))}</td>
+                                <td className="py-3 px-4 text-right text-slate-500">{formatPrice(Number(item.discount || 0))}</td>
+                                <td className="py-3 px-4 text-right font-black text-[#1a4731]">{formatPrice(itemTotal)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-
-                    {/* Shipping & Additional Info */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-2">Shipping & Additional Information</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-slate-500">Shipping Address:</span>
-                            <span className="font-bold text-slate-800 text-right max-w-[60%]">{order.customer_address || 'N/A'}</span>
-                          </div>
-                          {order.shipping_address && typeof order.shipping_address === 'object' && (
-                            <>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">City:</span>
-                                <span className="font-bold text-slate-800">{order.shipping_address.city || 'N/A'}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Postal Code:</span>
-                                <span className="font-bold text-slate-800">{order.shipping_address.postal_code || 'N/A'}</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          {order.tracking_number && (
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Tracking Number:</span>
-                              <span className="font-mono font-bold text-slate-800">{order.tracking_number}</span>
-                            </div>
-                          )}
-                          {order.courier_name && (
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Courier:</span>
-                              <span className="font-bold text-slate-800">{order.courier_name}</span>
-                            </div>
-                          )}
-                          {order.estimated_delivery && (
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Est. Delivery:</span>
-                              <span className="font-bold text-slate-800">{new Date(order.estimated_delivery).toLocaleDateString()}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Notes Section */}
-                    {(order.customer_notes || order.internal_notes || order.admin_notes) && (
-                      <div className="space-y-3">
-                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-2">Notes</h4>
-                        <div className="space-y-2 text-xs">
-                          {order.customer_notes && (
-                            <div>
-                              <span className="text-slate-500 font-semibold">Customer Notes:</span>
-                              <p className="text-slate-800 mt-1 bg-amber-50/60 border border-amber-100 rounded-lg p-2 italic">"{order.customer_notes}"</p>
-                            </div>
-                          )}
-                          {order.internal_notes && (
-                            <div>
-                              <span className="text-slate-500 font-semibold">Internal Notes:</span>
-                              <p className="text-slate-800 mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2">{order.internal_notes}</p>
-                            </div>
-                          )}
-                          {order.admin_notes && (
-                            <div>
-                              <span className="text-slate-500 font-semibold">Admin Notes:</span>
-                              <p className="text-slate-800 mt-1 bg-slate-50 border border-slate-200 rounded-lg p-2">{order.admin_notes}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
+
+                  {/* Payment & Reference */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="rounded-2xl bg-white border border-slate-100 p-5">
+                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Payment Summary</h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Subtotal</span>
+                          <span className="font-bold text-slate-800">
+                            {formatPrice(Number(metadata.subtotal || order.subtotal || order.total_price || order.amount || 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Delivery Charge</span>
+                          <span className="font-bold text-slate-800">
+                            {Number(order.delivery_charge) > 0 ? formatPrice(Number(order.delivery_charge)) : 'Free'}
+                          </span>
+                        </div>
+                        {metadata.discount > 0 && (
+                          <div className="flex justify-between text-emerald-600">
+                            <span>Discount {metadata.coupon_code ? `(${metadata.coupon_code})` : ''}</span>
+                            <span className="font-bold">-{formatPrice(metadata.discount)}</span>
+                          </div>
+                        )}
+                        {metadata.coupon_code && metadata.discount === 0 && (
+                          <div className="flex justify-between text-slate-500">
+                            <span>Coupon Code</span>
+                            <span className="font-mono font-bold text-slate-700">{metadata.coupon_code}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-base font-black text-[#1a4731] border-t border-slate-200 pt-3 mt-3">
+                          <span>Grand Total</span>
+                          <span>{formatPrice(Number(order.total_price || order.amount || 0))}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-slate-500">Payment Status</span>
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                            order.payment_status === 'paid' || order.payment_status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : order.payment_status === 'refunded'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {order.payment_status || 'pending'}
+                          </span>
+                        </div>
+                        {/* Collected and Due Section */}
+                        {status === 'delivered' && (
+                          <div className="flex justify-between items-center pt-2">
+                            <span className="text-slate-500 font-bold">Payment Collection</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-600">Collected:</span>
+                              <span className="font-bold text-emerald-600">{formatPrice(collected)}</span>
+                              <span className="text-xs text-slate-600">/</span>
+                              <span className="font-bold text-red-600">{formatPrice(due)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-2xl bg-white border border-slate-100 p-5">
+                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Order Reference</h4>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Order ID</span>
+                            <span className="font-mono font-bold text-slate-800">{order.id}</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Order Number</span>
+                            <span className="font-bold text-slate-800">{order.order_number || '—'}</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Delivery Type</span>
+                            <span className="font-bold text-slate-800 capitalize">{order.delivery_type || 'Standard'}</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-500">Payment Method</span>
+                            <span className="font-bold text-slate-800 capitalize">{order.payment_method || 'Cash on Delivery'}</span>
+                          </div>
+                          {order.transaction_id && (
+                            <div className="flex justify-between gap-3">
+                              <span className="text-slate-500">Transaction ID</span>
+                              <span className="font-mono font-bold text-slate-800 break-all text-right">{order.transaction_id}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes Section */}
+                  {(order.customer_notes || order.internal_notes || order.admin_notes || metadata.customer_notes || metadata.internal_notes) && (
+                    <div className="space-y-3">
+                      <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1.5">
+                        <MessageSquare size={12} /> Notes
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {(order.customer_notes || metadata.customer_notes) && (
+                          <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-700 mb-1.5">Customer Notes</p>
+                            <p className="text-xs text-amber-900 italic">"{order.customer_notes || metadata.customer_notes}"</p>
+                          </div>
+                        )}
+                        {(order.internal_notes || metadata.internal_notes) && (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Internal Notes</p>
+                            <p className="text-xs text-slate-700">{order.internal_notes || metadata.internal_notes}</p>
+                          </div>
+                        )}
+                        {order.admin_notes && (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Admin Notes</p>
+                            <p className="text-xs text-slate-700">{order.admin_notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            </CardContent>
-          </Card>
-
           {/* Return & Refund Request Approval Panel */}
           {((metadata.return_status && metadata.return_status === 'Requested') ||
             (metadata.refund_status && metadata.refund_status === 'Requested')) && (
@@ -1126,6 +1065,47 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                   </button>
                 </div>
               </div>
+
+              {/* Payment Collection Fields */}
+              {status === 'delivered' && (
+                <div className="pt-4 space-y-3">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Collection</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-semibold text-slate-500">Collected</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={collected}
+                        onChange={(e) => setCollected(Number(e.target.value) || 0)}
+                        className="w-full h-10 px-3 rounded-xl border text-xs outline-none focus:border-[#1a4731] transition-colors"
+                      />
+                      <p className="text-[9px] text-slate-500 mt-1">Amount actually collected from the customer</p>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-semibold text-slate-500">Due</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={due}
+                        onChange={(e) => setDue(Number(e.target.value) || 0)}
+                        className="w-full h-10 px-3 rounded-xl border text-xs outline-none focus:border-[#1a4731] transition-colors"
+                      />
+                      <p className="text-[9px] text-slate-500 mt-1">Remaining amount still unpaid</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSavePayment}
+                    className="w-full h-11 bg-[#1a4731] hover:bg-[#2d6a4f] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow shadow-forest-900/10"
+                    disabled={isUpdating}
+                  >
+                    <Save size={14} /> Save Payment
+                  </button>
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -36,7 +36,7 @@ export async function upsertAboutPage(payload: Record<string, any>) {
   }
 
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -65,7 +65,7 @@ export async function createTeamMember(data: { name: string; position: string; b
   const { error } = await supabase.from('about_team_members').insert(data);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -81,7 +81,7 @@ export async function updateTeamMember(id: string, data: Record<string, any>) {
   const { error } = await supabase.from('about_team_members').update(data).eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -97,7 +97,7 @@ export async function deleteTeamMember(id: string) {
   const { error } = await supabase.from('about_team_members').delete().eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -126,7 +126,7 @@ export async function createValue(data: { title: string; description?: string; i
   const { error } = await supabase.from('about_values').insert(data);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -142,7 +142,7 @@ export async function updateValue(id: string, data: Record<string, any>) {
   const { error } = await supabase.from('about_values').update(data).eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -158,7 +158,7 @@ export async function deleteValue(id: string) {
   const { error } = await supabase.from('about_values').delete().eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -187,7 +187,7 @@ export async function createWhyChooseUs(data: { title: string; description?: str
   const { error } = await supabase.from('about_why_choose_us').insert(data);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -203,7 +203,7 @@ export async function updateWhyChooseUs(id: string, data: Record<string, any>) {
   const { error } = await supabase.from('about_why_choose_us').update(data).eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -219,7 +219,7 @@ export async function deleteWhyChooseUs(id: string) {
   const { error } = await supabase.from('about_why_choose_us').delete().eq('id', id);
   if (error) return { error: error.message };
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }
 
@@ -291,6 +291,6 @@ export async function seedAboutPageDefaults() {
   ]);
 
   revalidatePath('/about');
-  revalidatePath('/admin/settings/about');
+  revalidatePath('/admin/marketing/about');
   return { error: null };
 }

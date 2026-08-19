@@ -17,7 +17,7 @@ export type CompanyInfo = {
   returnPolicy: string;
 };
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://horof.com';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://horofbd.com';
 
 export function getCompanyInfo(): CompanyInfo {
   return {

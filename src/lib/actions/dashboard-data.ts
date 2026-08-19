@@ -19,7 +19,7 @@ export async function getDashboardData() {
 
   const [productRes, orderRes, customerRes, ordersListRes, msgRes, dailySalesRes, profitLossRes, catSalesRes, orderStatusRes] = await Promise.all([
     supabase.from('products').select('id,stock,stock_status,is_active,cost_price,price,min_stock_level').limit(9999),
-    supabase.from('orders').select('id,total,status,payment_status,created_at'),
+    supabase.from('orders').select('id,total,status,payment_status,created_at,collected_amount,due_amount'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('user_type', 'customer').eq('role', 'customer').eq('is_warehouse_staff', false),
     supabase.from('orders').select('id,total,status,created_at,profiles!customer_id(full_name)').order('created_at', { ascending: false }).limit(5),
     supabase.from('contact_messages').select('id,name,subject,message,created_at').order('created_at', { ascending: false }).limit(5),
@@ -38,7 +38,13 @@ export async function getDashboardData() {
 
   const nonCancelled = orders.filter((o: any) => o.status !== 'cancelled');
   const totalRevenue = nonCancelled.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
-  const paidOrders = orders.filter((o: any) => o.payment_status === 'paid');
+  // Collected and Due revenue tracking
+  const collectedRevenue = orders.filter((o: any) => o.collected_amount > 0).reduce((s: number, o: any) => s + Number(o.collected_amount || 0), 0);
+  const dueRevenue = orders.filter((o: any) => o.due_amount > 0).reduce((s: number, o: any) => s + Number(o.due_amount || 0), 0);
+  // Paid revenue only counts orders that have been DELIVERED (or completed) AND paid.
+  // Money is only considered "received" once the order is delivered.
+  const deliveredStatuses = ['delivered', 'completed'];
+  const paidOrders = orders.filter((o: any) => o.payment_status === 'paid' && deliveredStatuses.includes(o.status));
   const paidRevenue = paidOrders.reduce((s: number, o: any) => s + Number(o.total || 0), 0);
   const orderCount = orders.length;
   const pendingOrders = orders.filter((o: any) => o.status === 'pending').length;
@@ -69,6 +75,8 @@ export async function getDashboardData() {
   return {
     stats: {
       totalRevenue,
+      collectedRevenue,
+      dueRevenue,
       paidRevenue,
       orderCount,
       customerCount: customerRes.count ?? 0,

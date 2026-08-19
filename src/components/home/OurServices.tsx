@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 
@@ -16,6 +17,7 @@ interface ServiceItem {
   title: string;
   subtitle: string;
   description: string;
+  categorySlug?: string;
 }
 
 interface OurServicesProps {
@@ -107,6 +109,15 @@ export const OurServices: React.FC<OurServicesProps> = ({ services }) => {
                   <p className="text-sm sm:text-base text-slate-500 leading-relaxed font-normal pt-1">
                     {item.description}
                   </p>
+                  {item.categorySlug && (
+                    <Link
+                      href={`/category/${item.categorySlug}`}
+                      className="mt-auto pt-3 inline-flex items-center gap-2 text-sm font-bold text-accent-primary hover:text-accent-hover transition-colors"
+                    >
+                      Products
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  )}
                 </div>
               </div>
             </SwiperSlide>

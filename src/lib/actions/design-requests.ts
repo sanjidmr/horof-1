@@ -270,7 +270,7 @@ export async function submitDesignRequest(formData: FormData) {
       ${uploadedFiles.length > 0 ? `<p><strong>Files (${uploadedFiles.length}):</strong></p><ul>${uploadedFiles.map(f => `<li><a href="${f.url}">${f.name}</a></li>`).join('')}</ul>` : ''}
       <p><a href="${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/admin/design-requests/${request.id}" style="display:inline-block;padding:12px 24px;background:#1a4731;color:#fff;text-decoration:none;border-radius:8px;">View Request</a></p>
     `;
-    await sendEmail(process.env.EMAIL_FROM || 'admin@horof.com', `New Design Request: ${fullName}`, adminHtml);
+    await sendEmail(process.env.EMAIL_FROM || 'admin@horofbd.com', `New Design Request: ${fullName}`, adminHtml);
   } catch {}
 
   // Email customer confirmation
@@ -1007,7 +1007,7 @@ export async function customerRespond(
       rejected: 'Rejected',
     };
     await sendEmail(
-      process.env.EMAIL_FROM || 'admin@horof.com',
+      process.env.EMAIL_FROM || 'admin@horofbd.com',
       `Design ${actionLabels[action] || action}: #${requestId.slice(0, 8).toUpperCase()}`,
       `
         <h2>Customer Response: ${actionLabels[action] || action}</h2>

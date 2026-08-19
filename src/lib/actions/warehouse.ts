@@ -674,12 +674,18 @@ async function updateAssignmentStatus(
   if (newStatus === 'delivered') {
     syncData.status = 'delivered';
     syncData.delivered_at = nowIso;
+    // Mark order as PAID once delivered — money is received on delivery
+    syncData.payment_status = 'paid';
+    syncData.paid_at = nowIso;
   }
   if (newStatus === 'returned') {
     syncData.status = 'returned';
   }
   if (newStatus === 'completed') {
     syncData.status = 'completed';
+    // Completed = confirmed delivered & paid
+    syncData.payment_status = 'paid';
+    syncData.paid_at = nowIso;
   }
   if (newStatus === 'assigned') {
     syncData.status = 'warehouse_assigned';

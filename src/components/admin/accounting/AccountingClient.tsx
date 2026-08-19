@@ -80,7 +80,7 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
   ];
 
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ category_id: '', amount: '' });
+  const [expenseForm, setExpenseForm] = useState({ category_id: '', amount: '', paid_to: '', description: '' });
   const [formError, setFormError] = useState('');
   const [formSaving, setFormSaving] = useState(false);
 
@@ -95,12 +95,14 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
       const result = await createExpense({
         category_id: expenseForm.category_id,
         amount: Number(expenseForm.amount),
+        paid_to: expenseForm.paid_to,
+        description: expenseForm.description,
       });
       if (result.error) {
         setFormError(result.error);
       } else {
         setShowAddExpense(false);
-        setExpenseForm({ category_id: '', amount: '' });
+        setExpenseForm({ category_id: '', amount: '', paid_to: '', description: '' });
         toast.success('Expense added');
         await refresh();
       }
@@ -313,6 +315,10 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
                 </select>
                 <input type="number" placeholder="Amount" value={expenseForm.amount} onChange={(e) => setExpenseForm(f => ({ ...f, amount: e.target.value }))}
                   className="h-12 px-4 rounded-xl border border-slate-200 text-sm" />
+                <input type="text" placeholder="Paid To (who received this bill)" value={expenseForm.paid_to} onChange={(e) => setExpenseForm(f => ({ ...f, paid_to: e.target.value }))}
+                  className="h-12 px-4 rounded-xl border border-slate-200 text-sm" />
+                <input type="text" placeholder="Description" value={expenseForm.description} onChange={(e) => setExpenseForm(f => ({ ...f, description: e.target.value }))}
+                  className="h-12 px-4 rounded-xl border border-slate-200 text-sm" />
               </div>
               <button onClick={handleAddExpense} disabled={formSaving} className="px-6 py-3 bg-[#1a4731] text-white rounded-xl text-sm font-bold hover:bg-[#2d6a4f] disabled:opacity-50">
                 {formSaving ? 'Saving...' : 'Save Expense'}
@@ -327,6 +333,8 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
                   <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em] border-b border-slate-50">
                     <th className="px-6 py-4">Date</th>
                     <th className="px-6 py-4">Category</th>
+                    <th className="px-6 py-4">Paid To</th>
+                    <th className="px-6 py-4">Description</th>
                     <th className="px-6 py-4">Amount</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -336,6 +344,8 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
                     <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 text-sm text-slate-700">{new Date(e.created_at).toLocaleDateString()}</td>
                       <td className="px-6 py-4 text-sm font-medium text-slate-800">{e.expense_categories?.name ?? 'N/A'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{e.paid_to || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 max-w-[240px] truncate">{e.description || '-'}</td>
                       <td className="px-6 py-4 text-sm font-bold text-slate-900">{formatPrice(Number(e.amount ?? 0))}</td>
                       <td className="px-6 py-4 text-right">
                         <button onClick={() => handleDeleteExpense(e.id)} className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100" title="Delete">
@@ -344,7 +354,7 @@ export function AccountingClient({ initialData }: { initialData: AcctData | null
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm">No expenses recorded</td></tr>
+                    <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400 text-sm">No expenses recorded</td></tr>
                   )}
                 </tbody>
               </table>
