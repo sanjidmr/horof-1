@@ -2,10 +2,11 @@ import React from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
-import { Printer, ChevronLeft, Package, Truck, MapPin, User, Phone, Mail, Clock, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/utils';
 import { extractProductImages } from '@/lib/store/extract-images';
+import { PackingSlipPrintButton } from '@/components/admin/orders/PackingSlipPrintButton';
 
 export default async function PackingSlipPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -48,12 +49,7 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
             <ChevronLeft className="mr-1 h-4 w-4" /> Back to Order details
           </Link>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 h-10 px-5 border rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <Printer size={15} /> Print
-            </button>
+            <PackingSlipPrintButton />
           </div>
         </div>
 
@@ -136,7 +132,7 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ id
                     <td className="px-4 py-3">
                       <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center">
                         {images[0] ? (
-                          <img src={images[0]} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <img src={images[0]} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-slate-300 text-[9px] font-bold">N/A</span>
                         )}

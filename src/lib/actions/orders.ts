@@ -72,10 +72,21 @@ export async function updateOrderStatusAction(
     product_details: updatedProductDetails
   };
 
-  // Mark order as PAID once delivered/completed — money is received on delivery
+  // Mark order as PAID once delivered/completed — money is received on delivery.
+  // For Cash on Delivery orders, auto-set collected_amount to the full total
+  // and due_amount to 0 so payment collection data persists server-side too.
   if (newStatus.toLowerCase() === 'delivered' || newStatus.toLowerCase() === 'completed') {
     updateFields.payment_status = 'paid';
     updateFields.paid_at = new Date().toISOString();
+
+    const hasStoredCollection = Number(order.collected_amount || 0) > 0;
+    if (!hasStoredCollection) {
+      const orderTotal = Number(order.total || order.total_price || order.amount || 0);
+      if (orderTotal > 0) {
+        updateFields.collected_amount = orderTotal;
+        updateFields.due_amount = 0;
+      }
+    }
   }
 
   const { error: updateErr } = await supabase
@@ -281,6 +292,127 @@ export async function updateOrderPaymentStatusAction(
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath('/admin/returns');
   return { success: true, paymentStatus: newPaymentStatus.toLowerCase() };
+}
+
+/**
+ * 2b. Quick Payment Status Update (Full Payment / Half Payment / Partial Payment / Pending)
+ *
+ * One-tap admin buttons for the Order Management page that set the payment
+ * status AND keep collected_amount / due_amount in sync automatically.
+ *
+ * Presets:
+ *   full    → 100% collected, 0 due            (payment_status: paid)
+ *   half    → 50% collected, 50% due           (payment_status: half_paid)
+ *   partial → 60% collected, 40% due           (payment_status: partially_paid) — a bit more than half
+ *   pending → 0% collected, 100% due           (payment_status: pending)
+ */
+export async function updateOrderPaymentQuickAction(
+  orderId: string,
+  paymentType: 'full' | 'half' | 'partial' | 'pending',
+  adminName?: string
+) {
+  const { supabase } = await requireAdmin('orders.manage');
+
+  const { data: order, error: fetchErr } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('id', orderId)
+    .single();
+
+  if (fetchErr || !order) throw new Error('Order not found');
+
+  const orderTotal = Number(order.total || order.total_price || order.amount || 0);
+
+  const presets: Record<string, { paymentStatus: string; collected: number; due: number; label: string }> = {
+    full: {
+      paymentStatus: 'paid',
+      collected: orderTotal,
+      due: 0,
+      label: 'Full Payment',
+    },
+    half: {
+      paymentStatus: 'half_paid',
+      collected: Math.round(orderTotal * 0.5 * 100) / 100,
+      due: Math.round(orderTotal * 0.5 * 100) / 100,
+      label: 'Half Payment',
+    },
+    partial: {
+      paymentStatus: 'partially_paid',
+      collected: Math.round(orderTotal * 0.6 * 100) / 100,
+      due: Math.round(orderTotal * 0.4 * 100) / 100,
+      label: 'Partial Payment',
+    },
+    pending: {
+      paymentStatus: 'pending',
+      collected: 0,
+      due: orderTotal,
+      label: 'Pending',
+    },
+  };
+
+  const preset = presets[paymentType];
+  if (!preset) throw new Error('Invalid payment type');
+
+  const updateFields: Record<string, any> = {
+    payment_status: preset.paymentStatus,
+    collected_amount: preset.collected,
+    due_amount: preset.due,
+  };
+
+  if (paymentType === 'pending') {
+    updateFields.paid_at = null;
+  } else {
+    updateFields.paid_at = new Date().toISOString();
+  }
+
+  const { error: updateErr } = await supabase
+    .from('orders')
+    .update(updateFields)
+    .eq('id', orderId);
+
+  if (updateErr) throw new Error('Failed to update payment status: ' + updateErr.message);
+
+  // Log timeline
+  const timelineNote = `Payment status updated to ${preset.label} (Collected: ৳${preset.collected.toLocaleString()}, Due: ৳${preset.due.toLocaleString()})${adminName ? ` (by Admin: ${adminName})` : ''}`;
+  await supabase.from('order_timeline').insert({
+    order_id: orderId,
+    status: order.status,
+    note: timelineNote,
+  });
+
+  // ── Send Payment Confirmation Email for Full Payment ──
+  // Non-fatal: email failure never breaks the payment-status update.
+  if (paymentType === 'full' && order.customer_email) {
+    const { items } = parseProductDetails(order.product_details);
+    const emailData: OrderEmailData = {
+      customerName: order.customer_name || 'Customer',
+      orderNumber: order.order_number || `#${orderId}`,
+      orderId,
+      total: orderTotal,
+      subtotal: Number(order.subtotal || orderTotal),
+      deliveryCharge: Number(order.shipping_charge || 0),
+      discount: Number(order.discount || 0),
+      items: items.map((item: any) => ({
+        name: item.product_name || item.name || 'Product',
+        quantity: item.quantity || 1,
+        unit_price: Number(item.unit_price || item.price || 0),
+        total: Number(item.unit_price || item.price || 0) * (item.quantity || 1),
+      })),
+      paymentMethod: order.payment_method || 'Paid',
+      customerAddress: order.customer_address || undefined,
+      customerPhone: order.customer_phone || undefined,
+      createdAt: order.created_at,
+    };
+    sendPaymentConfirmationEmail({
+      to: order.customer_email,
+      data: emailData,
+    }).catch((err) => console.error('[Email] Failed to send payment confirmation:', err));
+  }
+
+  revalidatePath('/admin/orders');
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath('/admin/returns');
+  return { success: true, paymentStatus: preset.paymentStatus, collectedAmount: preset.collected, dueAmount: preset.due, label: preset.label };
 }
 
 /**

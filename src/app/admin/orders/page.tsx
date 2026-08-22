@@ -18,7 +18,8 @@ import {
   ArrowUpDown,
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  Percent
 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
@@ -63,6 +64,45 @@ export default function AdminOrdersPage() {
       toast.error(err.message || 'Failed to assign warehouse');
     } finally {
       setAssigningOrder(null);
+    }
+  };
+
+  // Payment status badge helper
+  const getPaymentStatusBadge = (paymentStatus: string) => {
+    const ps = (paymentStatus || 'pending').toLowerCase();
+    switch (ps) {
+      case 'paid':
+      case 'completed':
+      case 'full_paid':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200">
+            <CheckCircle2 className="h-3 w-3" /> Full Paid
+          </span>
+        );
+      case 'half_paid':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-black uppercase tracking-wider border border-sky-200">
+            <Percent className="h-3 w-3" /> Half Paid
+          </span>
+        );
+      case 'partially_paid':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 text-[10px] font-black uppercase tracking-wider border border-violet-200">
+            <TrendingUp className="h-3 w-3" /> Partial Paid
+          </span>
+        );
+      case 'refunded':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-black uppercase tracking-wider border border-rose-200">
+            <Undo2 className="h-3 w-3" /> Refunded
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider border border-amber-200">
+            <Clock className="h-3 w-3" /> Pending
+          </span>
+        );
     }
   };
 
@@ -424,6 +464,7 @@ export default function AdminOrdersPage() {
                 <th className="px-6 py-4">Customer Details</th>
                 <th className="px-6 py-4">Order Date</th>
                 <th className="px-6 py-4">Fulfillment Status</th>
+                <th className="px-6 py-4">Payment Status</th>
                 <th className="px-6 py-4 text-right">Total Price</th>
                 <th className="px-6 py-4 hidden lg:table-cell">Warehouse</th>
                 <th className="px-6 py-4 text-center">Fulfillment</th>
@@ -432,13 +473,13 @@ export default function AdminOrdersPage() {
             <tbody className="divide-y divide-slate-150">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-light">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-light">
                     Querying order database...
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-light">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 font-light">
                     No orders match your filter criteria.
                   </td>
                 </tr>
@@ -479,6 +520,11 @@ export default function AdminOrdersPage() {
                       {/* Status */}
                       <td className="px-6 py-4">
                         {getStatusBadge(order.status)}
+                      </td>
+                      
+                      {/* Payment Status */}
+                      <td className="px-6 py-4">
+                        {getPaymentStatusBadge(order.payment_status)}
                       </td>
                       
                       {/* Total */}

@@ -12,8 +12,6 @@ import {
   User,
   MapPin,
   Clock,
-  CheckCircle2,
-  XCircle,
   ChevronLeft,
   Printer,
   FileText,
@@ -35,11 +33,11 @@ import {
   updateOrderNotesAction,
   handleReturnAction,
   handleRefundAction,
-  cancelOrderAction,
+  updateOrderPaymentQuickAction,
 } from '@/lib/actions/orders';
 import { assignWarehouseToOrder } from '@/lib/actions/admin/order-workflow';
 import { parseProductDetails } from '@/lib/utils/order-helpers';
-import { PackingSlipDownloadButton } from './PackingSlipDownloadButton';
+import { InvoiceDownloadButton } from '@/components/admin/orders/InvoiceDownloadButton';
 
 interface OrderDetailViewProps {
   order: any;
@@ -72,6 +70,14 @@ const COURIERS = [
   'Manual',
 ];
 
+const PAYMENT_STATUSES = [
+  'pending',
+  'half_paid',
+  'partially_paid',
+  'paid',
+  'refunded',
+];
+
 export function OrderDetailView({ order: initialOrder, items, timeline: initialTimeline }: OrderDetailViewProps) {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
@@ -85,8 +91,20 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
   // Input states
   const [status, setStatus] = useState(order.status);
   const [statusNote, setStatusNote] = useState('');
-  const [collected, setCollected] = useState(0);
-  const [due, setDue] = useState(0);
+
+  // Payment Collection state — initialized from saved order values.
+  // For delivered orders without saved values, default to full collection
+  // (Cash on Delivery: money is collected at delivery).
+  const orderInitTotal = Number(order.total || order.total_price || order.amount || 0);
+  const storedCollected = Number(order.collected_amount || 0);
+  const storedDue = Number(order.due_amount || 0);
+  const isDeliveredInit = (order.status || '').toLowerCase() === 'delivered';
+  const [collected, setCollected] = useState(
+    storedCollected > 0 ? storedCollected : isDeliveredInit ? orderInitTotal : 0
+  );
+  const [due, setDue] = useState(
+    storedCollected > 0 ? storedDue : isDeliveredInit ? 0 : orderInitTotal
+  );
 
   const { items: metaItems, metadata } = parseProductDetails(order.product_details);
 
@@ -190,6 +208,18 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
       if (res.success) {
         setStatus(newStatus.toLowerCase());
         setOrder((prev) => ({ ...prev, status: newStatus.toLowerCase() }));
+
+        // When an order is delivered (Cash on Delivery), auto-fill the full
+        // order total as collected so the Payment Collection never shows 0.
+        if ((newStatus.toLowerCase() === 'delivered' || newStatus.toLowerCase() === 'completed')) {
+          const totalNow = Number(order.total || order.total_price || order.amount || 0);
+          const hasStoredCollection = Number(order.collected_amount || 0) > 0;
+          if (!hasStoredCollection && totalNow > 0) {
+            setCollected(totalNow);
+            setDue(0);
+          }
+        }
+
         setStatusNote('');
         toast.success(`Order status set to: ${newStatus}`);
 
@@ -359,12 +389,36 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
     }
   };
 
+  // Quick Payment Status Update (Full / Half / Partial / Pending)
+  const handleQuickPayment = async (paymentType: 'full' | 'half' | 'partial' | 'pending') => {
+    setIsUpdating(true);
+    try {
+      const res = await updateOrderPaymentQuickAction(order.id, paymentType, adminName);
+      if (res.success) {
+        setOrder((prev) => ({
+          ...prev,
+          payment_status: res.paymentStatus,
+          collected_amount: res.collectedAmount,
+          due_amount: res.dueAmount,
+        }));
+        setCollected(res.collectedAmount);
+        setDue(res.dueAmount);
+        toast.success(`Payment updated: ${res.label}`);
+        await refreshTimeline();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update payment status');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Save payment handler
   const handleSavePayment = async () => {
     setIsUpdating(true);
     try {
       // Validate collected and due
-      const orderTotal = Number(order.total_price || order.amount || 0);
+      const orderTotal = Number(order.total || order.total_price || order.amount || 0);
       if (collected < 0) {
         toast.error('Collected cannot be negative.');
         setIsUpdating(false);
@@ -375,7 +429,8 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
         setIsUpdating(false);
         return;
       }
-      if (collected + due !== orderTotal) {
+      // Allow small floating-point tolerance
+      if (Math.abs(collected + due - orderTotal) > 0.01) {
         toast.error(`Collected + Due must equal the order total (৳${orderTotal}).`);
         setIsUpdating(false);
         return;
@@ -393,7 +448,14 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
         return;
       }
 
-      toast.success('Payment saved successfully.');
+      // Keep the UI state in sync with the saved values
+      setOrder((prev) => ({
+        ...prev,
+        collected_amount: collected,
+        due_amount: due,
+      }));
+
+      toast.success(`Payment saved. Collected: ৳${collected.toLocaleString()}, Due: ৳${due.toLocaleString()}.`);
       setIsUpdating(false);
     } catch (err: any) {
       toast.error('Failed to save payment: ' + (err.message || 'Unknown error'));
@@ -435,20 +497,13 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
         {/* Printable views links */}
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/admin/orders/packing-slip/${order.id}`}
-            target="_blank"
-            className="inline-flex items-center gap-2 h-11 px-5 border rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 transition-colors"
-          >
-            <Printer size={15} /> Packing Slip
-          </Link>
-          <PackingSlipDownloadButton orderId={order.id} orderNumber={order.order_number} />
-          <Link
             href={`/invoice/print/${order.id}`}
             target="_blank"
             className="inline-flex items-center gap-2 h-11 px-5 bg-[#1a4731] text-white rounded-xl text-xs font-bold hover:bg-[#2d6a4f] transition-colors"
           >
             <Printer size={15} /> Print Invoice (A5)
           </Link>
+          <InvoiceDownloadButton orderId={order.id} orderNumber={order.order_number} />
           {status !== 'cancelled' && status !== 'returned' && (
             <Button
               variant="outline"
@@ -702,7 +757,7 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                         )}
                         <div className="flex justify-between items-center text-base font-black text-[#1a4731] border-t border-slate-200 pt-3 mt-3">
                           <span>Grand Total</span>
-                          <span>{formatPrice(Number(order.total_price || order.amount || 0))}</span>
+                          <span>{formatPrice(Number(order.total || order.total_price || order.amount || 0))}</span>
                         </div>
                         <div className="flex justify-between items-center pt-2">
                           <span className="text-slate-500">Payment Status</span>
@@ -1066,6 +1121,35 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                 </div>
               </div>
 
+              {/* Payment Status Dropdown */}
+              <div className="pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Payment Status</label>
+                  <select
+                    className="w-full h-10 px-3 rounded-xl border bg-white text-xs outline-none focus:border-[#1a4731] cursor-pointer font-medium"
+                    value={(order.payment_status || 'pending').toLowerCase()}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'paid') handleQuickPayment('full');
+                      else if (val === 'half_paid') handleQuickPayment('half');
+                      else if (val === 'partially_paid') handleQuickPayment('partial');
+                      else if (val === 'pending') handleQuickPayment('pending');
+                      else if (val === 'refunded') handleQuickPayment('pending'); // refunded handled via refund flow
+                    }}
+                    disabled={isUpdating}
+                  >
+                    {PAYMENT_STATUSES.map((opt) => (
+                      <option key={opt} value={opt} className="capitalize">
+                        {opt.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium">
+                  Presets: Full (100%), Half (50%), Partial (60%), Pending (0%)
+                </p>
+              </div>
+
               {/* Payment Collection Fields */}
               {status === 'delivered' && (
                 <div className="pt-4 space-y-3">
@@ -1078,10 +1162,16 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                         min="0"
                         step="100"
                         value={collected}
-                        onChange={(e) => setCollected(Number(e.target.value) || 0)}
+                        onChange={(e) => {
+                          // Auto-calculate Due whenever Collected changes: due = total - collected
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setCollected(val);
+                          const totalNow = Number(order.total || order.total_price || order.amount || 0);
+                          setDue(Math.max(0, totalNow - val));
+                        }}
                         className="w-full h-10 px-3 rounded-xl border text-xs outline-none focus:border-[#1a4731] transition-colors"
                       />
-                      <p className="text-[9px] text-slate-500 mt-1">Amount actually collected from the customer</p>
+                      <p className="text-[9px] text-slate-500 mt-1">Amount collected from the order (due auto-calculated)</p>
                     </div>
                     <div>
                       <label className="text-[9px] font-semibold text-slate-500">Due</label>
@@ -1090,10 +1180,16 @@ export function OrderDetailView({ order: initialOrder, items, timeline: initialT
                         min="0"
                         step="100"
                         value={due}
-                        onChange={(e) => setDue(Number(e.target.value) || 0)}
+                        onChange={(e) => {
+                          // Auto-calculate Collected whenever Due changes: collected = total - due
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setDue(val);
+                          const totalNow = Number(order.total || order.total_price || order.amount || 0);
+                          setCollected(Math.max(0, totalNow - val));
+                        }}
                         className="w-full h-10 px-3 rounded-xl border text-xs outline-none focus:border-[#1a4731] transition-colors"
                       />
-                      <p className="text-[9px] text-slate-500 mt-1">Remaining amount still unpaid</p>
+                      <p className="text-[9px] text-slate-500 mt-1">Remaining amount still unpaid (collected auto-calculated)</p>
                     </div>
                   </div>
                   <button

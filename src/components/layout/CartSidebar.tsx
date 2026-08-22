@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, X, Plus, Minus, Trash2, ArrowRight } from 'lucide-react';
