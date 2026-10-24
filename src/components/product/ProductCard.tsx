@@ -2,14 +2,13 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Star, ShoppingCart, Heart, Eye, ArrowRight } from 'lucide-react';
 import { Product } from '../../lib/types';
 import { formatPrice } from '../../lib/utils';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
 const PLACEHOLDER_IMG = '/images/about.jpg';
@@ -48,19 +47,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const imgSrc = (!imgError && product.images[0]) ? product.images[0] : PLACEHOLDER_IMG;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
+    <div
       className="group bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(45,106,79,0.08)] transition-all duration-500 hover:-translate-y-2 flex flex-col h-full"
     >
       {/* Image Area */}
       <div className="relative aspect-[4/5] overflow-hidden bg-bg-secondary rounded-2xl m-3 border border-border-forest/20 transition-all duration-500 group-hover:border-[#2D6A4F]/30">
         <Link href={`/products/${product.id}`}>
-          <img
+          <Image
             src={imgSrc}
             alt={product.name}
             onError={() => setImgError(true)}
+            loading="lazy"
+            decoding="async"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
           />
         </Link>
@@ -164,6 +164,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };

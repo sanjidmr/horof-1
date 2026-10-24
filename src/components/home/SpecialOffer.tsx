@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingCart, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '../ui/Button';
 import { createSupabaseBrowserClient } from '../../lib/supabase/client';
 
-export const SpecialOffer: React.FC = () => {
-  const [offer, setOffer] = useState<any>(null);
+export const SpecialOffer: React.FC<{ initialOffer: any }> = ({ initialOffer }) => {
+  const [offer, setOffer] = useState<any>(initialOffer);
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
@@ -16,8 +15,6 @@ export const SpecialOffer: React.FC = () => {
       const { data } = await supabase.from('special_offers').select('*').limit(1).maybeSingle();
       setOffer(data || null);
     }
-    fetchOffer();
-
     const channel = supabase
       .channel('home-special-offer')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'special_offers' }, fetchOffer)
@@ -71,13 +68,7 @@ export const SpecialOffer: React.FC = () => {
             </div>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            className="relative order-1 lg:order-2 flex justify-center lg:justify-end"
-          >
+          <div className="relative order-1 lg:order-2 flex justify-center lg:justify-end">
             <Link href={offer.product_id ? `/products/${offer.product_id}` : '#'} className="w-full flex justify-center lg:justify-end cursor-pointer">
               <div className="relative z-10 aspect-[3/4] w-full max-w-[200px] sm:max-w-[400px] rounded-xl overflow-hidden shadow-[-20px_20px_40px_-10px_rgba(0,0,0,0.5)] lg:shadow-[-40px_40px_80px_-20px_rgba(0,0,0,0.5)] border border-white/10 group/img">
                 <img
@@ -95,7 +86,7 @@ export const SpecialOffer: React.FC = () => {
             {/* Decorative Background Elements */}
             <div className="absolute -top-12 -right-12 w-64 h-64 bg-accent-light/10 blur-[100px] rounded-full" />
             <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-black/40 blur-[100px] rounded-full" />
-          </motion.div>
+          </div>
         </div>
       </div>
     </section>

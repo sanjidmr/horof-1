@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { Inter, Playfair_Display } from 'next/font/google';
 import '../index.css';
 import { ClientLayout } from './ClientLayout';
 import { buildMeta } from '@/lib/seo';
@@ -8,16 +7,6 @@ import { buildMeta } from '@/lib/seo';
 // import TrackingLoader from '@/components/seo/TrackingLoader';
 import { getPublicSettings } from '@/lib/actions/app-settings';
 import { DEFAULT_GENERAL } from '@/lib/settings/types';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-body',
-});
-
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-display',
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   let siteName = 'Horof';
@@ -48,7 +37,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
+    <html lang="en">
       <head>
         <link rel="icon" href={favicon} />
       </head>

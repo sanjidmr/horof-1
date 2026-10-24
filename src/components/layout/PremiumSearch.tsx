@@ -38,11 +38,13 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [categories, setCategories] = useState<DynamicCategory[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchRequestId = useRef(0);
   const router = useRouter();
   const supabase = createClient();
 
@@ -50,6 +52,7 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
+      searchRequestId.current += 1;
       setDebouncedQuery('');
       setSuggestions([]);
       setActiveIndex(-1);
@@ -68,37 +71,50 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
 
   // Fetch categories dynamically from Supabase
   useEffect(() => {
+    if (!isOpen || categoriesLoaded) return;
+    const controller = new AbortController();
+    let active = true;
+
     const fetchCategories = async () => {
       try {
         const { data, error } = await supabase
           .from('categories')
           .select('id, name, slug, image_url')
           .eq('is_active', true)
-          .order('name', { ascending: true });
+          .order('name', { ascending: true })
+          .abortSignal(controller.signal);
 
         if (error) throw error;
 
-        if (data) {
-          const mapped: DynamicCategory[] = data.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            slug: c.slug,
-            image: c.image_url || '/images/c1.jpg',
-          }));
-          setCategories(mapped);
+        if (active && data) {
+          setCategories(data.map((category) => ({
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+            image: category.image_url || '/images/c1.jpg',
+          })));
+          setCategoriesLoaded(true);
         }
-      } catch (err: any) {
-        console.error('Error fetching categories from Supabase:', err.message || err);
+      } catch (error: unknown) {
+        if (active && !controller.signal.aborted) {
+          console.error('Error fetching categories from Supabase:', error);
+        }
       }
     };
 
-    if (isOpen) {
-      fetchCategories();
-    }
-  }, [isOpen, supabase]);
+    void fetchCategories();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [isOpen, categoriesLoaded, supabase]);
 
   // Fetch product suggestions dynamically from Supabase
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    const currentRequest = ++searchRequestId.current;
+
     const fetchSuggestions = async () => {
       if (!debouncedQuery) {
         setSuggestions([]);
@@ -114,12 +130,14 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
           .eq('is_active', true)
           .gt('stock', 0)
           .ilike('name', `%${debouncedQuery}%`)
-          .limit(6);
+          .order('name', { ascending: true })
+          .limit(6)
+          .abortSignal(controller.signal);
 
         if (error) throw error;
 
-        if (data) {
-          const mapped: Suggestion[] = data.map((r: any) => {
+        if (active && currentRequest === searchRequestId.current && data) {
+          const mapped: Suggestion[] = data.map((r) => {
             const categoryName = Array.isArray(r.categories)
               ? r.categories[0]?.name
               : r.categories?.name;
@@ -151,14 +169,20 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
           setSuggestions(mapped);
           setActiveIndex(-1);
         }
-      } catch (err: any) {
-        console.error('Error fetching suggestions:', err.message || err);
+      } catch (error: unknown) {
+        if (active && currentRequest === searchRequestId.current && !controller.signal.aborted) {
+          console.error('Error fetching suggestions:', error);
+        }
       } finally {
-        setIsLoading(false);
+        if (active && currentRequest === searchRequestId.current && !controller.signal.aborted) setIsLoading(false);
       }
     };
 
-    fetchSuggestions();
+    void fetchSuggestions();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [debouncedQuery, supabase]);
 
   // Close search on Escape key press
@@ -271,7 +295,11 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
                     ref={inputRef}
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      searchRequestId.current += 1;
+                      setSuggestions([]);
+                      setSearchQuery(e.target.value);
+                    }}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     onKeyDown={handleKeyDown}
@@ -301,13 +329,13 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
                 {isLoading ? (
                   /* Loading Skeletons */
                   <div className="space-y-2 py-2">
-                    <div className="h-3.5 w-32 bg-slate-100 rounded animate-pulse mb-3" />
+                    <div className="h-3.5 w-32 bg-slate-100 rounded mb-3" />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {[1, 2, 3, 4].map((n) => (
                         <div key={n} className="flex items-center gap-4 p-3 rounded-2xl border border-slate-100 bg-white">
-                          <div className="h-14 w-14 rounded-xl bg-slate-100 animate-pulse flex-shrink-0" />
+                          <div className="h-14 w-14 rounded-xl bg-slate-100 flex-shrink-0" />
                           <div className="flex-1 min-w-0 space-y-2">
-                            <div className="h-3 w-1/4 bg-slate-100 rounded animate-pulse" />
+                            <div className="h-3 w-1/4 bg-slate-100 rounded" />
                             <div className="h-4 w-3/4 bg-slate-100 rounded animate-pulse" />
                           </div>
                           <div className="h-4 w-16 bg-slate-100 rounded animate-pulse flex-shrink-0" />
@@ -441,4 +469,3 @@ export const PremiumSearch: React.FC<PremiumSearchProps> = ({ isOpen, onClose })
     </AnimatePresence>
   );
 };
-

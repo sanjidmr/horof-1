@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { MessageCircle, Mail, ArrowRight, Paintbrush } from 'lucide-react';
 import { Button } from '../ui/Button';
 import Link from 'next/link';
@@ -24,12 +23,7 @@ export const CustomDesignCTA: React.FC = () => {
           {/* Subtle Inner Decorative Glow */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-accent-hover opacity-20 blur-[80px] pointer-events-none" />
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="space-y-4 md:space-y-6 relative z-10"
-          >
+          <div className="space-y-4 md:space-y-6 relative z-10">
             <div className="inline-flex items-center gap-1.5 md:gap-3 px-3 md:px-6 py-1 md:py-2 rounded-full bg-accent-light/10 border border-accent-light/20 text-accent-light text-[7px] md:text-xs font-bold uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-4">
               <Paintbrush className="h-2.5 w-2.5 md:h-4 md:w-4" />
               Bespoke Craftsmanship
@@ -43,15 +37,9 @@ export const CustomDesignCTA: React.FC = () => {
             <p className="text-white/70 text-sm md:text-xl max-w-2xl mx-auto font-light leading-relaxed italic">
               Have a unique idea in mind? Our master artist are ready to transform your specific woodcraft visions into reality. Contact us for personalized consultations.
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-6 pt-2 md:pt-4 relative z-10"
-          >
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-6 pt-2 md:pt-4 relative z-10">
             <Button
               onClick={() => requireAuth(() => {
                 window.open('https://wa.me/yournumber', '_blank');
@@ -78,7 +66,7 @@ export const CustomDesignCTA: React.FC = () => {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
-          </motion.div>
+          </div>
 
           <div className="pt-6 flex flex-wrap justify-center gap-x-6 gap-y-3 text-white/40 text-[8px] md:text-[10px] font-bold uppercase tracking-[0.2em] relative z-10">
             <span className="flex items-center gap-2">✓ Personalized Consultation</span>

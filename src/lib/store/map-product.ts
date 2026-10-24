@@ -15,7 +15,7 @@ type DbProduct = {
   product_images?: { url: string; sort_order: number | null }[] | null;
   categories?: { name: string } | null;
   subcategories?: { name: string } | null;
-  reviews?: { rating: number }[] | null;
+  product_reviews?: { rating: number }[] | null;
 };
 
 // Normalize perfect_for data from multiple possible sources:
@@ -51,7 +51,7 @@ export function mapDbProductToCardProduct(row: DbProduct, categoryName?: string)
   const price = typeof row.price === 'string' ? parseFloat(row.price) : Number(row.price);
   const offer = row.compare_price != null ? (typeof row.compare_price === 'string' ? parseFloat(row.compare_price) : Number(row.compare_price)) : undefined;
 
-  const reviews = row.reviews ?? [];
+  const reviews = row.product_reviews ?? [];
   const reviewCount = reviews.length;
   const rating = reviewCount > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount : 0;
 

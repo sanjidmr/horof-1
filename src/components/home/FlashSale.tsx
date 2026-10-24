@@ -1,20 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
 import { Button } from "../ui/Button";
 import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
-export const FlashSale: React.FC = () => {
+export const FlashSale: React.FC<{ initialFlashSale: any }> = ({ initialFlashSale }) => {
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
     minutes: 0,
     seconds: 0,
   });
-  const [flashSale, setFlashSale] = useState<any>(null);
+  const [flashSale, setFlashSale] = useState<any>(initialFlashSale);
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
 
   useEffect(() => {
@@ -22,8 +21,6 @@ export const FlashSale: React.FC = () => {
       const { data } = await supabase.from('flash_sales').select('*').limit(1).maybeSingle();
       setFlashSale(data || null);
     }
-    fetchFlashSale();
-
     const channel = supabase
       .channel('home-flash-sale')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'flash_sales' }, fetchFlashSale)
@@ -88,19 +85,15 @@ export const FlashSale: React.FC = () => {
           {/* IMAGE */}
           <div className="lg:col-span-6 relative">
             <Link href={flashSale.product_id ? `/products/${flashSale.product_id}` : '#'}>
-              <motion.div
-                initial={{ opacity: 0, x: -40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.8 }}
-                className="relative aspect-[4/5] rounded-xl sm:rounded-2xl overflow-hidden group shadow-[0_30px_80px_rgba(0,0,0,0.15)] cursor-pointer"
-              >
+              <div className="relative aspect-[4/5] rounded-xl sm:rounded-2xl overflow-hidden group shadow-[0_30px_80px_rgba(0,0,0,0.15)] cursor-pointer">
                 <img
                   src={flashSale.image_url}
                   alt={flashSale.title}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-110"
                 />
-              </motion.div>
+              </div>
             </Link>
 
             {/* PRICE CARD */}

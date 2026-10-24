@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapDbProductToCardProduct, mapDbCategory } from '@/lib/store/map-product';
 import type { Product, Category } from '@/lib/types';
+import { getProductReviewSummaries } from './review-summaries';
 
 export type BannerSlide = { id: string; title: string | null; subtitle: string | null; image_url: string; link: string | null };
 
@@ -27,12 +28,16 @@ export async function getHomepageData() {
     supabase.from('categories').select('id,name,slug,image_url').eq('is_active', true).order('order', { ascending: true }).limit(12),
     supabase
       .from('products')
-      .select('id,name,slug,description,price,compare_price,stock,section,perfect_for,perfect_for_tags,flash_sale_ends_at,product_images(url,sort_order),categories(name),subcategories(name),reviews(rating)')
+      .select('id,name,slug,description,price,compare_price,stock,section,perfect_for,perfect_for_tags,flash_sale_ends_at,product_images(url,sort_order),categories(name),subcategories(name)')
       .eq('is_active', true)
       .in('section', HOMEPAGE_SECTIONS)
       .limit(100),
     supabase.from('site_settings').select('value').eq('key', 'homepage').maybeSingle(),
   ]);
+  const reviewSummaries = await getProductReviewSummaries(
+    supabase,
+    (sectionRows ?? []).map((product) => product.id),
+  );
 
   const bySection = new Map<string, any[]>();
   for (const p of sectionRows ?? []) {
@@ -53,7 +58,11 @@ export async function getHomepageData() {
       const categoryName = Array.isArray(r.categories) 
         ? r.categories[0]?.name 
         : r.categories?.name;
-      return mapDbProductToCardProduct(r as never, categoryName);
+      const product = mapDbProductToCardProduct(r as never, categoryName);
+      const summary = reviewSummaries.get(r.id);
+      product.rating = summary?.rating ?? 0;
+      product.reviewCount = summary?.reviewCount ?? 0;
+      return product;
     });
 
   const potdRow = potdRows?.[0] ?? null;
@@ -113,7 +122,7 @@ export async function getProducts(params: {
   let query = supabase
     .from('products')
     .select(
-      'id,name,slug,description,price,compare_price,stock,section,perfect_for,perfect_for_tags,product_images(url,sort_order),categories!inner(name,slug),subcategories!left(name),reviews(rating)',
+      'id,name,slug,description,price,compare_price,stock,section,perfect_for,perfect_for_tags,product_images(url,sort_order),categories!inner(name,slug),subcategories!left(name)',
       { count: 'exact' }
     )
     .eq('is_active', true);
@@ -139,13 +148,21 @@ export async function getProducts(params: {
   query = query.range(from, to);
 
   const { data, count } = await query;
+  const reviewSummaries = await getProductReviewSummaries(
+    supabase,
+    (data ?? []).map((product) => product.id),
+  );
 
   return {
     products: (data ?? []).map((r: any) => {
       const categoryName = Array.isArray(r.categories) 
         ? r.categories[0]?.name 
         : r.categories?.name;
-      return mapDbProductToCardProduct(r as never, categoryName);
+      const product = mapDbProductToCardProduct(r as never, categoryName);
+      const summary = reviewSummaries.get(r.id);
+      product.rating = summary?.rating ?? 0;
+      product.reviewCount = summary?.reviewCount ?? 0;
+      return product;
     }),
     total: count ?? 0,
   };

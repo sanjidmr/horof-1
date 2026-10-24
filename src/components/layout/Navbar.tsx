@@ -362,7 +362,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
 
       {/* Mobile Bottom Tab Bar */}
       <div className={cn(
-        "fixed bottom-0 left-0 right-0 z-[120] lg:hidden px-4 pb-6 transition-all duration-500",
+        "mobile-bottom-navigation fixed bottom-0 left-0 right-0 z-[120] lg:hidden px-4 pb-6 transition-all duration-500",
         (isMobileMenuOpen || isCartOpen || !isVisible) ? "translate-y-full opacity-0" : "translate-y-0 opacity-100"
       )}>
         <div className="max-w-md mx-auto bg-[#1A3320] backdrop-blur-xl border border-white/10 rounded-full h-16 flex items-center justify-around px-2 shadow-2xl shadow-black/40">
@@ -390,4 +390,3 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenCart, isCartOpen = false }
     </>
   );
 };
-

@@ -16,6 +16,7 @@ import { DesignRequestForm } from '../components/home/DesignRequestForm';
 import { createSupabaseServerClient } from '../lib/supabase/server';
 import { extractProductImages } from '../lib/store/extract-images';
 import { Product } from '../lib/types';
+import { getProductReviewSummaries } from '../lib/store/review-summaries';
 import { HomeMotionWrapper } from '../components/home/HomeMotionWrapper';
 import { OurServices } from '../components/home/OurServices';
 import { IoLogoWhatsapp } from 'react-icons/io';
@@ -38,32 +39,34 @@ export default async function HomePage() {
     { data: decorImages },
     { data: heroData },
     { data: heroContent },
-    { data: servicesData }
+    { data: servicesData },
+    { data: flashSale },
+    { data: specialOffer }
   ] = await Promise.all([
-    supabase.from('categories').select('*, products(count)').eq('is_active', true),
+    supabase.from('categories').select('id,name,slug,image_url,products(count)').eq('is_active', true),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
+      .select('id,name,slug,description,price,compare_price,stock,section,product_images(url,sort_order),categories(name)')
       .eq('is_active', true)
       .eq('section', 'best_selling')
       .order('created_at', { ascending: false })
       .limit(8),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
+      .select('id,name,slug,description,price,compare_price,stock,section,product_images(url,sort_order),categories(name)')
       .eq('is_active', true)
       .eq('section', 'new_arrival')
       .order('created_at', { ascending: false })
       .limit(4),
     supabase
       .from('products')
-      .select('*, product_images(url,sort_order), categories(name), reviews(rating)')
+      .select('id,name,slug,description,price,compare_price,stock,section,product_images(url,sort_order),categories(name)')
       .eq('is_active', true)
       .eq('section', 'product_of_the_day')
       .limit(4),
     supabase
       .from('site_images')
-      .select('*')
+      .select('section,title,subtitle,description,image_url,button_text')
       .like('section', 'decor-%'),
     supabase
       .from('site_images')
@@ -77,10 +80,15 @@ export default async function HomePage() {
       .maybeSingle(),
     supabase
       .from('site_images')
-      .select('*, categories(name, slug)')
+      .select('id,image_url,title,subtitle,description,category_id,categories(name,slug)')
       .eq('section', 'services')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true }),
+    supabase.from('flash_sales').select('id,title,image_url,offer_price,main_price,end_time,product_id').limit(1).maybeSingle(),
+    supabase.from('special_offers').select('id,title,image_url,discount_percent,product_id').limit(1).maybeSingle()
   ]);
+
+  const productRows = [...(bestSellingData ?? []), ...(newArrivalsData ?? []), ...(productDayData ?? [])];
+  const reviewSummaries = await getProductReviewSummaries(supabase, productRows.map((product) => product.id));
 
   const categories = catData
     ? catData.map(c => ({
@@ -93,9 +101,7 @@ export default async function HomePage() {
     : [];
 
   const mapProduct = (p: any): Product => {
-    const reviews = (p.reviews ?? []).filter((r: any) => r.rating >= 1);
-    const reviewCount = reviews.length;
-    const rating = reviewCount > 0 ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount : 0;
+    const reviewSummary = reviewSummaries.get(p.id);
     return {
       id: p.id,
       slug: p.slug,
@@ -105,8 +111,8 @@ export default async function HomePage() {
       discountPrice: p.compare_price ? Number(p.compare_price) : undefined,
       images: extractProductImages(p.product_images),
       category: p.categories?.name || 'Uncategorized',
-      rating,
-      reviewCount,
+      rating: reviewSummary?.rating ?? 0,
+      reviewCount: reviewSummary?.reviewCount ?? 0,
       stock: p.stock || 0,
       tags: [],
       isNew: p.section === 'new_arrival',
@@ -151,11 +157,11 @@ export default async function HomePage() {
       <div className="max-w-[1400px] mx-auto px-6">
         <OurServices services={services} />
       </div>
-      <FlashSale />
+      <FlashSale initialFlashSale={flashSale} />
       <div className="max-w-7xl mx-auto px-6">
         <NewArrivals products={newArrivals} />
       </div>
-      <SpecialOffer />
+      <SpecialOffer initialOffer={specialOffer} />
       <div className="max-w-7xl mx-auto px-6">
         <ProductOfTheDay products={dailyProducts} />
       </div>

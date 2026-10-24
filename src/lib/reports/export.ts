@@ -1,5 +1,4 @@
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import type { ReportColumn } from './types';
 
 function downloadBlob(filename: string, blob: Blob) {
@@ -45,10 +44,18 @@ export function exportCSV(filename: string, columns: ReportColumn<any>[], rows: 
 export function exportExcel(filename: string, columns: ReportColumn<any>[], rows: any[]): boolean {
   const data = rowsFromColumns(columns, rows);
   if (data.length === 0) return false;
-  const sheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, 'Report');
-  XLSX.writeFile(workbook, filename);
+
+  void import('xlsx')
+    .then((XLSX) => {
+      const sheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Report');
+      XLSX.writeFile(workbook, filename);
+    })
+    .catch((error: unknown) => {
+      console.error('Unable to export report to Excel:', error);
+    });
+
   return true;
 }
 

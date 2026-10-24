@@ -301,7 +301,7 @@ export function DesignRequestForm() {
                         <img src={preview} alt={entry.file.name} className="w-full h-full object-cover" />
                         {entry.status === 'uploading' && (
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            <Loader2 className="w-5 h-5 text-white" />
                           </div>
                         )}
                       </div>
@@ -345,7 +345,7 @@ export function DesignRequestForm() {
         >
           {isPending ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-4 h-4" />
               Submitting…
             </>
           ) : (

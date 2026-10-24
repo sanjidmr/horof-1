@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, HelpCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { createSupabaseBrowserClient } from '../../lib/supabase/client';
@@ -45,9 +44,8 @@ export const FAQSection: React.FC = () => {
             const isOpen = openIndex === index;
 
             return (
-              <motion.div
+              <div
                 key={faq.id}
-                initial={false}
                 className={cn(
                   "border border-border-forest rounded-lg md:rounded-2xl overflow-hidden transition-all duration-300",
                   isOpen
@@ -89,32 +87,20 @@ export const FAQSection: React.FC = () => {
                   {/* Arrow */}
                   <ChevronDown
                     className={cn(
-                      "h-4 w-4 md:h-5 md:w-5 text-accent-primary transition-transform duration-500 shrink-0",
+                      "h-4 w-4 md:h-5 md:w-5 text-accent-primary shrink-0",
                       isOpen && "rotate-180"
                     )}
                   />
                 </button>
 
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{
-                        duration: 0.25,
-                        ease: [0.04, 0.62, 0.23, 0.98],
-                      }}
-                    >
-                      <div className="px-3 pb-4 md:px-6 md:pb-6 ml-8 md:ml-12">
-                        <p className="text-xs md:text-base font-light leading-relaxed border-l-2 border-gold/30 pl-3 italic">
-                          {faq.answer}
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                {isOpen && (
+                  <div className="px-3 pb-4 md:px-6 md:pb-6 ml-8 md:ml-12">
+                    <p className="text-xs md:text-base font-light leading-relaxed border-l-2 border-gold/30 pl-3 italic">
+                      {faq.answer}
+                    </p>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

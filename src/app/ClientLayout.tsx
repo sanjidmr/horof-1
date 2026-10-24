@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
+import { MotionConfig } from 'framer-motion';
 import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
 import { AuthModalProvider } from '../context/AuthModalContext';
@@ -23,16 +24,13 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
   const isPackingSlipPath = pathname?.startsWith('/admin/orders/packing-slip');
   const isPrintView = isInvoicePrintPath || isPackingSlipPath;
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
-
   return (
     <AuthProvider>
       <PermissionProvider>
         <AuthModalProvider>
           <WishlistProvider>
             <CartProvider>
+              <MotionConfig skipAnimations reducedMotion="always">
               <div className="flex flex-col min-h-screen bg-white overflow-x-hidden">
                 {!isAdminPath && !isDashboardPath && !isPrintView && (
                 <Navbar onOpenCart={() => setIsCartOpen(true)} isCartOpen={isCartOpen} />
@@ -59,7 +57,8 @@ export const ClientLayout: React.FC<{ children: React.ReactNode }> = ({ children
                   },
                 }}
               />
-            </div>
+              </div>
+              </MotionConfig>
           </CartProvider>
         </WishlistProvider>
         </AuthModalProvider>

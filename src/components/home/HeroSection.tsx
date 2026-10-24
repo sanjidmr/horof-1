@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { ShoppingBag, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -67,12 +66,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     <section className="relative min-h-screen flex items-center bg-black overflow-hidden pt-20">
       {/* Full-Bleed Premium Decor Background */}
       <div className="absolute inset-0 z-0">
-        <motion.div
-          initial={{ scale: 1.1, opacity: 0 }}
-          animate={{ scale: 1, opacity: 0.75 }}
-          transition={{ duration: 3, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0"
-        >
+        <div className="absolute inset-0 opacity-75">
           {heroImage && (
             <img
               src={heroImage}
@@ -80,7 +74,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               className="w-full h-full object-cover object-top"
             />
           )}
-        </motion.div>
+        </div>
 
         {/* Refined Dark Overlays */}
         <div className="absolute inset-0 bg-black/40 pointer-events-none z-[1]" />
@@ -100,14 +94,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         </div>
 
         {/* Ambient Glow */}
-        <motion.div
-          animate={{
-            opacity: [0.1, 0.2, 0.1],
-            scale: [1, 1.05, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-1/2 -right-40 w-[900px] h-[900px] bg-white/5 blur-[180px] rounded-full -translate-y-1/2 z-[1]"
-        />
       </div>
 
       {/* Content */}
@@ -117,15 +103,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {/* Text Area */}
           <div className="space-y-10">
 
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, ease: "easeOut" }}
-              className="space-y-8 flex flex-col items-center"
-            >
+            <div className="space-y-8 flex flex-col items-center">
 
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-5 sm:py-2.5 bg-accent-hover/10 rounded-full border border-accent-hover/20 backdrop-blur-md">
-                <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-accent-light animate-pulse" />
+                <span className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-accent-light" />
 
                 <span className="text-accent-light text-[8px] sm:text-[11px] font-bold uppercase tracking-[0.3em] sm:tracking-[0.5em]">
                   Artisan Collection • Heritage Edition
@@ -143,14 +124,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </span>
               </p>
 
-            </motion.div>
+            </div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10"
-            >
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
 
               <Link href="/products" className="w-full sm:w-auto">
                 <Button
@@ -174,25 +150,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 </div>
               </Link>
 
-            </motion.div>
+            </div>
 
             {/* Let's Talk Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.7 }}
-              className="pt-4 flex justify-center"
-            >
+            <div className="pt-4 flex justify-center">
               <Link href="/contact" className="w-full sm:w-auto flex justify-center">
                 <Button
                   variant="secondary"
                   className="bg-transparent border border-white/15 hover:border-accent-light text-white/80 hover:text-white rounded-full px-8 sm:px-12 h-12 sm:h-16 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold transition-all hover:bg-white/5 active:scale-95 flex items-center justify-center gap-2.5 shadow-lg"
                 >
                   Let's Contact
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent-light animate-ping shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-light shrink-0" />
                 </Button>
               </Link>
-            </motion.div>
+            </div>
 
           </div>
 

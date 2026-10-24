@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { mapDbProductToCardProduct } from './map-product';
 import type { Product } from '@/lib/types';
+import { getProductReviewSummaries } from './review-summaries';
 
 export async function getRelatedProducts(categoryName: string, currentProductId: string): Promise<Product[]> {
   const supabase = await createSupabaseServerClient();
@@ -17,7 +18,7 @@ export async function getRelatedProducts(categoryName: string, currentProductId:
 
   const { data: rows } = await supabase
     .from('products')
-    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,perfect_for_tags,meta_title,meta_description,product_images(url,sort_order),categories(name),reviews(rating)')
+    .select('id,name,slug,description,price,offer_price,stock,specification,perfect_for,perfect_for_tags,meta_title,meta_description,product_images(url,sort_order),categories(name)')
     .eq('category_id', catData.id)
     .neq('id', currentProductId)
     .eq('is_active', true)
@@ -25,5 +26,12 @@ export async function getRelatedProducts(categoryName: string, currentProductId:
 
   if (!rows) return [];
 
-  return rows.map(row => mapDbProductToCardProduct(row as never, categoryName));
+  const reviewSummaries = await getProductReviewSummaries(supabase, rows.map((row) => row.id));
+  return rows.map((row) => {
+    const product = mapDbProductToCardProduct(row as never, categoryName);
+    const summary = reviewSummaries.get(row.id);
+    product.rating = summary?.rating ?? 0;
+    product.reviewCount = summary?.reviewCount ?? 0;
+    return product;
+  });
 }

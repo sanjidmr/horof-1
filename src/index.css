@@ -1,11 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Playfair Display", serif;
+  --font-body: ui-sans-serif, system-ui, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
 
   --color-bg-primary: #FFFFFF;
   --color-bg-secondary: #F9F7F2;
@@ -122,7 +121,6 @@
 .swiper-pagination-bullet {
   background: #cbd5e1 !important;
   opacity: 0.6 !important;
-  transition: all 0.3s ease !important;
 }
 
 .swiper-pagination-bullet-active {
@@ -132,3 +130,33 @@
   border-radius: 9999px !important;
 }
 
+*:not(.swiper-wrapper):not(.mobile-bottom-navigation),
+*:not(.swiper-wrapper):not(.mobile-bottom-navigation)::before,
+*:not(.swiper-wrapper):not(.mobile-bottom-navigation)::after {
+  animation: none !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+[class*="hover:scale-"]:hover,
+.group:hover [class*="group-hover:scale-"],
+[class*="hover:-translate-"]:hover,
+.group:hover [class*="group-hover:-translate-"],
+[class*="hover:rotate-"]:hover,
+.group:hover [class*="group-hover:rotate-"],
+[class*="hover:translate-"]:hover,
+.group:hover [class*="group-hover:translate-"] {
+  transform: none !important;
+  translate: none !important;
+  scale: none !important;
+  rotate: none !important;
+}
+
+.mobile-bottom-navigation {
+  transition-property: transform, translate !important;
+  transition-duration: 500ms !important;
+}
+
+.mobile-bottom-navigation.mobile-bottom-navigation {
+  transition-duration: 500ms !important;
+}

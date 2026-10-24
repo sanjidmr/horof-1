@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { Sparkles, Leaf, Truck, ShieldCheck } from 'lucide-react';
 
 const features = [
@@ -43,12 +42,8 @@ export const WhyChooseUs: React.FC = () => {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-10">
           {features.map((feature, index) => (
-            <motion.div
+            <div
               key={index}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
               className="flex flex-col items-center text-center space-y-4 group"
             >
               <div className="h-14 w-14 bg-white rounded-2xl border border-accent-primary/20 flex items-center justify-center group-hover:scale-110 transition-all duration-500 shadow-[0_10px_30px_-10px_rgba(20,45,34,0.1)]">
@@ -60,7 +55,7 @@ export const WhyChooseUs: React.FC = () => {
                   {feature.desc}
                 </p>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>

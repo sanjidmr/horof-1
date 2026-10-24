@@ -11,7 +11,7 @@ export const ProductOfTheDay: React.FC<{ products: Product[] }> = ({ products })
     <section className="pt-8 pb-2 md:pt-12 md:pb-4">
       <div className="flex flex-col items-center text-center space-y-6 mb-16">
         <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-gold/10 rounded-full border border-gold/20">
-          <Sparkles className="h-3.5 w-3.5 text-gold animate-pulse" />
+          <Sparkles className="h-3.5 w-3.5 text-gold" />
           <span className="text-gold text-[10px] md:text-xs font-bold uppercase tracking-[0.4em]">Limited Selection</span>
         </div>
 

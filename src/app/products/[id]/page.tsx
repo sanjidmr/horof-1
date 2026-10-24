@@ -45,6 +45,7 @@ import { productJsonLd } from '../../../lib/seo';
 import { ProductCard } from '../../../components/product/ProductCard';
 import { appendRecentProductId } from '../../../lib/recentlyViewed';
 import { Product } from '../../../lib/types';
+import { getProductReviewSummaries } from '../../../lib/store/review-summaries';
 import { useRequireAuth } from '../../../context/AuthModalContext';
 import { StarDisplay } from '../../../components/product/StarRating';
 import { ReviewCard } from '../../../components/product/ReviewCard';
@@ -125,6 +126,10 @@ export default function ProductDetailsPage({ params }: PageProps) {
           .order('created_at', { ascending: false })
       ]);
 
+      if (reviewsRes.error) {
+        console.error('Unable to load product reviews:', reviewsRes.error);
+      }
+
       if (productRes.data && !productRes.error) {
         const data = productRes.data;
         
@@ -198,13 +203,23 @@ export default function ProductDetailsPage({ params }: PageProps) {
         // Fetch related products
         const { data: relatedData } = await supabase
           .from('products')
-          .select('*, product_images(url,sort_order), categories(name), subcategories(name), reviews(rating)')
+          .select('id,name,slug,description,price,offer_price,stock,section,specification,perfect_for,product_images(url,sort_order),categories(name)')
           .eq('category_id', data.category_id)
           .neq('id', data.id)
           .eq('is_active', true)
           .limit(4);
 
         if (relatedData) {
+          let reviewSummaries = new Map<string, { rating: number; reviewCount: number }>();
+          try {
+            reviewSummaries = await getProductReviewSummaries(
+              supabase,
+              relatedData.map((relatedProduct) => relatedProduct.id),
+            );
+          } catch (error) {
+            console.error('Unable to load related product review summaries:', error);
+          }
+
           setRelatedProducts(relatedData.map(p => ({
             id: p.id,
             name: p.name,
@@ -217,10 +232,8 @@ export default function ProductDetailsPage({ params }: PageProps) {
               .map((i: any) => i.url)
               .filter(Boolean),
             category: p.categories?.name || 'Uncategorized',
-            rating: (p.reviews ?? []).filter((r) => r.rating >= 1).length > 0
-              ? (p.reviews ?? []).filter((r) => r.rating >= 1).reduce((sum, r) => sum + r.rating, 0) / (p.reviews ?? []).filter((r) => r.rating >= 1).length
-              : 0,
-            reviewCount: (p.reviews ?? []).filter((r) => r.rating >= 1).length,
+            rating: reviewSummaries.get(p.id)?.rating ?? 0,
+            reviewCount: reviewSummaries.get(p.id)?.reviewCount ?? 0,
             stock: p.stock || 0,
             tags: [],
             isNew: p.section === 'new_arrival',
